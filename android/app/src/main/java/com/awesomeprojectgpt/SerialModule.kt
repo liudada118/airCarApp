@@ -10,6 +10,8 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
+import com.chaquo.python.Python
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -17,6 +19,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import java.util.concurrent.Executors
 
 class SerialModule(
     private val reactContext: ReactApplicationContext
@@ -38,6 +41,8 @@ class SerialModule(
     private var pendingOpen: PendingOpen? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingTimeout: Runnable? = null
+    private val pythonExecutor = Executors.newSingleThreadExecutor()
+    private val logTag = "SerialModule"
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -55,11 +60,7 @@ class SerialModule(
                 return
             }
             val result = manager.open(pending.vendorId, pending.productId, pending.baudRate) { data ->
-                val map = Arguments.createMap()
-                map.putString("data", data)
-                reactContext
-                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                    .emit("onSerialData", map)
+                handleFrame(data)
             }
             when (result) {
                 is SerialManager.OpenResult.Ok ->
@@ -106,11 +107,7 @@ class SerialModule(
         }
         if (usbManager.hasPermission(device)) {
             val result = manager.open(vendorId, productId, 1000000) { data ->
-                val map = Arguments.createMap()
-                map.putString("data", data)
-                reactContext
-                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                    .emit("onSerialData", map)
+                handleFrame(data)
             }
             when (result) {
                 is SerialManager.OpenResult.Ok ->
@@ -146,11 +143,7 @@ class SerialModule(
         }
         if (usbManager.hasPermission(device)) {
             val result = manager.open(vendorId, productId, baudRate) { data ->
-                val map = Arguments.createMap()
-                map.putString("data", data)
-                reactContext
-                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                    .emit("onSerialData", map)
+                handleFrame(data)
             }
             when (result) {
                 is SerialManager.OpenResult.Ok ->
@@ -191,6 +184,7 @@ class SerialModule(
     override fun invalidate() {
         super.invalidate()
         clearPendingTimeout()
+        pythonExecutor.shutdownNow()
         try {
             reactContext.unregisterReceiver(permissionReceiver)
         } catch (_: Exception) {
@@ -226,5 +220,59 @@ class SerialModule(
     private fun clearPendingTimeout() {
         pendingTimeout?.let { mainHandler.removeCallbacks(it) }
         pendingTimeout = null
+    }
+
+    private fun handleFrame(data: String) {
+        emitSerialData(data)
+        pythonExecutor.execute {
+            try {
+                val values = parseCsvToIntList(data)
+                if (values == null) {
+                    emitSerialResult(data, null, "PARSE_ERROR")
+                    return@execute
+                }
+                val module = Python.getInstance().getModule("server")
+                val resultJson = module.callAttr("server", values).toString()
+                emitSerialResult(data, resultJson, null)
+            } catch (e: Exception) {
+                Log.e(logTag, "python server call failed", e)
+                emitSerialResult(data, null, e.message ?: "PY_ERROR")
+            }
+        }
+    }
+
+    private fun emitSerialData(data: String) {
+        val map = Arguments.createMap()
+        map.putString("data", data)
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onSerialData", map)
+    }
+
+    private fun emitSerialResult(data: String, resultJson: String?, error: String?) {
+        val map = Arguments.createMap()
+        map.putString("data", data)
+        if (resultJson != null) {
+            map.putString("result", resultJson)
+        }
+        if (error != null) {
+            map.putString("error", error)
+        }
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onSerialResult", map)
+    }
+
+    private fun parseCsvToIntList(data: String): List<Int>? {
+        if (data.isBlank()) return emptyList()
+        val parts = data.split(',')
+        val list = ArrayList<Int>(parts.size)
+        for (part in parts) {
+            val trimmed = part.trim()
+            if (trimmed.isEmpty()) continue
+            val value = trimmed.toIntOrNull() ?: return null
+            list.add(value)
+        }
+        return list
     }
 }

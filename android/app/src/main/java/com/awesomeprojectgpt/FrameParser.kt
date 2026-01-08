@@ -7,6 +7,7 @@ class FrameParser {
     private var windowPos = 0
     private var windowFilled = 0
 
+    private val expectedLength = 144
     private var inFrame = false
     private var buf = ByteArray(4096)
     private var idx = 0
@@ -17,6 +18,12 @@ class FrameParser {
         if (inFrame) {
             ensureCapacity()
             buf[idx++] = b.toByte()
+            if (idx >= expectedLength) {
+                val data = buf.copyOf(idx)
+                idx = 0
+                inFrame = false
+                return data.joinToString(",") { (it.toInt() and 0xFF).toString() }
+            }
         }
 
         if (isDelimiterMatched()) {

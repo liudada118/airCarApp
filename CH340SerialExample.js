@@ -28,11 +28,25 @@ export default function CH340SerialExample() {
   useEffect(() => {
     const emitter = new NativeEventEmitter(SerialModule)
     const sub = emitter.addListener('onSerialData', e => {
-      console.log('frame:', e.data)
       setLogs(prev => {
         const next = [`RX: ${e.data}`, ...prev]
-        return next.slice(0, 200)
+        return next.slice(0, 3)
       })
+    })
+    const resultSub = emitter.addListener('onSerialResult', e => {
+      if (e.error) {
+        setLogs(prev => {
+          const next = [`PY_ERR: ${e.error}`, ...prev]
+          return next.slice(0, 3)
+        })
+        return
+      }
+      if (e.result) {
+        setLogs(prev => {
+          const next = [`PY: ${e.result}`, ...prev]
+          return next.slice(0, 3)
+        })
+      }
     })
     if (SerialModule.resetPendingOpen) {
       SerialModule.resetPendingOpen()
@@ -42,6 +56,7 @@ export default function CH340SerialExample() {
     })
     return () => {
       sub.remove()
+      resultSub.remove()
       SerialModule.close()
     }
   }, [])
