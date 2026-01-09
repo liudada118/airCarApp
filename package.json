@@ -10,10 +10,14 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native/new-app-screen": "0.83.1",
+    "expo": "^54.0.31",
+    "expo-gl": "^14.0.0",
+    "expo-modules-core": "^2.0.0",
     "react": "19.2.0",
     "react-native": "0.83.1",
-    "@react-native/new-app-screen": "0.83.1",
-    "react-native-safe-area-context": "^5.5.2"
+    "react-native-safe-area-context": "^5.5.2",
+    "three": "^0.168.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

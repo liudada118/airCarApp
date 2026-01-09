@@ -2,6 +2,7 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 apply plugin: "com.chaquo.python"
+apply from: new File(rootDir, "../node_modules/expo-modules-autolinking/scripts/android/autolinking_implementation.gradle")
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -90,11 +91,7 @@ android {
                 options "--proxy", "http://127.0.0.1:7890"
                 install "numpy"
                 install "ruamel.yaml"
-                install "matplotlib"
-                install "pandas"
                 install "scipy"
-                install "serial"
-               
             }
         }
     }
@@ -118,9 +115,25 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+    sourceSets {
+        main {
+            java {
+                srcDir("$buildDir/$generatedFilesSrcDir")
+            }
+        }
+    }
 }
 
+def generateExpoModulesPackageListTask = tasks.register("generateExpoModulesPackageList") {
+    doLast {
+        generateExpoModulesPackageList()
+    }
+}
+
+preBuild.dependsOn(generateExpoModulesPackageListTask)
+
 dependencies {
+    addExpoModulesDependencies(dependencies, project)
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
     implementation("com.github.mik3y:usb-serial-for-android:3.7.0")
@@ -129,5 +142,12 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+}
+
+afterEvaluate {
+    ensureDependeciesWereEvaluated(project)
+    tasks.withType(Exec).matching { it.name == "createExpoConfig" }.configureEach {
+        environment "NODE_ENV", "development"
     }
 }

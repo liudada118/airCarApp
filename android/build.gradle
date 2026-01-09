@@ -8,7 +8,8 @@ buildscript {
         kotlinVersion = "2.1.20"
     }
     repositories {
-        google()
+        maven { url "https://maven.aliyun.com/repository/google" }
+        maven { url "https://maven.aliyun.com/repository/central" }
         mavenCentral()
     }
     dependencies {
@@ -20,3 +21,25 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository
+
+allprojects {
+    repositories {
+        maven { url "https://maven.aliyun.com/repository/google" }
+        maven { url "https://maven.aliyun.com/repository/central" }
+        mavenCentral()
+    }
+}
+
+gradle.projectsEvaluated {
+    allprojects { project ->
+        def toRemove = project.repositories.findAll { repo ->
+            repo instanceof MavenArtifactRepository &&
+                repo.url.toString().contains("dl.google.com")
+        }
+        toRemove.each { repo ->
+            project.repositories.remove(repo)
+        }
+    }
+}
