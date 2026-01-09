@@ -64,3 +64,38 @@
 ## 5. 依赖与运行要点
 - Android 侧通过 Chaquopy 安装 Python 依赖（如 `numpy`、`ruamel.yaml`、`matplotlib`、`pandas`、`scipy`、`serial`）。
 - 需要确保设备/模拟器支持 USB host 权限与 CH340 设备。
+
+## 6. 构建踩坑与变更记录（近期）
+### 6.1 仓库/网络（TLS 握手/镜像）
+- 现象：Gradle 访问 `dl.google.com` 出现 TLS handshake 失败，`fragment`/`gradle` 等依赖无法下载。
+- 处理：`android/settings.gradle` 统一使用阿里云镜像 + `jitpack`，`android/build.gradle` 移除 `google()`，并在 `projectsEvaluated` 时移除任何 `dl.google.com` 仓库；添加 `scripts/patch-gradle-repos.js` + `postinstall`，替换 node_modules 内 gradle plugin 的 `google()`。
+- 涉及文件：`android/settings.gradle`，`android/build.gradle`，`scripts/patch-gradle-repos.js`，`package.json`。
+
+### 6.2 Chaquopy pip 安装权限（WinError 5）
+- 现象：`generateDebugPythonRequirements` 在 `os.renames` 时报“拒绝访问”，`arm64-v8a -> common` 迁移失败。
+- 处理：`android/app/build.gradle` 的 `doFirst` 在执行前修补 `pip_install.py`，将 `stop_max_delay` 更新为 30000，并在 `renames` 失败时改为 copy+delete，同时注入 `import shutil`；建议给 `android/app/build` 和 `%LOCALAPPDATA%/chaquopy` 加杀软排除。
+- 涉及文件：`android/app/build.gradle`。
+
+### 6.3 Python 依赖/配置读取
+- 处理：Chaquopy pip 依赖精简为 `numpy`、`scipy`、`PyYAML`，并在 `config.py` 中增加 ruamel 不可用时的 PyYAML 后备分支（注释保留功能将失效）。
+- 涉及文件：`android/app/build.gradle`，`android/app/src/main/python/config.py`。
+
+### 6.4 Expo/RN 版本对齐
+- 现象：`expo-gl`/`expo-modules-core` 出现 RuntimeEnvironmentInterface 缺失与 Kotlin 编译错误。
+- 处理：对齐 Expo SDK 54 依赖（`expo` ~54.0.31，`expo-modules-core` ~3.0.29，`expo-gl` ~16.0.9，`react` 19.1.0，`react-native` 0.81.5）。
+- 涉及文件：`package.json`。
+
+### 6.5 RN 新架构 Host 接口
+- 现象：`MainApplication` 未实现 `reactNativeHost`，导致 `compileDebugKotlin` 失败。
+- 处理：切换为 `ReactNativeHostWrapper` + `DefaultReactNativeHost`，补充 `reactNativeHost`，并由其派生 `reactHost`。
+- 涉及文件：`android/app/src/main/java/com/awesomeprojectgpt/MainApplication.kt`。
+
+### 6.6 three.js 在 RN 中的 DOM 依赖
+- 现象：`document` 不存在，`THREE.WebGLRenderer` 创建 canvas 失败。
+- 处理：为 `WebGLRenderer` 显式传入 `canvas` stub + `context: gl`，绕开 DOM 创建。
+- 涉及文件：`airComponentsRn/CarAirRN.js`。
+
+### 6.7 Expo 构建环境变量
+- 现象：`createExpoConfig` 提示 `NODE_ENV` 不存在。
+- 处理：在 `createExpoConfig` 的 Exec 任务中注入 `NODE_ENV=development`。
+- 涉及文件：`android/app/build.gradle`。

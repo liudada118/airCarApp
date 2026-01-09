@@ -90,7 +90,7 @@ android {
             pip {
                 options "--proxy", "http://127.0.0.1:7890"
                 install "numpy"
-                install "ruamel.yaml"
+                install "PyYAML"
                 install "scipy"
             }
         }
@@ -147,6 +147,49 @@ dependencies {
 
 afterEvaluate {
     ensureDependeciesWereEvaluated(project)
+    tasks.matching { it.name == "generateDebugPythonRequirements" || it.name == "generateReleasePythonRequirements" }
+        .configureEach {
+            doFirst {
+                def pipInstall = file("$buildDir/generated/python/bp/chaquopy/pip_install.py")
+                if (pipInstall.exists()) {
+                    def text = pipInstall.getText("UTF-8")
+                    def updated = text.replace("stop_max_delay=3000", "stop_max_delay=30000")
+                    def lineEnding = updated.contains("\r\n") ? "\r\n" : "\n"
+                    def importReLine = "import re${lineEnding}"
+                    def importOsLine = "import os${lineEnding}"
+                    if (!updated.contains("import shutil")) {
+                        if (updated.contains(importReLine)) {
+                            updated = updated.replace(importReLine, "import re${lineEnding}import shutil${lineEnding}")
+                        } else if (updated.contains(importOsLine)) {
+                            updated = updated.replace(importOsLine, "import os${lineEnding}import shutil${lineEnding}")
+                        }
+                    }
+                    def renamesOld = "def renames(src, dst):${lineEnding}    os.renames(src, dst)"
+                    def renamesNew = [
+                        "def renames(src, dst):",
+                        "    try:",
+                        "        os.renames(src, dst)",
+                        "    except PermissionError:",
+                        "        if isdir(src):",
+                        "            if exists(dst):",
+                        "                rmtree(dst)",
+                        "            os.makedirs(dirname(dst), exist_ok=True)",
+                        "            shutil.copytree(src, dst)",
+                        "            rmtree(src)",
+                        "        else:",
+                        "            os.makedirs(dirname(dst), exist_ok=True)",
+                        "            shutil.copy2(src, dst)",
+                        "            os.remove(src)",
+                    ].join(lineEnding)
+                    if (updated.contains(renamesOld) && !updated.contains("shutil.copytree")) {
+                        updated = updated.replace(renamesOld, renamesNew)
+                    }
+                    if (updated != text) {
+                        pipInstall.write(updated, "UTF-8")
+                    }
+                }
+            }
+        }
     tasks.withType(Exec).matching { it.name == "createExpoConfig" }.configureEach {
         environment "NODE_ENV", "development"
     }

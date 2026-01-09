@@ -105,6 +105,13 @@ export default function CarAirRN({data = [], style}) {
   const onContextCreate = useCallback(
     gl => {
       const {drawingBufferWidth: width, drawingBufferHeight: height} = gl;
+      const canvas = {
+        width,
+        height,
+        style: {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
 
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x0b0f16);
@@ -112,7 +119,11 @@ export default function CarAirRN({data = [], style}) {
       const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 50);
       camera.position.set(0, 0, 4.2);
 
-      const renderer = new THREE.WebGLRenderer({gl, antialias: true});
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        context: gl,
+        antialias: true,
+      });
       renderer.setSize(width, height);
       renderer.setPixelRatio(gl.pixelRatio || 1);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
