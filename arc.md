@@ -99,3 +99,17 @@
 - 现象：`createExpoConfig` 提示 `NODE_ENV` 不存在。
 - 处理：在 `createExpoConfig` 的 Exec 任务中注入 `NODE_ENV=development`。
 - 涉及文件：`android/app/build.gradle`。
+
+### 6.8 three.js/GLB 加载与交互（近期）
+- 现象：RN 环境无 DOM，three 默认创建 canvas 会触发 `document` 报错；GLTFLoader 在 RN 下还会遇到 `TextDecoder`/`navigator.userAgent` 缺失。
+- 处理：`WebGLRenderer` 改为显式传入 `canvas` stub + `context: gl`；入口 `index.js` 增加 `TextDecoder` polyfill 和 `navigator.userAgent` 兜底。
+- 涉及文件：`airComponentsRn/CarAirRN.js`，`index.js`。
+
+### 6.9 GLB 资源加载链路调整
+- 处理：GLB 通过 `expo-asset` 下载后使用 `expo-file-system` 新 API `new FileSystem.File(uri).arrayBuffer()` 读取；并加入加载日志与错误日志。
+- 额外：导入路径改为 `three/examples/jsm/loaders/GLTFLoader.js` 以避免 exports 警告；测试模型切换为 `image/chair3.glb`（小模型）。
+- 涉及文件：`airComponentsRn/CarAirRN.js`。
+
+### 6.10 简易交互与加载提示
+- 处理：加入 `PanResponder` 控制旋转/缩放（单指旋转、双指缩放），并新增加载遮罩与错误提示 UI。
+- 涉及文件：`airComponentsRn/CarAirRN.js`。

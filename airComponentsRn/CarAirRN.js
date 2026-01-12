@@ -1,5 +1,5 @@
-import React, {useCallback, useEffect, useRef} from 'react';
-import {PanResponder, StyleSheet} from 'react-native';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {ActivityIndicator, PanResponder, StyleSheet, Text, View} from 'react-native';
 import {Asset} from 'expo-asset';
 import * as FileSystem from 'expo-file-system';
 import {GLView} from 'expo-gl';
@@ -92,6 +92,9 @@ async function loadSeatModel(group) {
 export default function CarAirRN({data = [], style}) {
   const stateRef = useRef({});
   const frameRef = useRef(null);
+  const mountedRef = useRef(true);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -267,9 +270,22 @@ export default function CarAirRN({data = [], style}) {
       };
       rootGroup.rotation.x = controls.rotationX;
 
-      loadSeatModel(rootGroup).catch(err => {
-        console.warn('glb: load failed', err);
-      });
+      setLoading(true);
+      setLoadError(null);
+      loadSeatModel(rootGroup)
+        .then(model => {
+          if (!mountedRef.current) return;
+          setLoading(false);
+          if (!model) {
+            setLoadError('model missing');
+          }
+        })
+        .catch(err => {
+          console.warn('glb: load failed', err);
+          if (!mountedRef.current) return;
+          setLoading(false);
+          setLoadError(err?.message || String(err));
+        });
 
       stateRef.current = {
         scene,
@@ -301,27 +317,67 @@ export default function CarAirRN({data = [], style}) {
     updatePoints(data);
   }, [data, updatePoints]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current);
       }
-    },
-    []
-  );
+    };
+  }, []);
 
   return (
-    <GLView
-      style={[styles.view, style]}
-      onContextCreate={onContextCreate}
-      {...panResponder.panHandlers}
-    />
+    <View style={[styles.container, style]}>
+      <GLView
+        style={styles.view}
+        onContextCreate={onContextCreate}
+        {...panResponder.panHandlers}
+      />
+      {loading ? (
+        <View pointerEvents="none" style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#7cc4ff" />
+          <Text style={styles.loadingText}>Loading model...</Text>
+        </View>
+      ) : null}
+      {!loading && loadError ? (
+        <View pointerEvents="none" style={styles.errorOverlay}>
+          <Text style={styles.errorText}>{loadError}</Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   view: {
     flex: 1,
     backgroundColor: '#0b0f16',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(11, 15, 22, 0.6)',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#d6e6ff',
+    fontSize: 14,
+  },
+  errorOverlay: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 16,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(220, 60, 60, 0.85)',
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 12,
   },
 });
