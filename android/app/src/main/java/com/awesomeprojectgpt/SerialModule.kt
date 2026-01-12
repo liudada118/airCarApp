@@ -20,6 +20,8 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 class SerialModule(
     private val reactContext: ReactApplicationContext
@@ -42,6 +44,11 @@ class SerialModule(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingTimeout: Runnable? = null
     private val pythonExecutor = Executors.newSingleThreadExecutor()
+    private val autoWriteScheduler = Executors.newSingleThreadScheduledExecutor()
+    private val autoWriteLock = Any()
+    private var autoWriteTask: ScheduledFuture<*>? = null
+    @Volatile private var autoWritePayload: String? = null
+    @Volatile private var isAutoMode = false
     private val logTag = "SerialModule"
 
     private val permissionReceiver = object : BroadcastReceiver() {
@@ -170,7 +177,13 @@ class SerialModule(
     }
 
     @ReactMethod
+    fun setAutoWritePayload(text: String) {
+        autoWritePayload = text
+    }
+
+    @ReactMethod
     fun close() {
+        stopAutoWrite()
         manager.close()
     }
 
@@ -184,6 +197,8 @@ class SerialModule(
     override fun invalidate() {
         super.invalidate()
         clearPendingTimeout()
+        stopAutoWrite()
+        autoWriteScheduler.shutdownNow()
         pythonExecutor.shutdownNow()
         try {
             reactContext.unregisterReceiver(permissionReceiver)
@@ -224,13 +239,17 @@ class SerialModule(
 
     private fun handleFrame(data: String) {
         emitSerialData(data)
+        val values = parseCsvToIntList(data)
+        if (values == null) {
+            emitSerialResult(data, null, "PARSE_ERROR")
+            return
+        }
+        if (values.size == 51) {
+            handleModeFrame(values, data)
+            return
+        }
         pythonExecutor.execute {
             try {
-                val values = parseCsvToIntList(data)
-                if (values == null) {
-                    emitSerialResult(data, null, "PARSE_ERROR")
-                    return@execute
-                }
                 val module = Python.getInstance().getModule("server")
                 val resultJson = module.callAttr("server", values).toString()
                 emitSerialResult(data, resultJson, null)
@@ -263,6 +282,36 @@ class SerialModule(
             .emit("onSerialResult", map)
     }
 
+    private fun emitSerialMode(data: String, modeValue: Int) {
+        val map = Arguments.createMap()
+        map.putString("data", data)
+        map.putInt("modeValue", modeValue)
+        map.putBoolean("manual", modeValue == 1)
+        map.putBoolean("auto", modeValue == 0)
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onSerialMode", map)
+    }
+
+    private fun handleModeFrame(values: List<Int>, data: String) {
+        val modeValue = values.getOrNull(49) ?: -1
+        emitSerialMode(data, modeValue)
+        when (modeValue) {
+            0 -> {
+                if (!isAutoMode) {
+                    isAutoMode = true
+                    startAutoWrite()
+                }
+            }
+            1 -> {
+                if (isAutoMode) {
+                    isAutoMode = false
+                    stopAutoWrite()
+                }
+            }
+        }
+    }
+
     private fun parseCsvToIntList(data: String): List<Int>? {
         if (data.isBlank()) return emptyList()
         val parts = data.split(',')
@@ -274,5 +323,27 @@ class SerialModule(
             list.add(value)
         }
         return list
+    }
+
+    private fun startAutoWrite() {
+        synchronized(autoWriteLock) {
+            if (autoWriteTask != null) return
+            autoWriteTask = autoWriteScheduler.scheduleAtFixedRate({
+                val payload = autoWritePayload
+                if (payload.isNullOrEmpty()) return@scheduleAtFixedRate
+                when (val result = manager.write(payload)) {
+                    is SerialManager.OpenResult.Fail ->
+                        Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
+                    else -> {}
+                }
+            }, 0, 500, TimeUnit.MILLISECONDS)
+        }
+    }
+
+    private fun stopAutoWrite() {
+        synchronized(autoWriteLock) {
+            autoWriteTask?.cancel(true)
+            autoWriteTask = null
+        }
     }
 }
