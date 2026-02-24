@@ -54,18 +54,22 @@ class SerialManager(private val context: Context) {
             ?: return OpenResult.Fail("NO_DRIVER", "usb-serial driver not found")
         port = driver.ports[0]
 
-        val conn = usbManager.openDevice(device)
-            ?: return OpenResult.Fail("OPEN_DEVICE_FAIL", "openDevice returned null")
         var lastError: Exception? = null
-        for (attempt in 0 until 2) {
-            try {
-                if (attempt == 0) {
-                    try {
-                        Thread.sleep(100)
-                    } catch (_: InterruptedException) {
-                        // ignore
-                    }
+        val delays = longArrayOf(100L, 300L, 500L, 800L)
+        for (attempt in delays.indices) {
+            if (attempt > 0) {
+                try {
+                    Thread.sleep(delays[attempt])
+                } catch (_: InterruptedException) {
+                    // ignore
                 }
+            }
+            val conn = usbManager.openDevice(device)
+            if (conn == null) {
+                lastError = Exception("openDevice returned null")
+                continue
+            }
+            try {
                 port!!.open(conn)
                 port!!.setParameters(
                     baudRate,
@@ -73,6 +77,11 @@ class SerialManager(private val context: Context) {
                     UsbSerialPort.STOPBITS_1,
                     UsbSerialPort.PARITY_NONE
                 )
+                try {
+                    port!!.purgeHwBuffers(true, true)
+                } catch (_: Exception) {
+                    // ignore
+                }
                 port!!.dtr = true
                 port!!.rts = true
                 readThread = SerialReadThread(port!!, onFrame)
@@ -85,12 +94,10 @@ class SerialManager(private val context: Context) {
                 } catch (_: Exception) {
                     // ignore
                 }
-                if (attempt == 0) {
-                    try {
-                        Thread.sleep(200)
-                    } catch (_: InterruptedException) {
-                        // ignore
-                    }
+                try {
+                    conn.close()
+                } catch (_: Exception) {
+                    // ignore
                 }
             }
         }
@@ -108,8 +115,24 @@ class SerialManager(private val context: Context) {
         }
     }
 
+    fun writeBytes(bytes: ByteArray): OpenResult {
+        val currentPort = port ?: return OpenResult.Fail("NOT_OPEN", "port not open")
+        return try {
+            currentPort.write(bytes, 2000)
+            OpenResult.Ok
+        } catch (e: Exception) {
+            OpenResult.Fail("WRITE_FAIL", e.message ?: "write failed")
+        }
+    }
+
     fun close() {
         readThread?.shutdown()
+        try {
+            readThread?.join(300)
+        } catch (_: Exception) {
+            // ignore
+        }
+        readThread = null
         port?.close()
         port = null
     }

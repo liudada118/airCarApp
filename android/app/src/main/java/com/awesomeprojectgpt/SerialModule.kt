@@ -19,6 +19,8 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -47,32 +49,58 @@ class SerialModule(
     private val autoWriteScheduler = Executors.newSingleThreadScheduledExecutor()
     private val autoWriteLock = Any()
     private var autoWriteTask: ScheduledFuture<*>? = null
-    @Volatile private var autoWritePayload: String? = null
-    @Volatile private var isAutoMode = false
+    @Volatile private var autoWriteText: String? = null
+    @Volatile private var autoWriteBytes: ByteArray? = null
+    @Volatile private var isAutoMode = true
+    @Volatile private var lastAutoWriteHex: String? = null
     private val logTag = "SerialModule"
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            // 检查接收到的Intent是否是USB权限请求的响应
             if (intent.action != permissionAction) return
+            
+            // 从Intent中获取USB设备信息，如果获取失败则直接返回
             val device =
                 intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE) ?: return
+            
+            // 检查用户是否授予了USB权限
             val granted =
                 intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+            
+            // 获取当前待处理的打开请求
             val pending = pendingOpen
+            
+            // 验证当前设备是否与待处理请求中的设备匹配，防止处理过期或无关的权限响应
             if (pending == null || device.deviceId != pending.device.deviceId) return
+            
+            // 清除待处理请求和超时任务
             pendingOpen = null
             clearPendingTimeout()
+            
+            // 如果用户拒绝了权限，则拒绝Promise并返回
             if (!granted) {
                 pending.promise.reject("NO_PERMISSION", "usb permission denied")
                 return
             }
+            
+            // 尝试打开串口连接，并设置数据帧处理回调
             val result = manager.open(pending.vendorId, pending.productId, pending.baudRate) { data ->
                 handleFrame(data)
             }
+            
+            // 根据打开结果处理Promise
             when (result) {
-                is SerialManager.OpenResult.Ok ->
+                is SerialManager.OpenResult.Ok -> {
+                    // 如果当前处于自动模式，则启动自动写入任务
+                    if (isAutoMode) {
+                        startAutoWrite()
+                    }
+                    // 成功打开连接，解决Promise
                     pending.promise.resolve(true)
+                }
                 is SerialManager.OpenResult.Fail ->
+                    // 打开失败，拒绝Promise并传递错误信息
                     pending.promise.reject(result.code, result.message)
             }
         }
@@ -117,8 +145,12 @@ class SerialModule(
                 handleFrame(data)
             }
             when (result) {
-                is SerialManager.OpenResult.Ok ->
+                is SerialManager.OpenResult.Ok -> {
+                    if (isAutoMode) {
+                        startAutoWrite()
+                    }
                     promise.resolve(true)
+                }
                 is SerialManager.OpenResult.Fail ->
                     promise.reject(result.code, result.message)
             }
@@ -153,8 +185,12 @@ class SerialModule(
                 handleFrame(data)
             }
             when (result) {
-                is SerialManager.OpenResult.Ok ->
+                is SerialManager.OpenResult.Ok -> {
+                    if (isAutoMode) {
+                        startAutoWrite()
+                    }
                     promise.resolve(true)
+                }
                 is SerialManager.OpenResult.Fail ->
                     promise.reject(result.code, result.message)
             }
@@ -178,7 +214,18 @@ class SerialModule(
 
     @ReactMethod
     fun setAutoWritePayload(text: String) {
-        autoWritePayload = text
+        autoWriteText = text
+        autoWriteBytes = null
+    }
+
+    @ReactMethod
+    fun addListener(eventName: String) {
+        // Required by NativeEventEmitter
+    }
+
+    @ReactMethod
+    fun removeListeners(count: Int) {
+        // Required by NativeEventEmitter
     }
 
     @ReactMethod
@@ -244,8 +291,13 @@ class SerialModule(
             emitSerialResult(data, null, "PARSE_ERROR")
             return
         }
+        if (values.isNotEmpty()) {
+            Log.i(logTag, "frame received: size=${values.size} first=${values.first()} last=${values.last()}")
+        } else {
+            Log.i(logTag, "frame received: empty")
+        }
         if (values.size == 51) {
-            handleModeFrame(values, data)
+            Log.i(logTag, "mode frame ignored: size=${values.size}")
             return
         }
         pythonExecutor.execute {
@@ -253,6 +305,7 @@ class SerialModule(
                 val module = Python.getInstance().getModule("server")
                 val resultJson = module.callAttr("server", values).toString()
                 emitSerialResult(data, resultJson, null)
+                updateAutoWritePayloadFromResult(resultJson)
             } catch (e: Exception) {
                 Log.e(logTag, "python server call failed", e)
                 emitSerialResult(data, null, e.message ?: "PY_ERROR")
@@ -295,20 +348,24 @@ class SerialModule(
 
     private fun handleModeFrame(values: List<Int>, data: String) {
         val modeValue = values.getOrNull(49) ?: -1
+        Log.i(logTag, "mode frame received: size=${values.size} modeValue=$modeValue")
         emitSerialMode(data, modeValue)
         when (modeValue) {
             0 -> {
                 if (!isAutoMode) {
                     isAutoMode = true
+                    Log.i(logTag, "auto mode enabled")
                     startAutoWrite()
                 }
             }
             1 -> {
                 if (isAutoMode) {
                     isAutoMode = false
+                    Log.i(logTag, "auto mode disabled")
                     stopAutoWrite()
                 }
             }
+            else -> Log.w(logTag, "unknown mode value: $modeValue")
         }
     }
 
@@ -325,16 +382,59 @@ class SerialModule(
         return list
     }
 
+    private fun updateAutoWritePayloadFromResult(resultJson: String) {
+        try {
+            val json = JSONObject(resultJson)
+            if (!json.has("control_command") || json.isNull("control_command")) {
+                autoWriteText = null
+                return
+            }
+            val arr = json.optJSONArray("control_command") ?: return
+            val hex = controlCommandToHex(arr)
+            if (hex.isEmpty()) {
+                autoWriteText = null
+                return
+            }
+            autoWriteText = hex
+            autoWriteBytes = null
+            if (hex != lastAutoWriteHex) {
+                lastAutoWriteHex = hex
+                Log.i(logTag, "auto write payload updated: hex=$hex")
+            }
+        } catch (e: Exception) {
+            Log.e(logTag, "parse control_command failed", e)
+        }
+    }
+
+    private fun controlCommandToHex(arr: JSONArray): String {
+        val sb = StringBuilder(arr.length() * 2)
+        for (i in 0 until arr.length()) {
+            val value = arr.optInt(i, -1)
+            if (value < 0) continue
+            val hex = Integer.toString(value and 0xFF, 16).padStart(2, '0')
+            sb.append(hex)
+        }
+        return sb.toString()
+    }
+
     private fun startAutoWrite() {
         synchronized(autoWriteLock) {
             if (autoWriteTask != null) return
+            if (autoWriteScheduler.isShutdown) {
+                Log.w(logTag, "auto write scheduler is shutdown")
+                return
+            }
             autoWriteTask = autoWriteScheduler.scheduleAtFixedRate({
-                val payload = autoWritePayload
+                try {
+                val payload = autoWriteText
                 if (payload.isNullOrEmpty()) return@scheduleAtFixedRate
                 when (val result = manager.write(payload)) {
                     is SerialManager.OpenResult.Fail ->
                         Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
                     else -> {}
+                }
+                } catch (e: Exception) {
+                    Log.e(logTag, "auto write task crashed", e)
                 }
             }, 0, 500, TimeUnit.MILLISECONDS)
         }
