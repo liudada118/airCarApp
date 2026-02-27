@@ -42,13 +42,13 @@ const CAMERA_MAX_DISTANCE = 600;
 //   rightsit  mesh ← 靠背左侧翼（backConfig 3x2）
 const DEFAULT_POINT_FIT_LAYOUT = {
   // 坐垫：位于座椅坐面上，水平放置（绕 X 轴旋转约 -PI/2）
-  center: {position: [5, -78, 45], rotation: [-Math.PI / 2 + 0.1, 0, 0]},
+  center: {position: [0, -82, 42], rotation: [-Math.PI / 2 + 0.15, 0, 0]},
   // 靠背：位于靠背面上，几乎竖直，微微前倾
-  centersit: {position: [3, 10, -55], rotation: [-0.1, 0, 0]},
+  centersit: {position: [0, 5, -52], rotation: [-0.1, 0, 0]},
   // 靠背右侧翼：在靠背右侧（X 正方向），绕 Y 轴旋转贴合侧面
-  leftsit: {position: [48, 20, -45], rotation: [-0.1, 0.65, 0]},
+  leftsit: {position: [42, 8, -48], rotation: [-0.1, 0.6, 0]},
   // 靠背左侧翼：在靠背左侧（X 负方向），绕 Y 轴反向旋转
-  rightsit: {position: [-48, 20, -45], rotation: [-0.1, -0.65, 0]},
+  rightsit: {position: [-42, 8, -48], rotation: [-0.1, -0.6, 0]},
 };
 
 // 点图整体旋转（应用到 pointGroup）
@@ -378,11 +378,13 @@ function applyPointFitToModel(model, pointMeshes, layoutMap = DEFAULT_POINT_FIT_
   if (!model || !pointMeshes) {
     return;
   }
-  // loadSeatModel 已将模型居中到原点（model.position ≈ [0, -0.6, 0]），
-  // 并缩放到 MODEL_TARGET_SIZE。
-  // layout.position 是相对于模型中心的偏移（rootGroup 局部空间）。
-  // 因为模型已居中，中心就是 model.position，fitScale = 1。
-  const localCenter = model.position.clone();
+  // loadSeatModel 的居中逻辑：
+  //   model.position = -center * scale  (GLB 原始中心的偏移)
+  //   最终顶点在 rootGroup 局部空间中 = (vertex - center) * scale
+  //   所以模型的视觉中心在 rootGroup 局部空间中是原点 [0, -0.6, 0]
+  // 注意：model.position 是很大的负值（约 [0, -205, -262]），
+  // 不是视觉中心，不能用作 localCenter。
+  const localCenter = new THREE.Vector3(0, -0.6, 0);
 
   Object.keys(layoutMap).forEach(name => {
     const mesh = pointMeshes[name];
