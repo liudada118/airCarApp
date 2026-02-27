@@ -1,11 +1,20 @@
 """
 配置管理模块
 用于加载和管理座椅控制系统的配置参数
+
+兼容说明：使用 PyYAML 替代 ruamel.yaml 以兼容 Chaquopy 环境。
+接口保持不变，但 save_to_file() 不再保留原始注释。
 """
 import copy
 from typing import Any, Dict, Optional
-from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
+
+try:
+    from ruamel.yaml import YAML
+    from ruamel.yaml.comments import CommentedMap
+    _USE_RUAMEL = True
+except ImportError:
+    import yaml
+    _USE_RUAMEL = False
 
 
 class Config:
@@ -19,22 +28,26 @@ class Config:
             config_path: 配置文件路径
         """
         self.config_path = config_path
-        self.yaml = YAML()
-        self.yaml.preserve_quotes = True
-        self.yaml.default_flow_style = False
+        if _USE_RUAMEL:
+            self.yaml = YAML()
+            self.yaml.preserve_quotes = True
+            self.yaml.default_flow_style = False
         self._config = self._load_config()
         self._original_config = copy.deepcopy(self._config)
 
-    def _load_config(self) -> CommentedMap:
+    def _load_config(self):
         """
-        加载配置文件（保留注释）
+        加载配置文件
 
         Returns:
-            配置字典（CommentedMap类型，保留注释信息）
+            配置字典
         """
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = self.yaml.load(f)
+                if _USE_RUAMEL:
+                    config = self.yaml.load(f)
+                else:
+                    config = yaml.safe_load(f)
             return config
         except FileNotFoundError:
             raise FileNotFoundError(f"配置文件未找到: {self.config_path}")
@@ -103,15 +116,26 @@ class Config:
 
     def save_to_file(self) -> None:
         """
-        将当前配置保存到文件（保留注释）
+        将当前配置保存到文件
+
+        注意：使用 PyYAML 时不保留原始注释。
 
         Examples:
             >>> config.set('lumbar.back_total_threshold', 600)
-            >>> config.save_to_file()  # 持久化到yaml文件，保留注释
+            >>> config.save_to_file()  # 持久化到yaml文件
         """
         try:
             with open(self.config_path, 'w', encoding='utf-8') as f:
-                self.yaml.dump(self._config, f)
+                if _USE_RUAMEL:
+                    self.yaml.dump(self._config, f)
+                else:
+                    yaml.dump(
+                        self._config,
+                        f,
+                        default_flow_style=False,
+                        allow_unicode=True,
+                        sort_keys=False,
+                    )
         except Exception as e:
             raise IOError(f"保存配置文件失败: {e}")
 
@@ -133,11 +157,15 @@ class Config:
 
         Returns:
             注释文本（如果存在），否则返回 None
+            注意：使用 PyYAML 时始终返回 None
 
         Examples:
             >>> config.get_comment('integrated_system.cushion_sum_threshold')
             '坐垫压力总和阈值，判定为有人坐下的压力值'
         """
+        if not _USE_RUAMEL:
+            return None
+
         keys = key_path.split('.')
         obj = self._config
 
@@ -207,7 +235,7 @@ class Config:
                 else:
                     # 获取注释
                     comment = None
-                    if hasattr(obj, 'ca') and hasattr(obj.ca, 'items'):
+                    if _USE_RUAMEL and hasattr(obj, 'ca') and hasattr(obj.ca, 'items'):
                         comment_token = obj.ca.items.get(key)
                         if comment_token and len(comment_token) >= 3:
                             if comment_token[2] and comment_token[2].value:
