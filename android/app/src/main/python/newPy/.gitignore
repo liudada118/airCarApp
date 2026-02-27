@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary analysis files
+enhanced_features.csv
+feature_discrimination.csv
+analysis_notes.txt
+analysis_findings.txt
+explore_data.py
+
+# Model artifacts (large binary files)
+output/body_type_model.pkl
+output/features.csv

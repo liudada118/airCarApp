@@ -1,88 +1,153 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+﻿import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ConnectionErrorModal,
-  SeatDiagram,
-  Toast,
+  Dimensions,
+  NativeEventEmitter,
+  NativeModules,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
+import {
   TopBar,
+  SeatDiagram,
+  ConnectionErrorModal,
 } from '../components';
-import { useSerialConnection } from '../serial';
-import { BorderRadius, Colors, FontSize, Spacing } from '../theme';
-import type { AirbagValues, ConnectionStatus, SeatStatus } from '../types';
+import IconFont from '../components/IconFont';
+import CarAirRN from '../components/CarAirRN';
+import type {
+  SeatStatus,
+  ConnectionStatus,
+  AirbagValues,
+} from '../types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const DEFAULT_BAUD_RATE = 1000000;
+const EMPTY_SENSOR_FRAME: number[] = new Array(144).fill(0);
+let hasTriedAutoConnect = false;
 
 interface HomeScreenProps {
   onNavigateToCustomize: () => void;
 }
 
-const SeatIcon: React.FC<{ type: 'seated' | 'away'; active: boolean }> = ({
-  type,
-  active,
-}) => {
-  const color = active ? Colors.primary : Colors.textGray;
-  return (
-    <View style={seatIconStyles.container}>
-      <View style={[seatIconStyles.seatBack, { borderColor: color }]} />
-      <View style={[seatIconStyles.seatBase, { borderColor: color }]} />
-      {type === 'seated' ? (
-        <View style={[seatIconStyles.personDot, { backgroundColor: color }]} />
-      ) : null}
-    </View>
-  );
+interface SerialDevice {
+  vendorId: number;
+  productId: number;
+  deviceName?: string;
+}
+
+interface SerialModuleType {
+  listDevices?: () => Promise<unknown>;
+  open?: (vendorId: number, productId: number) => Promise<boolean>;
+  openWithOptions?: (
+    vendorId: number,
+    productId: number,
+    options: { baudRate: number },
+  ) => Promise<boolean>;
+  resetPendingOpen?: () => void;
+  close?: () => void;
+}
+
+interface SerialResultEvent {
+  data?: string;
+  result?: string;
+  error?: string;
+}
+
+const { SerialModule } = NativeModules as {
+  SerialModule?: SerialModuleType;
 };
 
-const seatIconStyles = StyleSheet.create({
-  container: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  seatBack: {
-    position: 'absolute',
-    width: 20,
-    height: 24,
-    borderWidth: 2,
-    borderRadius: 4,
-    top: 2,
-    left: 6,
-    transform: [{ rotate: '-10deg' }],
-  },
-  seatBase: {
-    position: 'absolute',
-    width: 24,
-    height: 10,
-    borderWidth: 2,
-    borderRadius: 3,
-    bottom: 4,
-    left: 10,
-  },
-  personDot: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    top: 6,
-    left: 12,
-  },
-});
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function parseSerialFrame(payload: string): number[] | null {
+  if (!payload.trim()) {
+    return null;
+  }
+
+  const parts = payload.split(',');
+  const result: number[] = [];
+
+  for (let i = 0; i < parts.length; i += 1) {
+    const value = Number.parseInt(parts[i].trim(), 10);
+    if (Number.isNaN(value)) {
+      return null;
+    }
+    result.push(value);
+  }
+
+  return result;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+  }
+
+  return '连接失败，请检查传感器设备';
+}
+
+function pickTargetDevice(devices: SerialDevice[]): SerialDevice | undefined {
+  return devices.find(d => Number(d?.productId ?? 0) !== 0) ?? devices[0];
+}
+
+function mapSeatStateFromAlgoResult(result: string): SeatStatus | null {
+  try {
+    const parsed = JSON.parse(result) as {
+      algorData?: { living_status?: unknown; seat_state?: unknown };
+      living_status?: unknown;
+      seat_state?: unknown;
+    };
+
+    const livingStatus =
+      parsed.algorData?.living_status ?? parsed.living_status;
+    if (typeof livingStatus === 'string') {
+      const normalized = livingStatus.trim();
+      if (normalized === '离座') {
+        return 'away';
+      }
+      if (normalized === '在座') {
+        return 'seated';
+      }
+    }
+
+    const seatState = parsed.algorData?.seat_state ?? parsed.seat_state;
+    if (typeof seatState !== 'string' || !seatState) {
+      return null;
+    }
+
+    if (seatState === 'OFF_SEAT' || seatState === 'RESETTING') {
+      return 'away';
+    }
+
+    return 'seated';
+  } catch (_error) {
+    return null;
+  }
+}
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
-  const serial = useSerialConnection();
   const [seatStatus, setSeatStatus] = useState<SeatStatus>('seated');
+  const [connectionStatus, setConnectionStatus] =
+    useState<ConnectionStatus>('disconnected');
+  const [connecting, setConnecting] = useState(false);
   const [adaptiveEnabled, setAdaptiveEnabled] = useState(true);
   const [showConnectionError, setShowConnectionError] = useState(false);
-  const [toast, setToast] = useState<{
-    visible: boolean;
-    message: string;
-    type: 'success' | 'info' | 'error';
-  }>({
-    visible: false,
-    message: '',
-    type: 'success',
-  });
+  const [connectionErrorMessage, setConnectionErrorMessage] = useState('');
 
   const [airbagValues] = useState<AirbagValues>({
     shoulder: 3,
@@ -92,64 +157,125 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
     legRest: 3,
   });
 
-  const connectionStatus: ConnectionStatus =
-    serial?.connectionStatus ?? 'disconnected';
+  const [sensorData, setSensorData] = useState<number[]>(EMPTY_SENSOR_FRAME);
+
+  const autoConnectSensor = useCallback(async () => {
+    if (connecting || connectionStatus === 'connected') {
+      return;
+    }
+
+    if (Platform.OS !== 'android') {
+      setConnectionStatus('error');
+      setConnectionErrorMessage('当前平台不支持 USB 串口传感器连接');
+      setShowConnectionError(true);
+      return;
+    }
+
+    if (!SerialModule?.listDevices || (!SerialModule.openWithOptions && !SerialModule.open)) {
+      setConnectionStatus('error');
+      setConnectionErrorMessage('SerialModule 不可用，请检查原生模块集成');
+      setShowConnectionError(true);
+      return;
+    }
+
+    setConnecting(true);
+    setConnectionStatus('connecting');
+    setShowConnectionError(false);
+    setConnectionErrorMessage('');
+
+    try {
+      const list = await SerialModule.listDevices();
+      const devices = (Array.isArray(list) ? list : []) as SerialDevice[];
+      const target = pickTargetDevice(devices);
+
+      if (!target) {
+        throw new Error('未检测到可用传感器设备');
+      }
+
+      const openSelected = async () => {
+        if (SerialModule.openWithOptions) {
+          await SerialModule.openWithOptions(
+            target.vendorId,
+            target.productId,
+            { baudRate: DEFAULT_BAUD_RATE },
+          );
+          return;
+        }
+
+        if (SerialModule.open) {
+          await SerialModule.open(target.vendorId, target.productId);
+        }
+      };
+
+      SerialModule.resetPendingOpen?.();
+      try {
+        await openSelected();
+      } catch (_firstError) {
+        SerialModule.close?.();
+        await sleep(120);
+        SerialModule.resetPendingOpen?.();
+        await openSelected();
+      }
+
+      setConnectionStatus('connected');
+    } catch (error) {
+      setConnectionStatus('error');
+      setConnectionErrorMessage(getErrorMessage(error));
+      setShowConnectionError(true);
+    } finally {
+      setConnecting(false);
+    }
+  }, [connecting, connectionStatus]);
 
   useEffect(() => {
-    if (serial?.connectionError) {
-      setShowConnectionError(true);
+    if (hasTriedAutoConnect) {
+      return;
     }
-  }, [serial?.connectionError]);
 
-  const showToast = useCallback(
-    (message: string, type: 'success' | 'info' | 'error' = 'success') => {
-      setToast({ visible: true, message, type });
-    },
-    [],
-  );
+    hasTriedAutoConnect = true;
+    autoConnectSensor().catch(() => undefined);
+  }, [autoConnectSensor]);
 
-  const hideToast = useCallback(() => {
-    setToast(prev => ({ ...prev, visible: false }));
+  useEffect(() => {
+    if (!SerialModule) {
+      return;
+    }
+
+    const emitter = new NativeEventEmitter(SerialModule as never);
+
+    const dataSub = emitter.addListener('onSerialData', event => {
+      const payload = event && typeof event.data === 'string' ? event.data : '';
+      if (!payload) {
+        return;
+      }
+
+      const parsed = parseSerialFrame(payload);
+      if (parsed) {
+        setSensorData(parsed);
+      }
+    });
+
+    const resultSub = emitter.addListener('onSerialResult', (event: SerialResultEvent) => {
+      if (typeof event.result === 'string' && event.result) {
+        console.log('[AlgorithmResult]', event.result);
+        const nextSeatStatus = mapSeatStateFromAlgoResult(event.result);
+        if (nextSeatStatus) {
+          setSeatStatus(nextSeatStatus);
+        }
+      }
+
+      if (typeof event.error === 'string' && event.error) {
+        setConnectionStatus('error');
+        setConnectionErrorMessage(event.error);
+        setShowConnectionError(true);
+      }
+    });
+
+    return () => {
+      dataSub.remove();
+      resultSub.remove();
+    };
   }, []);
-
-  const hideConnectionError = useCallback(() => {
-    setShowConnectionError(false);
-    serial?.clearError();
-  }, [serial]);
-
-  const handleRefreshDevices = useCallback(() => {
-    if (!serial) {
-      showToast('Serial module is unavailable.', 'error');
-      return;
-    }
-    serial.refreshDevices().then(list => {
-      showToast(`Detected ${list.length} serial device(s).`, 'info');
-    }).catch(() => undefined);
-  }, [serial, showToast]);
-
-  const handleConnectToggle = useCallback(() => {
-    if (!serial) {
-      showToast('Serial module is unavailable.', 'error');
-      return;
-    }
-
-    if (connectionStatus === 'connected') {
-      serial.disconnect();
-      showToast('Serial disconnected.', 'info');
-      return;
-    }
-
-    serial.connect().then(ok => {
-      showToast(ok ? 'Serial connected.' : 'Serial connection failed.', ok ? 'success' : 'error');
-    }).catch(() => undefined);
-  }, [connectionStatus, serial, showToast]);
-
-  const connectLabel =
-    connectionStatus === 'connected'
-      ? 'Disconnect'
-      : serial?.connecting
-      ? 'Connecting...'
-      : 'Connect';
 
   return (
     <View style={styles.container}>
@@ -159,97 +285,61 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
         <View style={styles.leftPanel}>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Seat Status</Text>
+              <IconFont name="bianji" size={14} color={Colors.textGray} />
+              <Text style={styles.sectionTitle}>座椅状态</Text>
             </View>
             <View style={styles.seatStatusRow}>
-              <TouchableOpacity
+              <View
                 style={[
                   styles.seatStatusCard,
                   seatStatus === 'seated' && styles.seatStatusCardActive,
                 ]}
-                onPress={() => setSeatStatus('seated')}
-                activeOpacity={0.7}
               >
-                <SeatIcon type="seated" active={seatStatus === 'seated'} />
+                <IconFont
+                  name="zaizuo"
+                  size={36}
+                  color={seatStatus === 'seated' ? Colors.primary : Colors.textGray}
+                />
                 <Text
                   style={[
                     styles.seatStatusText,
                     seatStatus === 'seated' && styles.seatStatusTextActive,
                   ]}
                 >
-                  Seated
+                  在座
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </View>
+
+              <View
                 style={[
                   styles.seatStatusCard,
                   seatStatus === 'away' && styles.seatStatusCardActive,
                 ]}
-                onPress={() => setSeatStatus('away')}
-                activeOpacity={0.7}
               >
-                <SeatIcon type="away" active={seatStatus === 'away'} />
+                <IconFont
+                  name="lizuo"
+                  size={36}
+                  color={seatStatus === 'away' ? Colors.primary : Colors.textGray}
+                />
                 <Text
                   style={[
                     styles.seatStatusText,
                     seatStatus === 'away' && styles.seatStatusTextActive,
                   ]}
                 >
-                  Away
+                  离座
                 </Text>
-              </TouchableOpacity>
+              </View>
             </View>
           </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Serial Control</Text>
-            </View>
-            <View style={styles.serialCard}>
-              <View style={styles.serialMetaRow}>
-                <Text style={styles.serialMetaText}>
-                  Devices: {serial?.devices.length ?? 0}
-                </Text>
-                <Text style={styles.serialMetaText}>
-                  Mode: {serial?.mode ?? 'unknown'}
-                </Text>
-              </View>
-              <View style={styles.serialButtons}>
-                <TouchableOpacity
-                  style={styles.refreshButton}
-                  onPress={handleRefreshDevices}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.refreshButtonText}>Refresh</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.connectButton,
-                    connectionStatus === 'connected' && styles.disconnectButton,
-                  ]}
-                  onPress={handleConnectToggle}
-                  activeOpacity={0.7}
-                  disabled={serial?.connecting}
-                >
-                  <Text style={styles.connectButtonText}>{connectLabel}</Text>
-                </TouchableOpacity>
-              </View>
-              <Text numberOfLines={2} style={styles.serialPreview}>
-                {serial?.lastSerialData
-                  ? `RX: ${serial.lastSerialData}`
-                  : 'No serial frame received yet.'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Airbag Status</Text>
+              <IconFont name="bianji" size={14} color={Colors.textGray} />
+              <Text style={styles.sectionTitle}>气囊状态</Text>
             </View>
             <View style={styles.airbagStatusCard}>
-              <Text style={styles.bodyTypeText}>
-                Adaptive profile is active for current body type
-              </Text>
+              <Text style={styles.bodyTypeText}>当前为自适应调节状态</Text>
               <View style={styles.seatThumbnail}>
                 <SeatDiagram
                   activeZone={null}
@@ -259,11 +349,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
                 />
               </View>
               <View style={styles.divider} />
-              <TouchableOpacity
-                onPress={onNavigateToCustomize}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.customizeLink}>Open custom airbag editor</Text>
+              <TouchableOpacity onPress={onNavigateToCustomize} activeOpacity={0.7}>
+                <View style={styles.customizeLinkRow}>
+                  <IconFont name="keshihuatiaojie" size={14} color={Colors.primary} />
+                  <Text style={styles.customizeLink}>自定义气囊调节</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -272,7 +362,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
         <View style={styles.rightPanel}>
           <View style={styles.adaptiveSection}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Adaptive Adjustment</Text>
+              <IconFont name="bianji" size={14} color={Colors.textGray} />
+              <Text style={styles.sectionTitle}>自适应调节</Text>
             </View>
             <View style={styles.toggleContainer}>
               <TouchableOpacity
@@ -289,7 +380,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
                     adaptiveEnabled && styles.toggleTextActive,
                   ]}
                 >
-                  On
+                  开启
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -306,36 +397,33 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
                     !adaptiveEnabled && styles.toggleTextInactive,
                   ]}
                 >
-                  Off
+                  关闭
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.seat3DContainer}>
-            <SeatDiagram
-              activeZone={null}
-              scale={0.9}
-              showAllActive={false}
-              values={airbagValues}
-            />
-            <View style={styles.gridOverlay} />
+            <CarAirRN data={sensorData as unknown as never[]} style={styles.carAir3D} />
           </View>
         </View>
       </View>
 
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onHide={hideToast}
-      />
-
       <ConnectionErrorModal
         visible={showConnectionError}
-        message={serial?.connectionError ?? undefined}
-        onDismiss={hideConnectionError}
+        onDismiss={() => {
+          setShowConnectionError(false);
+          if (connectionStatus === 'error') {
+            setConnectionStatus('disconnected');
+          }
+        }}
       />
+
+      {showConnectionError && connectionErrorMessage ? (
+        <View style={styles.errorHint}>
+          <Text style={styles.errorHintText}>{connectionErrorMessage}</Text>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -352,7 +440,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.lg,
   },
   leftPanel: {
-    width: SCREEN_WIDTH * 0.38,
+    width: SCREEN_WIDTH * 0.35,
     paddingRight: Spacing.xl,
   },
   rightPanel: {
@@ -399,62 +487,6 @@ const styles = StyleSheet.create({
   seatStatusTextActive: {
     color: Colors.primary,
   },
-  serialCard: {
-    backgroundColor: Colors.cardBackground,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  serialMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  serialMetaText: {
-    fontSize: FontSize.sm,
-    color: Colors.textLightGray,
-  },
-  serialButtons: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  refreshButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.borderGray,
-    borderRadius: BorderRadius.round,
-    paddingVertical: Spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.cardBackgroundLight,
-  },
-  refreshButtonText: {
-    color: Colors.textWhite,
-    fontSize: FontSize.sm,
-    fontWeight: '500',
-  },
-  connectButton: {
-    flex: 1,
-    borderRadius: BorderRadius.round,
-    paddingVertical: Spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.buttonBlue,
-  },
-  disconnectButton: {
-    backgroundColor: Colors.cardBackgroundLight,
-    borderWidth: 1,
-    borderColor: Colors.borderGray,
-  },
-  connectButtonText: {
-    color: Colors.textWhite,
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-  },
-  serialPreview: {
-    fontSize: FontSize.sm,
-    color: Colors.textLightGray,
-  },
   airbagStatusCard: {
     backgroundColor: Colors.cardBackground,
     borderRadius: BorderRadius.lg,
@@ -475,6 +507,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.borderGray,
     marginVertical: Spacing.md,
   },
+  customizeLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
   customizeLink: {
     fontSize: FontSize.md,
     color: Colors.primary,
@@ -482,7 +519,7 @@ const styles = StyleSheet.create({
   },
   adaptiveSection: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     gap: Spacing.lg,
     marginBottom: Spacing.xl,
@@ -517,21 +554,26 @@ const styles = StyleSheet.create({
   },
   seat3DContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
   },
-  gridOverlay: {
+  carAir3D: {
+    flex: 1,
+  },
+  errorHint: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-    opacity: 0.1,
-    borderTopWidth: 1,
-    borderColor: Colors.textGray,
+    left: Spacing.xxl,
+    right: Spacing.xxl,
+    bottom: Spacing.xxl,
+    backgroundColor: 'rgba(255, 59, 48, 0.9)',
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  errorHintText: {
+    color: '#fff',
+    fontSize: FontSize.sm,
   },
 });
 
 export default HomeScreen;
-

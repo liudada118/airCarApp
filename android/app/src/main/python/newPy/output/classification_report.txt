@@ -1,0 +1,75 @@
+体型三分类报告 V2
+============================================================
+
+算法版本: 2.0
+最佳模型: KNN5_dist
+评估方式: LOSO-CV + 概率软投票
+滑动窗口: 30帧, 步长15帧
+选中特征数: 40
+窗口样本数: 88
+受试者数: 8
+
+受试者级指标:
+  受试者准确率: 100% (8/8)
+
+帧级指标:
+  Accuracy:    0.8750
+  F1 (macro):  0.8597
+  F1 (weighted): 0.8701
+
+各受试者投票详情:
+  ✓ 张(高大,92kg): 真实=高大 投票=高大 置信度=77%
+  ✓ 曲(瘦小,48kg): 真实=瘦小 投票=瘦小 置信度=100%
+  ✓ 涛(中等,70kg): 真实=中等 投票=中等 置信度=93%
+  ✓ 渠(瘦小,45kg): 真实=瘦小 投票=瘦小 置信度=97%
+  ✓ 程(中等,60kg): 真实=中等 投票=中等 置信度=96%
+  ✓ 笑(高大,90kg): 真实=高大 投票=高大 置信度=52%
+  ✓ 罗正科(中等,未知): 真实=中等 投票=中等 置信度=83%
+  ✓ 罗正科2(中等,72kg): 真实=中等 投票=中等 置信度=80%
+
+选中特征列表:
+   1. full_sum
+   2. full_mean
+   3. full_energy
+   4. full_rms
+   5. full_p75
+   6. full_p25
+   7. back_wing_sum
+   8. back_wing_mean
+   9. wing_total
+  10. back_iqr
+  11. back_row_spread
+  12. back_contact_above_50
+  13. back_block_1_0_mean
+  14. back_block_1_0_sum
+  15. back_block_1_0_max
+  16. cush_mean
+  17. cush_sum
+  18. cush_min
+  19. cush_median
+  20. cush_p25
+  21. cush_p75
+  22. cush_p90
+  23. cush_energy
+  24. cush_rms
+  25. cush_kurtosis
+  26. cush_lr_diff
+  27. cush_lr_ratio
+  28. cush_contact_above_50
+  29. cush_peak_ratio
+  30. cush_block_0_1_mean
+  31. cush_block_0_1_sum
+  32. cush_block_0_1_max
+  33. cush_block_0_2_mean
+  34. cush_block_0_2_sum
+  35. cush_block_0_2_max
+  36. cush_diag_mean
+  37. total_pressure
+  38. total_energy
+  39. wing_main_ratio
+  40. bc_ratio_1_0
+
+混淆矩阵 (帧级):
+[[25  0  0]
+ [ 0 39  3]
+ [ 0  8 13]]

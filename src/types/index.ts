@@ -1,15 +1,15 @@
-/**
- * 气囊区域类型
+﻿/**
+ * Airbag zone type
  */
 export type AirbagZone =
-  | 'shoulder'   // 肩部气囊
-  | 'lumbar'     // 腰托气囊
-  | 'sideWing'   // 侧翼气囊
-  | 'hipFirmness' // 臀部软硬度气囊
-  | 'legRest';    // 腿托气囊
+  | 'shoulder'
+  | 'lumbar'
+  | 'sideWing'
+  | 'hipFirmness'
+  | 'legRest';
 
 /**
- * 气囊区域配置
+ * Airbag zone config
  */
 export interface AirbagZoneConfig {
   key: AirbagZone;
@@ -18,22 +18,26 @@ export interface AirbagZoneConfig {
 }
 
 /**
- * 气囊参数值 (0-10)
+ * Airbag values (0-10)
  */
 export type AirbagValues = Record<AirbagZone, number>;
 
 /**
- * 座椅状态
+ * Seat status
  */
 export type SeatStatus = 'seated' | 'away';
 
 /**
- * 连接状态
+ * Connection status
  */
-export type ConnectionStatus = 'connected' | 'disconnected' | 'error';
+export type ConnectionStatus =
+  | 'connected'
+  | 'connecting'
+  | 'disconnected'
+  | 'error';
 
 /**
- * 弹窗类型
+ * Modal type
  */
 export type ModalType =
   | 'confirmSave'
@@ -43,7 +47,7 @@ export type ModalType =
   | null;
 
 /**
- * Toast 类型
+ * Toast type
  */
 export interface ToastConfig {
   visible: boolean;
@@ -52,6 +56,6 @@ export interface ToastConfig {
 }
 
 /**
- * 体型类型
+ * Body type
  */
 export type BodyType = '轻盈型' | '标准型' | '健壮型';

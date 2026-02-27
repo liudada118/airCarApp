@@ -1,0 +1,30 @@
+# Seat Pressure Sensor Control System - Dependencies
+
+# Core dependencies
+numpy>=1.21.0
+PyYAML>=5.4.0
+ruamel.yaml>=0.17.0
+
+# Data analysis & ML (for body_type_classifier)
+pandas>=1.3.0
+scikit-learn>=1.0.0
+scipy>=1.7.0
+matplotlib>=3.4.0
+seaborn>=0.11.0
+
+# HTTP API Service
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Optional dependencies for development and testing
+# Uncomment if needed for your development environment
+
+# Testing
+# pytest>=7.0.0
+# pytest-cov>=3.0.0
+
+# Serial communication (if you need to communicate with hardware)
+# pyserial>=3.5
+
+# Logging (enhanced logging capabilities)
+# loguru>=0.6.0

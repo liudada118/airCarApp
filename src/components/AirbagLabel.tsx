@@ -1,7 +1,20 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
+import IconFont from './IconFont';
 import type { AirbagZone } from '../types';
+
+/**
+ * 气囊区域对应的 iconfont 图标名称映射
+ * 根据 UI 设计图中各气囊标签的图标选择对应的 iconfont
+ */
+const ZONE_ICON_MAP: Record<AirbagZone, string> = {
+  shoulder: 'a-zu1175',     // 肩部气囊图标
+  lumbar: 'a-zu1202',       // 腰托气囊图标
+  sideWing: 'a-zu1216',     // 侧翼气囊图标
+  hipFirmness: 'a-zu1215',  // 臀部软硬度气囊图标
+  legRest: 'zu',            // 腿托气囊图标
+};
 
 interface AirbagLabelProps {
   zone: AirbagZone;
@@ -12,113 +25,6 @@ interface AirbagLabelProps {
   lineDirection: 'left' | 'right';
 }
 
-/**
- * 气囊图标（简化版）
- */
-const AirbagIcon: React.FC<{ zone: AirbagZone; active: boolean }> = ({
-  zone,
-  active,
-}) => {
-  const color = active ? Colors.textWhite : Colors.textGray;
-
-  // 根据不同气囊区域显示不同的简化图标
-  const getIconContent = () => {
-    switch (zone) {
-      case 'shoulder':
-        return (
-          <View style={iconStyles.iconBox}>
-            <View style={[iconStyles.shoulderLine, { backgroundColor: color }]} />
-            <View style={[iconStyles.shoulderDot, { backgroundColor: color }]} />
-          </View>
-        );
-      case 'lumbar':
-        return (
-          <View style={iconStyles.iconBox}>
-            <View style={[iconStyles.waveLine, { borderColor: color }]} />
-          </View>
-        );
-      case 'sideWing':
-        return (
-          <View style={iconStyles.iconBox}>
-            <View style={[iconStyles.wingLeft, { borderColor: color }]} />
-            <View style={[iconStyles.wingRight, { borderColor: color }]} />
-          </View>
-        );
-      case 'hipFirmness':
-        return (
-          <View style={iconStyles.iconBox}>
-            <View style={[iconStyles.hipDot, { backgroundColor: color }]} />
-            <View style={[iconStyles.hipDot, { backgroundColor: color }]} />
-          </View>
-        );
-      case 'legRest':
-        return (
-          <View style={iconStyles.iconBox}>
-            <View style={[iconStyles.legLine, { backgroundColor: color }]} />
-          </View>
-        );
-      default:
-        return null;
-    }
-  };
-
-  return <View style={iconStyles.container}>{getIconContent()}</View>;
-};
-
-const iconStyles = StyleSheet.create({
-  container: {
-    width: 24,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  shoulderLine: {
-    width: 12,
-    height: 2,
-    borderRadius: 1,
-  },
-  shoulderDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  waveLine: {
-    width: 16,
-    height: 8,
-    borderWidth: 1.5,
-    borderRadius: 4,
-  },
-  wingLeft: {
-    width: 8,
-    height: 12,
-    borderWidth: 1.5,
-    borderRadius: 4,
-    borderRightWidth: 0,
-  },
-  wingRight: {
-    width: 8,
-    height: 12,
-    borderWidth: 1.5,
-    borderRadius: 4,
-    borderLeftWidth: 0,
-  },
-  hipDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-  },
-  legLine: {
-    width: 14,
-    height: 2,
-    borderRadius: 1,
-  },
-});
-
 const AirbagLabel: React.FC<AirbagLabelProps> = ({
   zone,
   label,
@@ -126,6 +32,9 @@ const AirbagLabel: React.FC<AirbagLabelProps> = ({
   onPress,
   lineDirection,
 }) => {
+  const iconName = ZONE_ICON_MAP[zone];
+  const iconColor = isActive ? Colors.textWhite : Colors.textGray;
+
   return (
     <View
       style={[
@@ -141,7 +50,7 @@ const AirbagLabel: React.FC<AirbagLabelProps> = ({
         onPress={() => onPress(zone)}
         activeOpacity={0.7}
       >
-        <AirbagIcon zone={zone} active={isActive} />
+        <IconFont name={iconName} size={18} color={iconColor} />
         <Text
           style={[
             styles.label,

@@ -1,28 +1,23 @@
 import React from 'react';
 import {
-  Dimensions,
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
 } from 'react-native';
-import { BorderRadius, Colors, FontSize, Spacing } from '../theme';
+import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ConnectionErrorModalProps {
   visible: boolean;
-  message?: string;
   onDismiss: () => void;
 }
 
-const DEFAULT_MESSAGE =
-  'The app could not establish a stable serial connection. Check the USB device and try again.';
-
 const ConnectionErrorModal: React.FC<ConnectionErrorModalProps> = ({
   visible,
-  message,
   onDismiss,
 }) => {
   return (
@@ -34,10 +29,12 @@ const ConnectionErrorModal: React.FC<ConnectionErrorModalProps> = ({
     >
       <View style={styles.overlay}>
         <View style={styles.container}>
-          <Text style={styles.title}>Connection Error</Text>
-          <Text style={styles.description}>{message ?? DEFAULT_MESSAGE}</Text>
+          <Text style={styles.title}>连接异常，请检查设备</Text>
+          <Text style={styles.description}>
+            当前软件未能正常连接。请检查您的接线或硬件设备，确保一切连接正确后，重新启动软件。如有持续问题，请联系技术支持。
+          </Text>
           <TouchableOpacity onPress={onDismiss} activeOpacity={0.7}>
-            <Text style={styles.linkText}>Dismiss</Text>
+            <Text style={styles.linkText}>我知道了</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -53,7 +50,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    width: Math.min(SCREEN_WIDTH * 0.4, 420),
+    width: Math.min(SCREEN_WIDTH * 0.4, 380),
     backgroundColor: Colors.modalBackground,
     borderRadius: BorderRadius.xl,
     paddingHorizontal: Spacing.xxxl,

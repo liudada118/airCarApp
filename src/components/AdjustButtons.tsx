@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Colors, Spacing, BorderRadius } from '../theme';
+import IconFont from './IconFont';
 
 interface AdjustButtonsProps {
   onIncrease: () => void;
@@ -31,14 +32,11 @@ const AdjustButtons: React.FC<AdjustButtonsProps> = ({
         disabled={!increaseEnabled}
         activeOpacity={0.7}
       >
-        <Text
-          style={[
-            styles.buttonText,
-            increaseEnabled ? styles.increaseText : styles.disabledText,
-          ]}
-        >
-          +
-        </Text>
+        <IconFont
+          name="plus-full"
+          size={28}
+          color={increaseEnabled ? Colors.textWhite : Colors.textGray}
+        />
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -50,14 +48,11 @@ const AdjustButtons: React.FC<AdjustButtonsProps> = ({
         disabled={!decreaseEnabled}
         activeOpacity={0.7}
       >
-        <Text
-          style={[
-            styles.buttonText,
-            decreaseEnabled ? styles.decreaseText : styles.disabledText,
-          ]}
-        >
-          −
-        </Text>
+        <IconFont
+          name="minus-full"
+          size={28}
+          color={decreaseEnabled ? Colors.textWhite : Colors.textGray}
+        />
       </TouchableOpacity>
     </View>
   );
@@ -84,20 +79,6 @@ const styles = StyleSheet.create({
   disabledButton: {
     backgroundColor: '#3A3A4A',
     opacity: 0.5,
-  },
-  buttonText: {
-    fontSize: 28,
-    fontWeight: '300',
-    lineHeight: 32,
-  },
-  increaseText: {
-    color: Colors.textWhite,
-  },
-  decreaseText: {
-    color: Colors.textWhite,
-  },
-  disabledText: {
-    color: Colors.textGray,
   },
 });
 

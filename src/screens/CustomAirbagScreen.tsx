@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
 } from 'react-native';
 import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 import {
@@ -16,6 +15,7 @@ import {
   SavingModal,
   Toast,
 } from '../components';
+import IconFont from '../components/IconFont';
 import type {
   AirbagZone,
   AirbagValues,
@@ -23,8 +23,6 @@ import type {
   ModalType,
   ConnectionStatus,
 } from '../types';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /** 气囊区域配置 */
 const AIRBAG_ZONES: AirbagZoneConfig[] = [
@@ -162,7 +160,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         {/* 标题栏 */}
         <View style={styles.titleBar}>
           <View style={styles.titleLeft}>
-            <Text style={styles.titleIcon}>⚙</Text>
+            <IconFont name="keshihuatiaojie" size={20} color={Colors.textWhite} />
             <Text style={styles.title}>自定义气囊调节</Text>
           </View>
           <TouchableOpacity
@@ -326,9 +324,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-  },
-  titleIcon: {
-    fontSize: FontSize.xl,
   },
   title: {
     fontSize: FontSize.xxl,
