@@ -30,7 +30,6 @@ const SEAT_UPDATE_INTERVAL = 1000 / 10;
 const MODEL_TARGET_SIZE = 220;
 const CAMERA_MIN_DISTANCE = 80;
 const CAMERA_MAX_DISTANCE = 600;
-const POINT_FIT_BASE_SIZE = 220;
 
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
 // 模型居中后坐标系：X=左右, Y=上下(根节点有90度旋转), Z=前后
@@ -42,14 +41,14 @@ const POINT_FIT_BASE_SIZE = 220;
 //   leftsit   mesh ← 靠背右侧翼（backConfig 3x2）
 //   rightsit  mesh ← 靠背左侧翼（backConfig 3x2）
 const DEFAULT_POINT_FIT_LAYOUT = {
-  // 坐垫：位于模型下半部分，面朝上，需要绕 X 轴旋转使其水平
-  center: {position: [0, -68, 48], rotation: [-Math.PI / 2 + 0.15, 0, 0]},
-  // 靠背：位于模型上半部分，面朝前，需要微微倾斜
-  centersit: {position: [0, 20, 52], rotation: [-0.25, 0, 0]},
-  // 靠背右侧翼：在靠背右侧（X 正方向），需要绕 Y 轴旋转贴合侧面
-  leftsit: {position: [38, 20, 40], rotation: [-0.25, 0.55, 0]},
-  // 靠背左侧翼：在靠背左侧（X 负方向），需要绕 Y 轴反向旋转
-  rightsit: {position: [-38, 20, 40], rotation: [-0.25, -0.55, 0]},
+  // 坐垫：位于座椅坐面上，水平放置（绕 X 轴旋转约 -PI/2）
+  center: {position: [5, -78, 45], rotation: [-Math.PI / 2 + 0.1, 0, 0]},
+  // 靠背：位于靠背面上，几乎竖直，微微前倾
+  centersit: {position: [3, 10, -55], rotation: [-0.1, 0, 0]},
+  // 靠背右侧翼：在靠背右侧（X 正方向），绕 Y 轴旋转贴合侧面
+  leftsit: {position: [48, 20, -45], rotation: [-0.1, 0.65, 0]},
+  // 靠背左侧翼：在靠背左侧（X 负方向），绕 Y 轴反向旋转
+  rightsit: {position: [-48, 20, -45], rotation: [-0.1, -0.65, 0]},
 };
 
 // 点图整体旋转（应用到 pointGroup）
@@ -321,11 +320,11 @@ function initPoint(config, pointConfig, name, group) {
     vertexColors: true,
     transparent: true,
     side: THREE.DoubleSide,
-    depthWrite: true,
-    depthTest: true,
+    depthWrite: false,
+    depthTest: false,
     blending: THREE.NormalBlending,
-    opacity: 0.4,
-    size: name === 'center' ? 1 : 1.2,
+    opacity: 0.6,
+    size: name === 'center' || name === 'centersit' ? 2 : 2.5,
     map: circleTexture,
     alphaTest: 0.2,
   });
@@ -379,12 +378,11 @@ function applyPointFitToModel(model, pointMeshes, layoutMap = DEFAULT_POINT_FIT_
   if (!model || !pointMeshes) {
     return;
   }
-  const box = new THREE.Box3().setFromObject(model);
-  const center = new THREE.Vector3();
-  const size = new THREE.Vector3();
-  box.getCenter(center);
-  box.getSize(size);
-  const fitScale = Math.max(size.x, size.y, size.z) / POINT_FIT_BASE_SIZE;
+  // loadSeatModel 已将模型居中到原点（model.position ≈ [0, -0.6, 0]），
+  // 并缩放到 MODEL_TARGET_SIZE。
+  // layout.position 是相对于模型中心的偏移（rootGroup 局部空间）。
+  // 因为模型已居中，中心就是 model.position，fitScale = 1。
+  const localCenter = model.position.clone();
 
   Object.keys(layoutMap).forEach(name => {
     const mesh = pointMeshes[name];
@@ -393,9 +391,9 @@ function applyPointFitToModel(model, pointMeshes, layoutMap = DEFAULT_POINT_FIT_
       return;
     }
     mesh.position.set(
-      center.x + layout.position[0] * fitScale,
-      center.y + layout.position[1] * fitScale,
-      center.z + layout.position[2] * fitScale,
+      localCenter.x + layout.position[0],
+      localCenter.y + layout.position[1],
+      localCenter.z + layout.position[2],
     );
     mesh.rotation.set(...layout.rotation);
   });
