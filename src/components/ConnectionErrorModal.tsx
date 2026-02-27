@@ -7,9 +7,9 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
+import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const {width: SCREEN_WIDTH} = Dimensions.get('window');
 
 interface ConnectionErrorModalProps {
   visible: boolean;
@@ -25,8 +25,7 @@ const ConnectionErrorModal: React.FC<ConnectionErrorModalProps> = ({
       visible={visible}
       transparent
       animationType="fade"
-      statusBarTranslucent
-    >
+      statusBarTranslucent>
       <View style={styles.overlay}>
         <View style={styles.container}>
           <Text style={styles.title}>连接异常，请检查设备</Text>

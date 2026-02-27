@@ -7,9 +7,9 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
+import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const {width: SCREEN_WIDTH} = Dimensions.get('window');
 
 interface ConfirmModalProps {
   visible: boolean;
@@ -35,8 +35,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
       visible={visible}
       transparent
       animationType="fade"
-      statusBarTranslucent
-    >
+      statusBarTranslucent>
       <View style={styles.overlay}>
         <View style={styles.container}>
           <Text style={styles.title}>{title}</Text>
@@ -45,15 +44,13 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             <TouchableOpacity
               style={[styles.button, styles.cancelButton]}
               onPress={onCancel}
-              activeOpacity={0.7}
-            >
+              activeOpacity={0.7}>
               <Text style={styles.cancelButtonText}>{cancelText}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.button, styles.confirmButton]}
               onPress={onConfirm}
-              activeOpacity={0.7}
-            >
+              activeOpacity={0.7}>
               <Text style={styles.confirmButtonText}>{confirmText}</Text>
             </TouchableOpacity>
           </View>

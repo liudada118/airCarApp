@@ -1,11 +1,6 @@
-import React, { useState, useCallback, useRef } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
-import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
+import React, {useState, useCallback, useRef} from 'react';
+import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
+import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 import {
   TopBar,
   SeatDiagram,
@@ -26,11 +21,11 @@ import type {
 
 /** 气囊区域配置 */
 const AIRBAG_ZONES: AirbagZoneConfig[] = [
-  { key: 'shoulder', label: '肩部气囊', side: 'left' },
-  { key: 'lumbar', label: '腰托气囊', side: 'left' },
-  { key: 'legRest', label: '腿托气囊', side: 'left' },
-  { key: 'sideWing', label: '侧翼气囊', side: 'right' },
-  { key: 'hipFirmness', label: '臀部软硬度气囊', side: 'right' },
+  {key: 'shoulder', label: '肩部气囊', side: 'left'},
+  {key: 'lumbar', label: '腰托气囊', side: 'left'},
+  {key: 'legRest', label: '腿托气囊', side: 'left'},
+  {key: 'sideWing', label: '侧翼气囊', side: 'right'},
+  {key: 'hipFirmness', label: '臀部软硬度气囊', side: 'right'},
 ];
 
 /** 默认气囊值 */
@@ -83,7 +78,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // 增加气囊值
   const handleIncrease = useCallback(() => {
-    if (!selectedZone) return;
+    if (!selectedZone) {
+      return;
+    }
     setAirbagValues(prev => ({
       ...prev,
       [selectedZone]: Math.min(prev[selectedZone] + 1, MAX_VALUE),
@@ -92,7 +89,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // 减少气囊值
   const handleDecrease = useCallback(() => {
-    if (!selectedZone) return;
+    if (!selectedZone) {
+      return;
+    }
     setAirbagValues(prev => ({
       ...prev,
       [selectedZone]: Math.max(prev[selectedZone] - 1, MIN_VALUE),
@@ -132,18 +131,18 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   // 确认恢复默认
   const handleConfirmRestore = useCallback(() => {
     setModalType(null);
-    setAirbagValues({ ...DEFAULT_VALUES });
+    setAirbagValues({...DEFAULT_VALUES});
     setSelectedZone('lumbar');
     setToast({
       visible: true,
       message: '已恢复默认参数',
-      type: 'success',
+      type: 'info',
     });
   }, []);
 
   // 隐藏 Toast
   const hideToast = useCallback(() => {
-    setToast(prev => ({ ...prev, visible: false }));
+    setToast(prev => ({...prev, visible: false}));
   }, []);
 
   // 获取左侧和右侧的气囊区域
@@ -160,14 +159,17 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         {/* 标题栏 */}
         <View style={styles.titleBar}>
           <View style={styles.titleLeft}>
-            <IconFont name="keshihuatiaojie" size={20} color={Colors.textWhite} />
+            <IconFont
+              name="keshihuatiaojie"
+              size={20}
+              color={Colors.textWhite}
+            />
             <Text style={styles.title}>自定义气囊调节</Text>
           </View>
           <TouchableOpacity
             style={styles.closeButton}
             onPress={onClose}
-            activeOpacity={0.7}
-          >
+            activeOpacity={0.7}>
             <View style={styles.closeIcon}>
               <View style={[styles.closeLine, styles.closeLine1]} />
               <View style={[styles.closeLine, styles.closeLine2]} />
@@ -198,8 +200,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
                   index === 0 && styles.labelTop,
                   index === 1 && styles.labelMiddle,
                   index === 2 && styles.labelBottom,
-                ]}
-              >
+                ]}>
                 <AirbagLabel
                   zone={zone.key}
                   label={zone.label}
@@ -229,8 +230,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
                   styles.labelPosition,
                   index === 0 && styles.rightLabelTop,
                   index === 1 && styles.rightLabelBottom,
-                ]}
-              >
+                ]}>
                 <AirbagLabel
                   zone={zone.key}
                   label={zone.label}
@@ -248,15 +248,13 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
           <TouchableOpacity
             style={styles.restoreButton}
             onPress={handleRestorePress}
-            activeOpacity={0.7}
-          >
+            activeOpacity={0.7}>
             <Text style={styles.restoreButtonText}>恢复默认</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.saveButton}
             onPress={handleSavePress}
-            activeOpacity={0.7}
-          >
+            activeOpacity={0.7}>
             <Text style={styles.saveButtonText}>保存</Text>
           </TouchableOpacity>
         </View>
@@ -353,10 +351,10 @@ const styles = StyleSheet.create({
     left: -1,
   },
   closeLine1: {
-    transform: [{ rotate: '45deg' }],
+    transform: [{rotate: '45deg'}],
   },
   closeLine2: {
-    transform: [{ rotate: '-45deg' }],
+    transform: [{rotate: '-45deg'}],
   },
   body: {
     flex: 1,

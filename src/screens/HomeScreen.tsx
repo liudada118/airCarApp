@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useState } from 'react';
+import React, {useCallback, useEffect, useState, useRef} from 'react';
 import {
   Dimensions,
   NativeEventEmitter,
@@ -9,25 +9,21 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
-import {
-  TopBar,
-  SeatDiagram,
-  ConnectionErrorModal,
-} from '../components';
+import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
+import {TopBar, SeatDiagram, ConnectionErrorModal} from '../components';
 import IconFont from '../components/IconFont';
 import CarAirRN from '../components/CarAirRN';
-import type {
-  SeatStatus,
-  ConnectionStatus,
-  AirbagValues,
-} from '../types';
+import type {SeatStatus, ConnectionStatus, AirbagValues} from '../types';
+import {mockSerial} from '../mock/mockSerialData';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const {width: SCREEN_WIDTH} = Dimensions.get('window');
 
 const DEFAULT_BAUD_RATE = 1000000;
-const EMPTY_SENSOR_FRAME: number[] = new Array(144).fill(0);
+const INITIAL_SENSOR_FRAME: number[] = new Array(144).fill(0);
 let hasTriedAutoConnect = false;
+
+/** 是否使用模拟数据（无真实硬件时自动启用） */
+const USE_MOCK = Platform.OS !== 'android';
 
 interface HomeScreenProps {
   onNavigateToCustomize: () => void;
@@ -45,7 +41,7 @@ interface SerialModuleType {
   openWithOptions?: (
     vendorId: number,
     productId: number,
-    options: { baudRate: number },
+    options: {baudRate: number},
   ) => Promise<boolean>;
   resetPendingOpen?: () => void;
   close?: () => void;
@@ -57,7 +53,7 @@ interface SerialResultEvent {
   error?: string;
 }
 
-const { SerialModule } = NativeModules as {
+const {SerialModule} = NativeModules as {
   SerialModule?: SerialModuleType;
 };
 
@@ -92,7 +88,7 @@ function getErrorMessage(error: unknown): string {
   }
 
   if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
+    const message = (error as {message?: unknown}).message;
     if (typeof message === 'string' && message.trim()) {
       return message;
     }
@@ -108,7 +104,7 @@ function pickTargetDevice(devices: SerialDevice[]): SerialDevice | undefined {
 function mapSeatStateFromAlgoResult(result: string): SeatStatus | null {
   try {
     const parsed = JSON.parse(result) as {
-      algorData?: { living_status?: unknown; seat_state?: unknown };
+      algorData?: {living_status?: unknown; seat_state?: unknown};
       living_status?: unknown;
       seat_state?: unknown;
     };
@@ -140,7 +136,7 @@ function mapSeatStateFromAlgoResult(result: string): SeatStatus | null {
   }
 }
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   const [seatStatus, setSeatStatus] = useState<SeatStatus>('seated');
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('disconnected');
@@ -157,10 +153,54 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
     legRest: 3,
   });
 
-  const [sensorData, setSensorData] = useState<number[]>(EMPTY_SENSOR_FRAME);
+  const [sensorData, setSensorData] = useState<number[]>(INITIAL_SENSOR_FRAME);
 
+  // ─── 模拟串口逻辑 ──────────────────────────────────────
+  const mockStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (!USE_MOCK || mockStartedRef.current) {
+      return;
+    }
+    mockStartedRef.current = true;
+
+    // 模拟连接成功
+    setConnectionStatus('connecting');
+    const connectTimer = setTimeout(() => {
+      setConnectionStatus('connected');
+      mockSerial.setScenario('adaptive_locked');
+      mockSerial.start(77);
+    }, 800);
+
+    const removeDataListener = mockSerial.addDataListener(event => {
+      if (event.data) {
+        const parsed = parseSerialFrame(event.data);
+        if (parsed) {
+          setSensorData(parsed);
+        }
+      }
+    });
+
+    const removeResultListener = mockSerial.addResultListener(event => {
+      if (event.result) {
+        const nextSeatStatus = mapSeatStateFromAlgoResult(event.result);
+        if (nextSeatStatus) {
+          setSeatStatus(nextSeatStatus);
+        }
+      }
+    });
+
+    return () => {
+      clearTimeout(connectTimer);
+      removeDataListener();
+      removeResultListener();
+      mockSerial.stop();
+    };
+  }, []);
+
+  // ─── 真实串口逻辑 ──────────────────────────────────────
   const autoConnectSensor = useCallback(async () => {
-    if (connecting || connectionStatus === 'connected') {
+    if (USE_MOCK || connecting || connectionStatus === 'connected') {
       return;
     }
 
@@ -171,7 +211,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
       return;
     }
 
-    if (!SerialModule?.listDevices || (!SerialModule.openWithOptions && !SerialModule.open)) {
+    if (
+      !SerialModule?.listDevices ||
+      (!SerialModule.openWithOptions && !SerialModule.open)
+    ) {
       setConnectionStatus('error');
       setConnectionErrorMessage('SerialModule 不可用，请检查原生模块集成');
       setShowConnectionError(true);
@@ -197,7 +240,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
           await SerialModule.openWithOptions(
             target.vendorId,
             target.productId,
-            { baudRate: DEFAULT_BAUD_RATE },
+            {baudRate: DEFAULT_BAUD_RATE},
           );
           return;
         }
@@ -228,7 +271,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
   }, [connecting, connectionStatus]);
 
   useEffect(() => {
-    if (hasTriedAutoConnect) {
+    if (USE_MOCK || hasTriedAutoConnect) {
       return;
     }
 
@@ -237,14 +280,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
   }, [autoConnectSensor]);
 
   useEffect(() => {
-    if (!SerialModule) {
+    if (USE_MOCK || !SerialModule) {
       return;
     }
 
     const emitter = new NativeEventEmitter(SerialModule as never);
 
     const dataSub = emitter.addListener('onSerialData', event => {
-      const payload = event && typeof event.data === 'string' ? event.data : '';
+      const payload =
+        event && typeof event.data === 'string' ? event.data : '';
       if (!payload) {
         return;
       }
@@ -255,21 +299,23 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
       }
     });
 
-    const resultSub = emitter.addListener('onSerialResult', (event: SerialResultEvent) => {
-      if (typeof event.result === 'string' && event.result) {
-        console.log('[AlgorithmResult]', event.result);
-        const nextSeatStatus = mapSeatStateFromAlgoResult(event.result);
-        if (nextSeatStatus) {
-          setSeatStatus(nextSeatStatus);
+    const resultSub = emitter.addListener(
+      'onSerialResult',
+      (event: SerialResultEvent) => {
+        if (typeof event.result === 'string' && event.result) {
+          const nextSeatStatus = mapSeatStateFromAlgoResult(event.result);
+          if (nextSeatStatus) {
+            setSeatStatus(nextSeatStatus);
+          }
         }
-      }
 
-      if (typeof event.error === 'string' && event.error) {
-        setConnectionStatus('error');
-        setConnectionErrorMessage(event.error);
-        setShowConnectionError(true);
-      }
-    });
+        if (typeof event.error === 'string' && event.error) {
+          setConnectionStatus('error');
+          setConnectionErrorMessage(event.error);
+          setShowConnectionError(true);
+        }
+      },
+    );
 
     return () => {
       dataSub.remove();
@@ -282,7 +328,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
       <TopBar connectionStatus={connectionStatus} />
 
       <View style={styles.content}>
+        {/* ─── 左侧面板 ─── */}
         <View style={styles.leftPanel}>
+          {/* 座椅状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <IconFont name="bianji" size={14} color={Colors.textGray} />
@@ -293,19 +341,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
                 style={[
                   styles.seatStatusCard,
                   seatStatus === 'seated' && styles.seatStatusCardActive,
-                ]}
-              >
+                ]}>
                 <IconFont
                   name="zaizuo"
                   size={36}
-                  color={seatStatus === 'seated' ? Colors.primary : Colors.textGray}
+                  color={
+                    seatStatus === 'seated' ? Colors.primary : Colors.textGray
+                  }
                 />
                 <Text
                   style={[
                     styles.seatStatusText,
                     seatStatus === 'seated' && styles.seatStatusTextActive,
-                  ]}
-                >
+                  ]}>
                   在座
                 </Text>
               </View>
@@ -314,25 +362,26 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
                 style={[
                   styles.seatStatusCard,
                   seatStatus === 'away' && styles.seatStatusCardActive,
-                ]}
-              >
+                ]}>
                 <IconFont
                   name="lizuo"
                   size={36}
-                  color={seatStatus === 'away' ? Colors.primary : Colors.textGray}
+                  color={
+                    seatStatus === 'away' ? Colors.primary : Colors.textGray
+                  }
                 />
                 <Text
                   style={[
                     styles.seatStatusText,
                     seatStatus === 'away' && styles.seatStatusTextActive,
-                  ]}
-                >
+                  ]}>
                   离座
                 </Text>
               </View>
             </View>
           </View>
 
+          {/* 气囊状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <IconFont name="bianji" size={14} color={Colors.textGray} />
@@ -349,9 +398,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
                 />
               </View>
               <View style={styles.divider} />
-              <TouchableOpacity onPress={onNavigateToCustomize} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={onNavigateToCustomize}
+                activeOpacity={0.7}>
                 <View style={styles.customizeLinkRow}>
-                  <IconFont name="keshihuatiaojie" size={14} color={Colors.primary} />
+                  <IconFont
+                    name="keshihuatiaojie"
+                    size={14}
+                    color={Colors.primary}
+                  />
                   <Text style={styles.customizeLink}>自定义气囊调节</Text>
                 </View>
               </TouchableOpacity>
@@ -359,7 +414,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
           </View>
         </View>
 
+        {/* ─── 右侧面板 ─── */}
         <View style={styles.rightPanel}>
+          {/* 自适应调节开关 */}
           <View style={styles.adaptiveSection}>
             <View style={styles.sectionHeader}>
               <IconFont name="bianji" size={14} color={Colors.textGray} />
@@ -372,14 +429,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
                   adaptiveEnabled && styles.toggleButtonActive,
                 ]}
                 onPress={() => setAdaptiveEnabled(true)}
-                activeOpacity={0.7}
-              >
+                activeOpacity={0.7}>
                 <Text
                   style={[
                     styles.toggleText,
                     adaptiveEnabled && styles.toggleTextActive,
-                  ]}
-                >
+                  ]}>
                   开启
                 </Text>
               </TouchableOpacity>
@@ -389,26 +444,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigateToCustomize }) => {
                   !adaptiveEnabled && styles.toggleButtonInactive,
                 ]}
                 onPress={() => setAdaptiveEnabled(false)}
-                activeOpacity={0.7}
-              >
+                activeOpacity={0.7}>
                 <Text
                   style={[
                     styles.toggleText,
                     !adaptiveEnabled && styles.toggleTextInactive,
-                  ]}
-                >
+                  ]}>
                   关闭
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
+          {/* 3D 座椅模型 */}
           <View style={styles.seat3DContainer}>
-            <CarAirRN data={sensorData as unknown as never[]} style={styles.carAir3D} />
+            <CarAirRN
+              data={sensorData as unknown as never[]}
+              style={styles.carAir3D}
+            />
           </View>
         </View>
       </View>
 
+      {/* 连接异常弹窗 */}
       <ConnectionErrorModal
         visible={showConnectionError}
         onDismiss={() => {
@@ -439,12 +497,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xxl,
     paddingBottom: Spacing.lg,
   },
+  // ─── 左侧面板 ───
   leftPanel: {
     width: SCREEN_WIDTH * 0.35,
     paddingRight: Spacing.xl,
-  },
-  rightPanel: {
-    flex: 1,
   },
   section: {
     marginBottom: Spacing.xl,
@@ -517,6 +573,10 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '500',
   },
+  // ─── 右侧面板 ───
+  rightPanel: {
+    flex: 1,
+  },
   adaptiveSection: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -560,6 +620,7 @@ const styles = StyleSheet.create({
   carAir3D: {
     flex: 1,
   },
+  // ─── 错误提示 ───
   errorHint: {
     position: 'absolute',
     left: Spacing.xxl,
