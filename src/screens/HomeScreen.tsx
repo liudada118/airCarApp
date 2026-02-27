@@ -13,7 +13,16 @@ import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 import {TopBar, SeatDiagram, ConnectionErrorModal} from '../components';
 import IconFont from '../components/IconFont';
 import CarAirRN from '../components/CarAirRN';
-import type {SeatStatus, ConnectionStatus, AirbagValues} from '../types';
+import type {
+  SeatStatus,
+  ConnectionStatus,
+  AirbagValues,
+  AlgoSeatStatus,
+  AlgoBodyShapeInfo,
+  BodyShape,
+  BodyShapeState,
+  AlgoResult,
+} from '../types';
 import {mockSerial} from '../mock/mockSerialData';
 
 const {width: SCREEN_WIDTH} = Dimensions.get('window');
@@ -101,43 +110,149 @@ function pickTargetDevice(devices: SerialDevice[]): SerialDevice | undefined {
   return devices.find(d => Number(d?.productId ?? 0) !== 0) ?? devices[0];
 }
 
-function mapSeatStateFromAlgoResult(result: string): SeatStatus | null {
+// ─── 从新算法结果中提取状态 ──────────────────────────────────────
+
+/** 默认的 seat_status */
+const DEFAULT_SEAT_STATUS: AlgoSeatStatus = {
+  state: 'OFF_SEAT',
+  is_off_seat: true,
+  is_seated: false,
+  is_resetting: false,
+};
+
+/** 默认的 body_shape_info */
+const DEFAULT_BODY_SHAPE_INFO: AlgoBodyShapeInfo = {
+  body_shape: '',
+  body_shape_state: 'IDLE',
+  confidence: 0.0,
+  probabilities: {},
+  preference: {
+    active_body_shape: null,
+    using_preference: false,
+    is_recording: false,
+    recording_progress: null,
+  },
+};
+
+/** 从算法 JSON 结果中解析三个核心字段 */
+function parseAlgoResult(resultJson: string): {
+  seatStatus: SeatStatus;
+  algoSeatStatus: AlgoSeatStatus;
+  bodyShapeInfo: AlgoBodyShapeInfo;
+  livingStatus: string;
+  bodyType: string;
+} | null {
   try {
-    const parsed = JSON.parse(result) as {
-      algorData?: {living_status?: unknown; seat_state?: unknown};
-      living_status?: unknown;
-      seat_state?: unknown;
+    const parsed = JSON.parse(resultJson) as Partial<AlgoResult>;
+
+    // 优先使用新的 seat_status 字段
+    const algoSeatStatus: AlgoSeatStatus = parsed.seat_status ?? {
+      state: parsed.seat_state ?? 'OFF_SEAT',
+      is_off_seat:
+        parsed.seat_state === 'OFF_SEAT' ||
+        parsed.seat_state === 'RESETTING',
+      is_seated:
+        parsed.seat_state === 'CUSHION_ONLY' ||
+        parsed.seat_state === 'ADAPTIVE_LOCKED',
+      is_resetting: parsed.seat_state === 'RESETTING',
     };
 
+    // 优先使用新的 body_shape_info 字段
+    const bodyShapeInfo: AlgoBodyShapeInfo = parsed.body_shape_info ?? {
+      ...DEFAULT_BODY_SHAPE_INFO,
+    };
+
+    // 映射到简化的 SeatStatus
+    const seatStatus: SeatStatus = algoSeatStatus.is_seated
+      ? 'seated'
+      : 'away';
+
+    // 兼容字段
     const livingStatus =
-      parsed.algorData?.living_status ?? parsed.living_status;
-    if (typeof livingStatus === 'string') {
-      const normalized = livingStatus.trim();
-      if (normalized === '离座') {
-        return 'away';
-      }
-      if (normalized === '在座') {
-        return 'seated';
-      }
-    }
+      typeof parsed.living_status === 'string'
+        ? parsed.living_status
+        : '未知';
+    const bodyType =
+      typeof parsed.body_type === 'string' ? parsed.body_type : '未判断';
 
-    const seatState = parsed.algorData?.seat_state ?? parsed.seat_state;
-    if (typeof seatState !== 'string' || !seatState) {
-      return null;
-    }
-
-    if (seatState === 'OFF_SEAT' || seatState === 'RESETTING') {
-      return 'away';
-    }
-
-    return 'seated';
+    return {
+      seatStatus,
+      algoSeatStatus,
+      bodyShapeInfo,
+      livingStatus,
+      bodyType,
+    };
   } catch (_error) {
     return null;
   }
 }
 
+// ─── 体型分类状态的中文映射 ──────────────────────────────────────
+
+function getBodyShapeStateLabel(state: BodyShapeState): string {
+  switch (state) {
+    case 'IDLE':
+      return '等待识别';
+    case 'COLLECTING':
+      return '数据采集中';
+    case 'CLASSIFYING':
+      return '分析中';
+    case 'COMPLETED':
+      return '识别完成';
+    case 'DISABLED':
+      return '未启用';
+    default:
+      return '未知';
+  }
+}
+
+function getBodyShapeLabel(shape: BodyShape): string {
+  if (!shape) {
+    return '未识别';
+  }
+  return shape;
+}
+
+function getBodyShapeColor(shape: BodyShape): string {
+  switch (shape) {
+    case '瘦小':
+      return '#5AC8FA';
+    case '中等':
+      return Colors.success;
+    case '高大':
+      return Colors.warning;
+    default:
+      return Colors.textGray;
+  }
+}
+
+function getSeatStateLabel(state: AlgoSeatStatus): string {
+  if (state.is_off_seat) {
+    return '离座';
+  }
+  if (state.is_resetting) {
+    return '复位中';
+  }
+  if (state.state === 'CUSHION_ONLY') {
+    return '检测中';
+  }
+  if (state.state === 'ADAPTIVE_LOCKED') {
+    return '自适应调节中';
+  }
+  return '未知';
+}
+
+// ─── 组件 ────────────────────────────────────────────────────────
+
 const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
-  const [seatStatus, setSeatStatus] = useState<SeatStatus>('seated');
+  const [seatStatus, setSeatStatus] = useState<SeatStatus>('away');
+  const [algoSeatStatus, setAlgoSeatStatus] =
+    useState<AlgoSeatStatus>(DEFAULT_SEAT_STATUS);
+  const [bodyShapeInfo, setBodyShapeInfo] =
+    useState<AlgoBodyShapeInfo>(DEFAULT_BODY_SHAPE_INFO);
+  const [livingStatus, setLivingStatus] = useState<string>('离座');
+  const [bodyType, setBodyType] = useState<string>('未判断');
+
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('disconnected');
   const [connecting, setConnecting] = useState(false);
@@ -154,6 +269,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   });
 
   const [sensorData, setSensorData] = useState<number[]>(INITIAL_SENSOR_FRAME);
+
+  // ─── 处理算法结果 ──────────────────────────────────────
+  const handleAlgoResult = useCallback((resultJson: string) => {
+    const parsed = parseAlgoResult(resultJson);
+    if (!parsed) {
+      return;
+    }
+    setSeatStatus(parsed.seatStatus);
+    setAlgoSeatStatus(parsed.algoSeatStatus);
+    setBodyShapeInfo(parsed.bodyShapeInfo);
+    setLivingStatus(parsed.livingStatus);
+    setBodyType(parsed.bodyType);
+  }, []);
 
   // ─── 模拟串口逻辑 ──────────────────────────────────────
   const mockStartedRef = useRef(false);
@@ -183,10 +311,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
 
     const removeResultListener = mockSerial.addResultListener(event => {
       if (event.result) {
-        const nextSeatStatus = mapSeatStateFromAlgoResult(event.result);
-        if (nextSeatStatus) {
-          setSeatStatus(nextSeatStatus);
-        }
+        handleAlgoResult(event.result);
       }
     });
 
@@ -196,7 +321,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
       removeResultListener();
       mockSerial.stop();
     };
-  }, []);
+  }, [handleAlgoResult]);
 
   // ─── 真实串口逻辑 ──────────────────────────────────────
   const autoConnectSensor = useCallback(async () => {
@@ -303,10 +428,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
       'onSerialResult',
       (event: SerialResultEvent) => {
         if (typeof event.result === 'string' && event.result) {
-          const nextSeatStatus = mapSeatStateFromAlgoResult(event.result);
-          if (nextSeatStatus) {
-            setSeatStatus(nextSeatStatus);
-          }
+          handleAlgoResult(event.result);
         }
 
         if (typeof event.error === 'string' && event.error) {
@@ -321,7 +443,36 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
       dataSub.remove();
       resultSub.remove();
     };
-  }, []);
+  }, [handleAlgoResult]);
+
+  // ─── 渲染辅助 ──────────────────────────────────────────
+
+  /** 体型概率条 */
+  const renderProbabilityBar = (
+    label: string,
+    value: number,
+    color: string,
+    isActive: boolean,
+  ) => (
+    <View style={styles.probRow} key={label}>
+      <Text
+        style={[styles.probLabel, isActive && {color, fontWeight: '600'}]}>
+        {label}
+      </Text>
+      <View style={styles.probBarBg}>
+        <View
+          style={[
+            styles.probBarFill,
+            {width: `${Math.round(value * 100)}%`, backgroundColor: color},
+          ]}
+        />
+      </View>
+      <Text
+        style={[styles.probValue, isActive && {color, fontWeight: '600'}]}>
+        {Math.round(value * 100)}%
+      </Text>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -379,6 +530,166 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                 </Text>
               </View>
             </View>
+
+            {/* 详细状态标签 */}
+            <View style={styles.detailStatusRow}>
+              <View style={styles.detailStatusItem}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    {
+                      backgroundColor: algoSeatStatus.is_seated
+                        ? Colors.success
+                        : Colors.textGray,
+                    },
+                  ]}
+                />
+                <Text style={styles.detailStatusText}>
+                  {getSeatStateLabel(algoSeatStatus)}
+                </Text>
+              </View>
+              <View style={styles.detailStatusItem}>
+                <Text style={styles.detailStatusLabel}>活体：</Text>
+                <Text
+                  style={[
+                    styles.detailStatusText,
+                    livingStatus === '活体' && {color: Colors.success},
+                    livingStatus === '静物' && {color: Colors.error},
+                  ]}>
+                  {livingStatus}
+                </Text>
+              </View>
+              <View style={styles.detailStatusItem}>
+                <Text style={styles.detailStatusLabel}>体型：</Text>
+                <Text
+                  style={[
+                    styles.detailStatusText,
+                    bodyType === '大人' && {color: Colors.success},
+                    bodyType === '小孩' && {color: '#5AC8FA'},
+                  ]}>
+                  {bodyType}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* 体型分析 */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <IconFont name="bianji" size={14} color={Colors.textGray} />
+              <Text style={styles.sectionTitle}>体型分析</Text>
+            </View>
+            <View style={styles.bodyShapeCard}>
+              {/* 分类状态 */}
+              <View style={styles.bodyShapeHeader}>
+                <View style={styles.bodyShapeStateRow}>
+                  <View
+                    style={[
+                      styles.bodyShapeStateBadge,
+                      bodyShapeInfo.body_shape_state === 'COMPLETED' && {
+                        backgroundColor: 'rgba(52, 199, 89, 0.15)',
+                      },
+                      bodyShapeInfo.body_shape_state === 'COLLECTING' && {
+                        backgroundColor: 'rgba(0, 122, 255, 0.15)',
+                      },
+                      bodyShapeInfo.body_shape_state === 'CLASSIFYING' && {
+                        backgroundColor: 'rgba(255, 149, 0, 0.15)',
+                      },
+                    ]}>
+                    <Text
+                      style={[
+                        styles.bodyShapeStateText,
+                        bodyShapeInfo.body_shape_state === 'COMPLETED' && {
+                          color: Colors.success,
+                        },
+                        bodyShapeInfo.body_shape_state === 'COLLECTING' && {
+                          color: Colors.primary,
+                        },
+                        bodyShapeInfo.body_shape_state === 'CLASSIFYING' && {
+                          color: Colors.warning,
+                        },
+                      ]}>
+                      {getBodyShapeStateLabel(bodyShapeInfo.body_shape_state)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* 体型结果 */}
+                <View style={styles.bodyShapeResult}>
+                  <Text
+                    style={[
+                      styles.bodyShapeValue,
+                      {
+                        color: getBodyShapeColor(bodyShapeInfo.body_shape),
+                      },
+                    ]}>
+                    {getBodyShapeLabel(bodyShapeInfo.body_shape)}
+                  </Text>
+                  {bodyShapeInfo.confidence > 0 && (
+                    <Text style={styles.bodyShapeConfidence}>
+                      置信度 {Math.round(bodyShapeInfo.confidence * 100)}%
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* 概率分布条 */}
+              {Object.keys(bodyShapeInfo.probabilities).length > 0 && (
+                <View style={styles.probContainer}>
+                  {renderProbabilityBar(
+                    '瘦小',
+                    bodyShapeInfo.probabilities['瘦小'] ?? 0,
+                    '#5AC8FA',
+                    bodyShapeInfo.body_shape === '瘦小',
+                  )}
+                  {renderProbabilityBar(
+                    '中等',
+                    bodyShapeInfo.probabilities['中等'] ?? 0,
+                    Colors.success,
+                    bodyShapeInfo.body_shape === '中等',
+                  )}
+                  {renderProbabilityBar(
+                    '高大',
+                    bodyShapeInfo.probabilities['高大'] ?? 0,
+                    Colors.warning,
+                    bodyShapeInfo.body_shape === '高大',
+                  )}
+                </View>
+              )}
+
+              {/* 品味记忆状态 */}
+              {bodyShapeInfo.preference.using_preference && (
+                <View style={styles.preferenceRow}>
+                  <IconFont
+                    name="bianji"
+                    size={12}
+                    color={Colors.primary}
+                  />
+                  <Text style={styles.preferenceText}>
+                    已应用「{bodyShapeInfo.preference.active_body_shape}」品味记忆
+                  </Text>
+                </View>
+              )}
+              {bodyShapeInfo.preference.is_recording &&
+                bodyShapeInfo.preference.recording_progress && (
+                  <View style={styles.recordingRow}>
+                    <Text style={styles.recordingText}>
+                      品味记录中...{' '}
+                      {bodyShapeInfo.preference.recording_progress.progress_pct}%
+                    </Text>
+                    <View style={styles.recordingBarBg}>
+                      <View
+                        style={[
+                          styles.recordingBarFill,
+                          {
+                            width: `${bodyShapeInfo.preference.recording_progress.progress_pct}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                )}
+            </View>
           </View>
 
           {/* 气囊状态 */}
@@ -388,7 +699,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               <Text style={styles.sectionTitle}>气囊状态</Text>
             </View>
             <View style={styles.airbagStatusCard}>
-              <Text style={styles.bodyTypeText}>当前为自适应调节状态</Text>
+              <Text style={styles.airbagStatusText}>
+                {adaptiveEnabled ? '当前为自适应调节状态' : '自适应调节已关闭'}
+              </Text>
               <View style={styles.seatThumbnail}>
                 <SeatDiagram
                   activeZone={null}
@@ -503,7 +816,7 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.xl,
   },
   section: {
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -516,6 +829,7 @@ const styles = StyleSheet.create({
     color: Colors.textGray,
     fontWeight: '500',
   },
+  // ─── 座椅状态 ───
   seatStatusRow: {
     flexDirection: 'row',
     gap: Spacing.md,
@@ -543,12 +857,145 @@ const styles = StyleSheet.create({
   seatStatusTextActive: {
     color: Colors.primary,
   },
+  // ─── 详细状态标签 ───
+  detailStatusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  detailStatusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  detailStatusLabel: {
+    fontSize: FontSize.sm,
+    color: Colors.textGray,
+  },
+  detailStatusText: {
+    fontSize: FontSize.sm,
+    color: Colors.textLightGray,
+    fontWeight: '500',
+  },
+  // ─── 体型分析 ───
+  bodyShapeCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+  },
+  bodyShapeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  bodyShapeStateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bodyShapeStateBadge: {
+    backgroundColor: 'rgba(142, 142, 147, 0.15)',
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  bodyShapeStateText: {
+    fontSize: FontSize.xs,
+    color: Colors.textGray,
+    fontWeight: '500',
+  },
+  bodyShapeResult: {
+    alignItems: 'flex-end',
+  },
+  bodyShapeValue: {
+    fontSize: FontSize.xxl,
+    fontWeight: '700',
+    color: Colors.textGray,
+  },
+  bodyShapeConfidence: {
+    fontSize: FontSize.xs,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  // ─── 概率分布条 ───
+  probContainer: {
+    gap: Spacing.sm,
+  },
+  probRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  probLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.textGray,
+    width: 28,
+    textAlign: 'right',
+  },
+  probBarBg: {
+    flex: 1,
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  probBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  probValue: {
+    fontSize: FontSize.xs,
+    color: Colors.textGray,
+    width: 32,
+    textAlign: 'right',
+  },
+  // ─── 品味记忆 ───
+  preferenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderGray,
+  },
+  preferenceText: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    fontWeight: '500',
+  },
+  recordingRow: {
+    marginTop: Spacing.sm,
+  },
+  recordingText: {
+    fontSize: FontSize.xs,
+    color: Colors.warning,
+    marginBottom: Spacing.xs,
+  },
+  recordingBarBg: {
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  recordingBarFill: {
+    height: '100%',
+    backgroundColor: Colors.warning,
+    borderRadius: 2,
+  },
+  // ─── 气囊状态 ───
   airbagStatusCard: {
     backgroundColor: Colors.cardBackground,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
   },
-  bodyTypeText: {
+  airbagStatusText: {
     fontSize: FontSize.md,
     color: Colors.textWhite,
     fontWeight: '600',

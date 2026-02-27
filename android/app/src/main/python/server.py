@@ -4,13 +4,14 @@ import sys
 from collections.abc import Iterable
 
 import numpy as np
-_base_dir = os.path.dirname(__file__)
-_newpy_dir = os.path.join(_base_dir, "newPy")
-if _newpy_dir not in sys.path:
-    sys.path.insert(0, _newpy_dir)
 
-# Ensure imports resolve to newPy modules, not previously cached legacy modules.
-_newpy_prefix = os.path.abspath(_newpy_dir)
+_base_dir = os.path.dirname(__file__)
+_release_dir = os.path.join(_base_dir, "release_package")
+if _release_dir not in sys.path:
+    sys.path.insert(0, _release_dir)
+
+# Ensure imports resolve to release_package modules, not previously cached legacy modules.
+_release_prefix = os.path.abspath(_release_dir)
 for _name in (
     "integrated_system",
     "config",
@@ -18,15 +19,16 @@ for _name in (
     "body_shape_classifier",
     "tap_massage",
     "body_type_classifier",
+    "preference_manager",
 ):
     _mod = sys.modules.get(_name)
     _mod_file = getattr(_mod, "__file__", "") if _mod else ""
-    if _mod and _mod_file and not os.path.abspath(_mod_file).startswith(_newpy_prefix):
+    if _mod and _mod_file and not os.path.abspath(_mod_file).startswith(_release_prefix):
         del sys.modules[_name]
 
 from integrated_system import IntegratedSeatSystem
 
-_config_path = os.path.join(_newpy_dir, "sensor_config.yaml")
+_config_path = os.path.join(_release_dir, "sensor_config.yaml")
 _system = IntegratedSeatSystem(_config_path)
 
 

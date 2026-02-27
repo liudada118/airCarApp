@@ -1,11 +1,16 @@
 /**
  * 模拟串口数据模块
  *
- * 模拟 Python 层 (integrated_system.py) 的 process_frame 输出数据，
+ * 模拟 release_package 中 IntegratedSeatSystem.process_frame 的输出数据，
  * 以及串口传感器的原始 144 点数据帧。
+ *
+ * 输出格式遵循 OUTPUT_FIELDS.md 定义的三个核心字段：
+ *   seat_status, body_shape_info, airbag_command
  *
  * 用于在没有真实硬件时进行 UI 开发和调试。
  */
+
+import type {AlgoResult} from '../types';
 
 // ─── 原始传感器数据帧（144 个 uint8 值）───────────────────────────
 // 结构：[0-71] 靠背传感器，[72-143] 坐垫传感器
@@ -50,73 +55,76 @@ export const SEATED_SENSOR_FRAME: number[] = [
   20, 35, 50, 52, 38, 22,  // row 9 (后缘)
 ];
 
-// ─── Python 层 process_frame 输出的模拟数据 ───────────────────────
+// ─── 新算法 process_frame 输出的模拟数据 ─────────────────────────
 
 /** 模拟算法结果 - 离座状态 */
-export const MOCK_RESULT_OFF_SEAT = {
+export const MOCK_RESULT_OFF_SEAT: AlgoResult = {
+  // 三个核心字段
+  seat_status: {
+    state: 'OFF_SEAT',
+    is_off_seat: true,
+    is_seated: false,
+    is_resetting: false,
+  },
+  body_shape_info: {
+    body_shape: '',
+    body_shape_state: 'IDLE',
+    confidence: 0.0,
+    probabilities: {},
+    preference: {
+      active_body_shape: null,
+      using_preference: false,
+      is_recording: false,
+      recording_progress: null,
+    },
+  },
+  airbag_command: {
+    command: null,
+    is_new_command: false,
+  },
+  // 兼容字段
   control_command: null,
   is_new_command: false,
-  control_decision_data: null,
   living_status: '离座',
   body_type: '未判断',
-  body_shape: '未判断',
   seat_state: 'OFF_SEAT',
   cushion_sum: 0,
   backrest_sum: 0,
   living_confidence: 0.0,
   body_features: {},
-  living_detection_data: {
-    enabled: true,
-    status: '离座',
-    in_enabled_state: false,
-    queue: {
-      size: 3,
-      current_length: 0,
-      is_full: false,
-      values: [],
-      values_display: [],
-    },
-    control_lock: {
-      adaptive_control_unlocked: false,
-      message: '等待活体确认',
-    },
-  },
-  body_type_detection_data: {
-    enabled: true,
-    body_type: '未判断',
-    locked: false,
-    locked_value: '未判断',
-    queue: {
-      size: 2,
-      current_length: 0,
-      is_full: false,
-      values: [],
-    },
-  },
-  tap_massage: null,
-  deflate_cooldown: {
-    enabled: true,
-    max_commands: 16,
-    groups: {
-      lumbar: { locked: false, counter: 0 },
-      left_side_wing: { locked: false, counter: 0 },
-      right_side_wing: { locked: false, counter: 0 },
-      left_leg: { locked: false, counter: 0 },
-      right_leg: { locked: false, counter: 0 },
-    },
-  },
-  step_drop_detection: null,
   frame_count: 1,
 };
 
 /** 模拟算法结果 - 检测中（坐垫有压力） */
-export const MOCK_RESULT_CUSHION_ONLY = {
+export const MOCK_RESULT_CUSHION_ONLY: AlgoResult = {
+  // 三个核心字段
+  seat_status: {
+    state: 'CUSHION_ONLY',
+    is_off_seat: false,
+    is_seated: true,
+    is_resetting: false,
+  },
+  body_shape_info: {
+    body_shape: '',
+    body_shape_state: 'COLLECTING',
+    confidence: 0.0,
+    probabilities: {},
+    preference: {
+      active_body_shape: null,
+      using_preference: false,
+      is_recording: false,
+      recording_progress: null,
+    },
+  },
+  airbag_command: {
+    command: null,
+    is_new_command: false,
+  },
+  // 兼容字段
   control_command: null,
   is_new_command: false,
-  control_decision_data: null,
   living_status: '检测中',
   body_type: '未判断',
-  body_shape: '未判断',
   seat_state: 'CUSHION_ONLY',
   cushion_sum: 3500.0,
   backrest_sum: 150.0,
@@ -137,52 +145,44 @@ export const MOCK_RESULT_CUSHION_ONLY = {
     body_size_type: '未判断',
     body_size_raw: 0.0,
   },
-  living_detection_data: {
-    enabled: true,
-    status: '检测中',
-    in_enabled_state: true,
-    queue: {
-      size: 3,
-      current_length: 1,
-      is_full: false,
-      values: [true],
-      values_display: ['活体'],
-    },
-    control_lock: {
-      adaptive_control_unlocked: false,
-      message: '等待活体确认',
-    },
-  },
-  body_type_detection_data: {
-    enabled: true,
-    body_type: '未判断',
-    locked: false,
-    locked_value: '未判断',
-    queue: {
-      size: 2,
-      current_length: 0,
-      is_full: false,
-      values: [],
-    },
-  },
-  tap_massage: null,
-  deflate_cooldown: {
-    enabled: true,
-    max_commands: 16,
-    groups: {
-      lumbar: { locked: false, counter: 0 },
-      left_side_wing: { locked: false, counter: 0 },
-      right_side_wing: { locked: false, counter: 0 },
-      left_leg: { locked: false, counter: 0 },
-      right_leg: { locked: false, counter: 0 },
-    },
-  },
-  step_drop_detection: null,
   frame_count: 50,
 };
 
-/** 模拟算法结果 - 自适应锁定（正常在座，大人） */
-export const MOCK_RESULT_ADAPTIVE_LOCKED = {
+/** 模拟算法结果 - 自适应锁定（正常在座，体型中等） */
+export const MOCK_RESULT_ADAPTIVE_LOCKED: AlgoResult = {
+  // 三个核心字段
+  seat_status: {
+    state: 'ADAPTIVE_LOCKED',
+    is_off_seat: false,
+    is_seated: true,
+    is_resetting: false,
+  },
+  body_shape_info: {
+    body_shape: '中等',
+    body_shape_state: 'COMPLETED',
+    confidence: 0.92,
+    probabilities: {
+      '瘦小': 0.05,
+      '中等': 0.92,
+      '高大': 0.03,
+    },
+    preference: {
+      active_body_shape: '中等',
+      using_preference: true,
+      is_recording: false,
+      recording_progress: null,
+    },
+  },
+  airbag_command: {
+    command: [
+      31, 1, 0, 2, 0, 3, 0, 4, 0, 5, 3, 6, 3, 7, 0, 8, 0,
+      9, 0, 10, 0, 11, 0, 12, 0, 13, 0, 14, 0, 15, 0, 16, 0,
+      17, 0, 18, 0, 19, 0, 20, 0, 21, 0, 22, 0, 23, 0, 24, 0,
+      0, 0, 170, 85, 3, 153,
+    ],
+    is_new_command: true,
+  },
+  // 兼容字段
   control_command: [
     31, 1, 0, 2, 0, 3, 0, 4, 0, 5, 3, 6, 3, 7, 0, 8, 0,
     9, 0, 10, 0, 11, 0, 12, 0, 13, 0, 14, 0, 15, 0, 16, 0,
@@ -190,31 +190,8 @@ export const MOCK_RESULT_ADAPTIVE_LOCKED = {
     0, 0, 170, 85, 3, 153,
   ],
   is_new_command: true,
-  control_decision_data: {
-    lumbar: {
-      upper_pressure: 450.0,
-      lower_pressure: 280.0,
-      ratio: 1.607,
-      threshold_passed: true,
-      action: 'INFLATE',
-    },
-    side_wings: {
-      left_pressure: 120.0,
-      right_pressure: 125.0,
-      ratio: 0.96,
-      left_action: 'HOLD',
-      right_action: 'HOLD',
-    },
-    leg_support: {
-      butt_pressure: 800.0,
-      leg_pressure: 350.0,
-      ratio: 2.286,
-      action: 'HOLD',
-    },
-  },
   living_status: '活体',
   body_type: '大人',
-  body_shape: '标准型',
   seat_state: 'ADAPTIVE_LOCKED',
   cushion_sum: 5200.0,
   backrest_sum: 2800.0,
@@ -235,63 +212,40 @@ export const MOCK_RESULT_ADAPTIVE_LOCKED = {
     body_size_type: '大人',
     body_size_raw: 0.78,
   },
-  living_detection_data: {
-    enabled: true,
-    status: '活体',
-    in_enabled_state: true,
-    queue: {
-      size: 3,
-      current_length: 3,
-      is_full: true,
-      values: [true, true, true],
-      values_display: ['活体', '活体', '活体'],
-    },
-    control_lock: {
-      adaptive_control_unlocked: true,
-      message: '已解锁自适应控制',
-    },
-    current_detection: {
-      is_living: true,
-      confidence: 0.92,
-      threshold: 0.5,
-      passed_threshold: true,
-      sad_score: 0.15,
-      sad_energy: 8.5,
-      sad_cushion: 5.2,
-      sad_backrest: 3.3,
-      detection_count: 12,
-    },
-  },
-  body_type_detection_data: {
-    enabled: true,
-    body_type: '大人',
-    locked: true,
-    locked_value: '大人',
-    queue: {
-      size: 2,
-      current_length: 2,
-      is_full: true,
-      values: ['大人', '大人'],
-    },
-  },
-  tap_massage: null,
-  deflate_cooldown: {
-    enabled: true,
-    max_commands: 16,
-    groups: {
-      lumbar: { locked: false, counter: 2 },
-      left_side_wing: { locked: false, counter: 0 },
-      right_side_wing: { locked: false, counter: 0 },
-      left_leg: { locked: false, counter: 0 },
-      right_leg: { locked: false, counter: 0 },
-    },
-  },
-  step_drop_detection: null,
   frame_count: 200,
 };
 
 /** 模拟算法结果 - 复位中 */
-export const MOCK_RESULT_RESETTING = {
+export const MOCK_RESULT_RESETTING: AlgoResult = {
+  // 三个核心字段
+  seat_status: {
+    state: 'RESETTING',
+    is_off_seat: false,
+    is_seated: false,
+    is_resetting: true,
+  },
+  body_shape_info: {
+    body_shape: '',
+    body_shape_state: 'IDLE',
+    confidence: 0.0,
+    probabilities: {},
+    preference: {
+      active_body_shape: null,
+      using_preference: false,
+      is_recording: false,
+      recording_progress: null,
+    },
+  },
+  airbag_command: {
+    command: [
+      31, 1, 4, 2, 4, 3, 4, 4, 4, 5, 4, 6, 4, 7, 4, 8, 4,
+      9, 4, 10, 4, 11, 0, 12, 0, 13, 0, 14, 0, 15, 0, 16, 0,
+      17, 0, 18, 0, 19, 0, 20, 0, 21, 0, 22, 0, 23, 0, 24, 0,
+      0, 0, 170, 85, 3, 153,
+    ],
+    is_new_command: true,
+  },
+  // 兼容字段
   control_command: [
     31, 1, 4, 2, 4, 3, 4, 4, 4, 5, 4, 6, 4, 7, 4, 8, 4,
     9, 4, 10, 4, 11, 0, 12, 0, 13, 0, 14, 0, 15, 0, 16, 0,
@@ -299,64 +253,25 @@ export const MOCK_RESULT_RESETTING = {
     0, 0, 170, 85, 3, 153,
   ],
   is_new_command: true,
-  control_decision_data: null,
   living_status: '离座',
   body_type: '未判断',
-  body_shape: '未判断',
   seat_state: 'RESETTING',
   cushion_sum: 50.0,
   backrest_sum: 20.0,
   living_confidence: 0.0,
   body_features: {},
-  living_detection_data: {
-    enabled: true,
-    status: '离座',
-    in_enabled_state: false,
-    queue: {
-      size: 3,
-      current_length: 0,
-      is_full: false,
-      values: [],
-      values_display: [],
-    },
-    control_lock: {
-      adaptive_control_unlocked: false,
-      message: '等待活体确认',
-    },
-  },
-  body_type_detection_data: {
-    enabled: true,
-    body_type: '未判断',
-    locked: false,
-    locked_value: '未判断',
-    queue: {
-      size: 2,
-      current_length: 0,
-      is_full: false,
-      values: [],
-    },
-  },
-  tap_massage: null,
-  deflate_cooldown: {
-    enabled: true,
-    max_commands: 16,
-    groups: {
-      lumbar: { locked: false, counter: 0 },
-      left_side_wing: { locked: false, counter: 0 },
-      right_side_wing: { locked: false, counter: 0 },
-      left_leg: { locked: false, counter: 0 },
-      right_leg: { locked: false, counter: 0 },
-    },
-  },
-  step_drop_detection: null,
   frame_count: 350,
 };
 
 // ─── 模拟串口事件发射器 ──────────────────────────────────────────
 
-export type MockScenario = 'off_seat' | 'cushion_only' | 'adaptive_locked' | 'resetting';
+export type MockScenario =
+  | 'off_seat'
+  | 'cushion_only'
+  | 'adaptive_locked'
+  | 'resetting';
 
-const SCENARIO_RESULTS: Record<MockScenario, typeof MOCK_RESULT_OFF_SEAT> = {
+const SCENARIO_RESULTS: Record<MockScenario, AlgoResult> = {
   off_seat: MOCK_RESULT_OFF_SEAT,
   cushion_only: MOCK_RESULT_CUSHION_ONLY,
   adaptive_locked: MOCK_RESULT_ADAPTIVE_LOCKED,
@@ -370,7 +285,11 @@ const SCENARIO_SENSOR_DATA: Record<MockScenario, number[]> = {
   resetting: EMPTY_SENSOR_FRAME,
 };
 
-type MockListener = (data: { data?: string; result?: string; error?: string }) => void;
+type MockListener = (data: {
+  data?: string;
+  result?: string;
+  error?: string;
+}) => void;
 
 /**
  * 模拟串口数据管理器
@@ -428,7 +347,7 @@ export class MockSerialManager {
 
       // 发射传感器数据
       const sensorPayload = sensorData.join(',');
-      this.dataListeners.forEach(l => l({ data: sensorPayload }));
+      this.dataListeners.forEach(l => l({data: sensorPayload}));
 
       // 每 4 帧发射一次算法结果（模拟 control_check_interval = 4）
       if (this.frameCount % 4 === 0) {
@@ -436,7 +355,7 @@ export class MockSerialManager {
           ...SCENARIO_RESULTS[this.scenario],
           frame_count: this.frameCount,
         };
-        this.resultListeners.forEach(l => l({ result: JSON.stringify(result) }));
+        this.resultListeners.forEach(l => l({result: JSON.stringify(result)}));
       }
     }, intervalMs);
   }
@@ -455,8 +374,8 @@ export class MockSerialManager {
   }
 
   /** 获取当前场景的算法结果快照 */
-  getResultSnapshot(): typeof MOCK_RESULT_OFF_SEAT {
-    return { ...SCENARIO_RESULTS[this.scenario], frame_count: this.frameCount };
+  getResultSnapshot(): AlgoResult {
+    return {...SCENARIO_RESULTS[this.scenario], frame_count: this.frameCount};
   }
 }
 

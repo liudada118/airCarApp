@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Airbag zone type
  */
 export type AirbagZone =
@@ -56,6 +56,98 @@ export interface ToastConfig {
 }
 
 /**
- * Body type
+ * Body type (大人/小孩 二分类)
  */
-export type BodyType = '轻盈型' | '标准型' | '健壮型';
+export type BodyType = '大人' | '小孩' | '静物' | '未判断';
+
+/**
+ * Body shape (瘦小/中等/高大 三分类)
+ */
+export type BodyShape = '瘦小' | '中等' | '高大' | '';
+
+/**
+ * Body shape classifier state
+ */
+export type BodyShapeState =
+  | 'IDLE'
+  | 'COLLECTING'
+  | 'CLASSIFYING'
+  | 'COMPLETED'
+  | 'DISABLED';
+
+/**
+ * Seat state machine state (from algorithm)
+ */
+export type SeatMachineState =
+  | 'OFF_SEAT'
+  | 'CUSHION_ONLY'
+  | 'ADAPTIVE_LOCKED'
+  | 'RESETTING';
+
+// ─── 新算法 process_frame 三个核心输出字段 ─────────────────────
+
+/**
+ * seat_status - 离座状态
+ */
+export interface AlgoSeatStatus {
+  state: SeatMachineState;
+  is_off_seat: boolean;
+  is_seated: boolean;
+  is_resetting: boolean;
+}
+
+/**
+ * body_shape_info.preference - 品味记忆状态
+ */
+export interface PreferenceInfo {
+  active_body_shape: string | null;
+  using_preference: boolean;
+  is_recording: boolean;
+  recording_progress: {
+    target_shape: string;
+    current_frames: number;
+    total_frames: number;
+    progress_pct: number;
+  } | null;
+}
+
+/**
+ * body_shape_info - 体型相关信息
+ */
+export interface AlgoBodyShapeInfo {
+  body_shape: BodyShape;
+  body_shape_state: BodyShapeState;
+  confidence: number;
+  probabilities: Record<string, number>;
+  preference: PreferenceInfo;
+}
+
+/**
+ * airbag_command - 气囊指令
+ */
+export interface AlgoAirbagCommand {
+  command: number[] | null;
+  is_new_command: boolean;
+}
+
+/**
+ * 完整的算法输出结果
+ */
+export interface AlgoResult {
+  // 三个核心字段
+  seat_status: AlgoSeatStatus;
+  body_shape_info: AlgoBodyShapeInfo;
+  airbag_command: AlgoAirbagCommand;
+
+  // 兼容字段
+  control_command: number[] | null;
+  is_new_command: boolean;
+  living_status: string;
+  body_type: BodyType;
+  seat_state: SeatMachineState;
+  cushion_sum: number;
+  backrest_sum: number;
+  living_confidence: number;
+  body_features: Record<string, unknown>;
+  frame_count: number;
+}
