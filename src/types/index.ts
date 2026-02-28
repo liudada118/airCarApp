@@ -70,6 +70,71 @@ export const DEFAULT_AIRBAG_VALUES: AirbagValues = {
 };
 
 /**
+ * 气囊指令状态
+ *   0 = 空闲（无背景、无箭头）
+ *   3 = 充气（蓝色背景 + 向上箭头）
+ *   4 = 放气（蓝色背景 + 向下箭头）
+ */
+export type AirbagCommandState = 0 | 3 | 4;
+
+/** 10 个气囊的指令状态 */
+export type AirbagCommandStates = Record<AirbagZone, AirbagCommandState>;
+
+/** 默认气囊指令状态（全部空闲） */
+export const DEFAULT_AIRBAG_COMMAND_STATES: AirbagCommandStates = {
+  shoulderL: 0,
+  shoulderR: 0,
+  sideWingL: 0,
+  sideWingR: 0,
+  lumbarUp: 0,
+  lumbarDown: 0,
+  cushionFL: 0,
+  cushionFR: 0,
+  cushionRL: 0,
+  cushionRR: 0,
+};
+
+/**
+ * 解析 airbag_command 的 command 数组（55 字节）
+ *
+ * 数据格式：
+ *   [0]      : 帧头（忽略）
+ *   [1..48]  : 24 组 [索引, 指令] 交替排列
+ *   [49..54] : 校验/尾部（忽略）
+ *
+ * 前 10 组 [索引, 指令] 对应页面上的 10 个气囊。
+ * 索引从 1 开始，与 ALL_AIRBAG_ZONES 的顺序一一对应。
+ *
+ * 指令值：
+ *   0 = 空闲
+ *   3 = 充气
+ *   4 = 放气
+ */
+export function parseAirbagCommand(
+  command: number[] | null | undefined,
+): AirbagCommandStates {
+  const states: AirbagCommandStates = {...DEFAULT_AIRBAG_COMMAND_STATES};
+
+  if (!command || command.length < 21) {
+    return states;
+  }
+
+  // 跳过帧头 [0]，从 [1] 开始，每 2 个元素为一组 [索引, 指令]
+  for (let i = 0; i < 10; i++) {
+    const offset = 1 + i * 2; // 帧头后偏移
+    // const index = command[offset];     // 索引（1-10）
+    const cmd = command[offset + 1]; // 指令值
+
+    const zone = ALL_AIRBAG_ZONES[i];
+    if (zone && (cmd === 0 || cmd === 3 || cmd === 4)) {
+      states[zone] = cmd as AirbagCommandState;
+    }
+  }
+
+  return states;
+}
+
+/**
  * Seat status
  */
 export type SeatStatus = 'seated' | 'away';

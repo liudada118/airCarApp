@@ -1,7 +1,6 @@
 import React from 'react';
 import {View, Image, StyleSheet} from 'react-native';
-import {Colors} from '../theme';
-import type {AirbagZone, AirbagValues} from '../types';
+import type {AirbagZone, AirbagValues, AirbagCommandStates, AirbagCommandState} from '../types';
 
 // 座椅背景图
 const SEAT_BG = require('../assets/images/seat_bg.png');
@@ -14,33 +13,28 @@ interface SeatDiagramProps {
   showAllActive?: boolean;
   /** 各气囊的数值，用于判断是否激活 */
   values?: Partial<AirbagValues>;
+  /** 气囊指令状态（来自 airbag_command 解析结果） */
+  commandStates?: AirbagCommandStates;
 }
 
 /**
  * 箭头指示器（三角形）
  */
 const ArrowIndicator: React.FC<{
-  direction: 'up' | 'down' | 'left' | 'right';
+  direction: 'up' | 'down';
   size?: number;
 }> = ({direction, size = 10}) => {
-  const rotations: Record<string, string> = {
-    up: '0deg',
-    right: '90deg',
-    down: '180deg',
-    left: '270deg',
-  };
-
   return (
     <View style={[arrowStyles.container, {width: size, height: size}]}>
       <View
         style={[
           arrowStyles.arrow,
           {
-            borderLeftWidth: size * 0.35,
-            borderRightWidth: size * 0.35,
-            borderBottomWidth: size * 0.5,
-            borderBottomColor: 'rgba(255,255,255,0.7)',
-            transform: [{rotate: rotations[direction]}],
+            borderLeftWidth: size * 0.4,
+            borderRightWidth: size * 0.4,
+            borderBottomWidth: size * 0.6,
+            borderBottomColor: 'rgba(255,255,255,0.85)',
+            transform: [{rotate: direction === 'up' ? '0deg' : '180deg'}],
           },
         ]}
       />
@@ -64,6 +58,26 @@ const arrowStyles = StyleSheet.create({
 });
 
 /**
+ * 根据 command 状态获取气囊区域的样式
+ *
+ * 指令 3 = 充气：蓝色背景 + 向上箭头
+ * 指令 4 = 放气：蓝色背景 + 向下箭头
+ * 指令 0 = 空闲：无背景色 + 无箭头
+ */
+function getZoneStyleByCommand(cmd: AirbagCommandState) {
+  if (cmd === 3 || cmd === 4) {
+    return {
+      backgroundColor: 'rgba(0, 150, 255, 0.45)',
+      borderColor: 'rgba(0, 150, 255, 0.6)',
+    };
+  }
+  return {
+    backgroundColor: 'rgba(100, 120, 160, 0.08)',
+    borderColor: 'rgba(150, 160, 180, 0.2)',
+  };
+}
+
+/**
  * 10 个气囊的座椅示意图
  *
  * 布局参照用户提供的设计稿截图：
@@ -71,30 +85,49 @@ const arrowStyles = StyleSheet.create({
  *   靠背中部: 3(sideWingL)  5(lumbarUp)/6(lumbarDown)  4(sideWingR)
  *   坐垫前部: 7(cushionFL)  8(cushionFR)
  *   坐垫后部: 9(cushionRL)  10(cushionRR)
+ *
+ * 气囊状态由 commandStates 驱动：
+ *   指令 3 → 蓝色背景 + ↑ 箭头（充气）
+ *   指令 4 → 蓝色背景 + ↓ 箭头（放气）
+ *   指令 0 → 无背景 + 无箭头（空闲）
  */
 const SeatDiagram: React.FC<SeatDiagramProps> = ({
   activeZone,
   scale = 1,
   showAllActive = false,
   values,
+  commandStates,
 }) => {
-  const isZoneActive = (zone: AirbagZone) => {
-    if (showAllActive && values) {
-      return (values[zone] ?? 0) > 0;
+  /** 获取某个气囊的指令状态 */
+  const getCmd = (zone: AirbagZone): AirbagCommandState => {
+    if (commandStates) {
+      return commandStates[zone] ?? 0;
     }
-    return activeZone === zone;
+    // 无 commandStates 时，使用 showAllActive/activeZone 的旧逻辑做 fallback
+    if (showAllActive && values && (values[zone] ?? 0) > 0) {
+      return 3; // 模拟充气状态
+    }
+    if (activeZone === zone) {
+      return 3;
+    }
+    return 0;
   };
 
+  /** 获取气囊区域样式 */
   const getZoneStyle = (zone: AirbagZone) => {
-    const active = isZoneActive(zone);
-    return {
-      backgroundColor: active
-        ? 'rgba(0, 150, 255, 0.45)'
-        : 'rgba(100, 120, 160, 0.15)',
-      borderColor: active
-        ? 'rgba(0, 150, 255, 0.6)'
-        : 'rgba(150, 160, 180, 0.25)',
-    };
+    return getZoneStyleByCommand(getCmd(zone));
+  };
+
+  /** 渲染气囊箭头（仅在指令为 3 或 4 时显示） */
+  const renderArrow = (zone: AirbagZone, arrowSize: number) => {
+    const cmd = getCmd(zone);
+    if (cmd === 3) {
+      return <ArrowIndicator direction="up" size={arrowSize} />;
+    }
+    if (cmd === 4) {
+      return <ArrowIndicator direction="down" size={arrowSize} />;
+    }
+    return null;
   };
 
   const s = scale;
@@ -125,7 +158,7 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
             borderRadius: 10 * s,
           },
         ]}>
-        {isZoneActive('shoulderL') && <ArrowIndicator direction="up" size={8 * s} />}
+        {renderArrow('shoulderL', 8 * s)}
       </View>
       <View
         style={[
@@ -139,7 +172,7 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
             borderRadius: 10 * s,
           },
         ]}>
-        {isZoneActive('shoulderR') && <ArrowIndicator direction="up" size={8 * s} />}
+        {renderArrow('shoulderR', 8 * s)}
       </View>
 
       {/* ─── 靠背中部: 3(sideWingL) ─── */}
@@ -155,7 +188,7 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
             borderRadius: 10 * s,
           },
         ]}>
-        {isZoneActive('sideWingL') && <ArrowIndicator direction="right" size={8 * s} />}
+        {renderArrow('sideWingL', 8 * s)}
       </View>
 
       {/* ─── 靠背中部: 4(sideWingR) ─── */}
@@ -171,11 +204,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
             borderRadius: 10 * s,
           },
         ]}>
-        {isZoneActive('sideWingR') && <ArrowIndicator direction="left" size={8 * s} />}
+        {renderArrow('sideWingR', 8 * s)}
       </View>
 
       {/* ─── 靠背中部: 5(lumbarUp) 6(lumbarDown) ─── */}
-      {/* 外框容器 */}
       <View
         style={{
           position: 'absolute',
@@ -187,10 +219,9 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
         {/* 5: lumbarUp - 上半部分 */}
         <View
           style={[
-            styles.zone,
+            styles.zoneRelative,
             getZoneStyle('lumbarUp'),
             {
-              position: 'relative',
               width: '100%',
               height: '50%',
               borderTopLeftRadius: 8 * s,
@@ -198,17 +229,17 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
               borderBottomLeftRadius: 0,
               borderBottomRightRadius: 0,
             },
-          ]}
-        />
+          ]}>
+          {renderArrow('lumbarUp', 8 * s)}
+        </View>
         {/* 虚线分隔 */}
         <View style={[styles.dashedLine, {height: 1 * s}]} />
         {/* 6: lumbarDown - 下半部分 */}
         <View
           style={[
-            styles.zone,
+            styles.zoneRelative,
             getZoneStyle('lumbarDown'),
             {
-              position: 'relative',
               width: '100%',
               height: '50%',
               borderTopLeftRadius: 0,
@@ -216,8 +247,9 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
               borderBottomLeftRadius: 8 * s,
               borderBottomRightRadius: 8 * s,
             },
-          ]}
-        />
+          ]}>
+          {renderArrow('lumbarDown', 8 * s)}
+        </View>
       </View>
 
       {/* ─── 坐垫前部: 7(cushionFL) 8(cushionFR) ─── */}
@@ -233,10 +265,9 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
         {/* 7: cushionFL */}
         <View
           style={[
-            styles.zone,
+            styles.zoneRelative,
             getZoneStyle('cushionFL'),
             {
-              position: 'relative',
               flex: 1,
               height: '100%',
               borderTopLeftRadius: 8 * s,
@@ -245,17 +276,16 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
               borderBottomRightRadius: 0,
             },
           ]}>
-          <ArrowIndicator direction="up" size={10 * s} />
+          {renderArrow('cushionFL', 10 * s)}
         </View>
         {/* 竖向虚线分隔 */}
         <View style={[styles.dashedLineVertical, {width: 1 * s}]} />
         {/* 8: cushionFR */}
         <View
           style={[
-            styles.zone,
+            styles.zoneRelative,
             getZoneStyle('cushionFR'),
             {
-              position: 'relative',
               flex: 1,
               height: '100%',
               borderTopLeftRadius: 0,
@@ -264,7 +294,7 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
               borderBottomRightRadius: 8 * s,
             },
           ]}>
-          <ArrowIndicator direction="up" size={10 * s} />
+          {renderArrow('cushionFR', 10 * s)}
         </View>
       </View>
 
@@ -280,8 +310,9 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
             height: 28 * s,
             borderRadius: 10 * s,
           },
-        ]}
-      />
+        ]}>
+        {renderArrow('cushionRL', 8 * s)}
+      </View>
       <View
         style={[
           styles.zone,
@@ -293,8 +324,9 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
             height: 28 * s,
             borderRadius: 10 * s,
           },
-        ]}
-      />
+        ]}>
+        {renderArrow('cushionRR', 8 * s)}
+      </View>
     </View>
   );
 };
@@ -310,6 +342,13 @@ const styles = StyleSheet.create({
   },
   zone: {
     position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  zoneRelative: {
+    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,

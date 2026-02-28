@@ -17,12 +17,14 @@ import type {
   SeatStatus,
   ConnectionStatus,
   AirbagValues,
+  AirbagCommandStates,
   AlgoSeatStatus,
   AlgoBodyShapeInfo,
   BodyShape,
   BodyShapeState,
   AlgoResult,
 } from '../types';
+import {parseAirbagCommand, DEFAULT_AIRBAG_COMMAND_STATES} from '../types';
 import {mockSerial} from '../mock/mockSerialData';
 
 const {width: SCREEN_WIDTH} = Dimensions.get('window');
@@ -139,6 +141,7 @@ function parseAlgoResult(resultJson: string): {
   seatStatus: SeatStatus;
   algoSeatStatus: AlgoSeatStatus;
   bodyShapeInfo: AlgoBodyShapeInfo;
+  commandStates: AirbagCommandStates;
   livingStatus: string;
   bodyType: string;
 } | null {
@@ -175,10 +178,16 @@ function parseAlgoResult(resultJson: string): {
     const bodyType =
       typeof parsed.body_type === 'string' ? parsed.body_type : '未判断';
 
+    // 解析 airbag_command
+    const commandStates = parseAirbagCommand(
+      parsed.airbag_command?.command ?? parsed.control_command,
+    );
+
     return {
       seatStatus,
       algoSeatStatus,
       bodyShapeInfo,
+      commandStates,
       livingStatus,
       bodyType,
     };
@@ -252,6 +261,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
     useState<AlgoBodyShapeInfo>(DEFAULT_BODY_SHAPE_INFO);
   const [livingStatus, setLivingStatus] = useState<string>('离座');
   const [bodyType, setBodyType] = useState<string>('未判断');
+  const [commandStates, setCommandStates] =
+    useState<AirbagCommandStates>(DEFAULT_AIRBAG_COMMAND_STATES);
 
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('disconnected');
@@ -284,6 +295,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
     setSeatStatus(parsed.seatStatus);
     setAlgoSeatStatus(parsed.algoSeatStatus);
     setBodyShapeInfo(parsed.bodyShapeInfo);
+    setCommandStates(parsed.commandStates);
     setLivingStatus(parsed.livingStatus);
     setBodyType(parsed.bodyType);
   }, []);
@@ -711,8 +723,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                 <SeatDiagram
                   activeZone={null}
                   scale={0.55}
-                  showAllActive
-                  values={airbagValues}
+                  commandStates={commandStates}
                 />
               </View>
               <View style={styles.divider} />
