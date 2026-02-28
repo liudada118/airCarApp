@@ -11,7 +11,7 @@ import * as FileSystem from 'expo-file-system';
 import {GLView} from 'expo-gl';
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
-import {addSide, gaussBlur_return, lineInterpnew, jetWhite3} from '../../util/util';
+import {addSide, lineInterpnew, jetWhite3} from '../../util/util';
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 const SEPARATION = 100;
@@ -25,35 +25,24 @@ const DEFAULT_SETTINGS = {
   height: 1,
   coherent: 1,
 };
-// 降低座椅数据更新频率：从 15fps → 10fps，减少每帧计算量
+// 数据更新频率：10fps
 const SEAT_UPDATE_INTERVAL = 1000 / 10;
 const MODEL_TARGET_SIZE = 220;
 const CAMERA_MIN_DISTANCE = 80;
 const CAMERA_MAX_DISTANCE = 600;
 
+// 按需渲染：手势结束后继续渲染的帧数（用于惯性/过渡）
+const IDLE_RENDER_FRAMES = 3;
+
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
-// 模型居中后坐标系：X=左右, Y=上下(根节点有90度旋转), Z=前后
-// 模型整体 scaled size ≈ [124, 220, 151]
-//
-// 数据映射关系（splitSeatData 交叉映射后）：
-//   center    mesh ← 坐垫数据（sitConfig 10x6）
-//   centersit mesh ← 靠背数据（sitConfigBack 10x6）
-//   leftsit   mesh ← 靠背右侧翼（backConfig 3x2）
-//   rightsit  mesh ← 靠背左侧翼（backConfig 3x2）
 const DEFAULT_POINT_FIT_LAYOUT = {
-  // 坐垫：位于座椅坐面上，水平放置（绕 X 轴旋转约 -PI/2）
   center: {position: [0, -82, 42], rotation: [-Math.PI / 2 + 0.15, 0, 0]},
-  // 靠背：位于靠背面上，几乎竖直，微微前倾
   centersit: {position: [0, 5, -52], rotation: [-0.1, 0, 0]},
-  // 靠背右侧翼：在靠背右侧（X 正方向），绕 Y 轴旋转贴合侧面
   leftsit: {position: [42, 8, -48], rotation: [-0.1, 0.6, 0]},
-  // 靠背左侧翼：在靠背左侧（X 负方向），绕 Y 轴反向旋转
   rightsit: {position: [-42, 8, -48], rotation: [-0.1, -0.6, 0]},
 };
 
-// 点图整体旋转（应用到 pointGroup）
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
-// 点图整体缩放倍率
 const POINT_MAP_SCALE_DEFAULT = 1.8;
 
 // ─── 插值配置（保持原有点数不变） ────────────────────────────────────────────
@@ -123,6 +112,84 @@ function getTouchDistance(a, b) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+// ─── 预计算高斯卷积核（避免每帧调用 Math.exp） ─────────────────────────────
+// 原始 gaussBlur_return 对每个像素的每个卷积核元素都调用 Math.exp()，
+// 但权重只取决于 (ix-j, iy-i) 的偏移量，与像素位置无关。
+// 预计算一次即可，每次数据更新节省约 24 万次 Math.exp 调用。
+
+function buildGaussKernel(r) {
+  const rs = Math.ceil(r * 2.57);
+  const size = 2 * rs + 1;
+  const kernel = new Float64Array(size * size);
+  let wsum = 0;
+  let idx = 0;
+  for (let dy = -rs; dy <= rs; dy++) {
+    for (let dx = -rs; dx <= rs; dx++) {
+      const dsq = dx * dx + dy * dy;
+      const w = Math.exp(-dsq / (2 * r * r)) / (Math.PI * 2 * r * r);
+      kernel[idx++] = w;
+      wsum += w;
+    }
+  }
+  // 归一化，使权重和为 1（消除边界截断误差）
+  for (let i = 0; i < kernel.length; i++) {
+    kernel[i] /= wsum;
+  }
+  return {kernel, rs, size};
+}
+
+// 预计算 r=1 的高斯核（全局只算一次）
+const GAUSS_KERNEL = buildGaussKernel(DEFAULT_SETTINGS.gauss);
+
+/**
+ * 优化版高斯模糊：使用预计算的归一化权重表
+ * 相比原版 gaussBlur_return，消除了每像素 49 次 Math.exp 调用
+ */
+function gaussBlurFast(scl, w, h, resultBuf) {
+  const {kernel, rs, size} = GAUSS_KERNEL;
+  const result = resultBuf || new Array(scl.length).fill(0);
+
+  for (let i = 0; i < h; i++) {
+    for (let j = 0; j < w; j++) {
+      let val = 0;
+      let kidx = 0;
+      for (let dy = -rs; dy <= rs; dy++) {
+        const y = i + dy;
+        // 边界钳制
+        const cy = y < 0 ? 0 : y >= h ? h - 1 : y;
+        const rowOff = cy * w;
+        for (let dx = -rs; dx <= rs; dx++) {
+          const x = j + dx;
+          const cx = x < 0 ? 0 : x >= w ? w - 1 : x;
+          val += scl[rowOff + cx] * kernel[kidx];
+          kidx++;
+        }
+      }
+      result[i * w + j] = Math.round(val);
+    }
+  }
+  return result;
+}
+
+// ─── 预分配临时数组（避免每帧 GC） ───────────────────────────────────────────
+// 为每个区域预分配 lineInterp → addSide → gaussBlur 的中间缓冲区
+
+function createWorkBuffers() {
+  const buffers = {};
+  Object.keys(allConfig).forEach(key => {
+    const config = allConfig[key].dataConfig;
+    const {sitnum1, sitnum2, sitInterp, sitInterp1, sitOrder} = config;
+    const interpW = 1 + (sitnum2 - 1) * sitInterp1;
+    const interpH = 1 + (sitnum1 - 1) * sitInterp;
+    const sideW = interpW + sitOrder * 2;
+    const sideH = interpH + sitOrder * 2;
+    buffers[allConfig[key].name] = {
+      gaussBuf: new Array(sideW * sideH).fill(0),
+    };
+  });
+  return buffers;
+}
+
 // ─── 模型加载 ────────────────────────────────────────────────────────────────
 
 async function loadSeatModel(group) {
@@ -184,9 +251,15 @@ async function loadSeatModel(group) {
   });
 }
 
-// ─── 圆形纹理（程序生成，避免加载外部图片） ──────────────────────────────────
+// ─── 圆形纹理（程序生成，全局共享单例） ─────────────────────────────────────
+// 优化：所有点图材质共享同一个纹理实例，减少 GPU 纹理切换
 
-function createCircleTexture(size = 64) {
+let _sharedCircleTexture = null;
+
+function getSharedCircleTexture(size = 32) {
+  if (_sharedCircleTexture) {
+    return _sharedCircleTexture;
+  }
   const data = new Uint8Array(size * size * 4);
   const center = (size - 1) / 2;
   const radius = size / 2 - 1;
@@ -215,9 +288,10 @@ function createCircleTexture(size = 64) {
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.magFilter = THREE.LinearFilter;
-  texture.minFilter = THREE.LinearMipMapLinearFilter;
-  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearFilter; // 不用 mipmap，减少内存
+  texture.generateMipmaps = false;
   texture.needsUpdate = true;
+  _sharedCircleTexture = texture;
   return texture;
 }
 
@@ -313,8 +387,8 @@ function initPoint(config, pointConfig, name, group) {
   geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-  // 使用程序生成的圆形纹理
-  const circleTexture = createCircleTexture();
+  // 共享圆形纹理（所有点图材质共用一个）
+  const circleTexture = getSharedCircleTexture();
 
   const material = new THREE.PointsMaterial({
     vertexColors: true,
@@ -378,12 +452,6 @@ function applyPointFitToModel(model, pointMeshes, layoutMap = DEFAULT_POINT_FIT_
   if (!model || !pointMeshes) {
     return;
   }
-  // loadSeatModel 的居中逻辑：
-  //   model.position = -center * scale  (GLB 原始中心的偏移)
-  //   最终顶点在 rootGroup 局部空间中 = (vertex - center) * scale
-  //   所以模型的视觉中心在 rootGroup 局部空间中是原点 [0, -0.6, 0]
-  // 注意：model.position 是很大的负值（约 [0, -205, -262]），
-  // 不是视觉中心，不能用作 localCenter。
   const localCenter = new THREE.Vector3(0, -0.6, 0);
 
   Object.keys(layoutMap).forEach(name => {
@@ -425,8 +493,8 @@ function applyPointRotateToGroup(pointGroup, rotateMap = DEFAULT_POINT_MAP_ROTAT
   pointGroup.rotation.set(x, y, z);
 }
 
-// 性能优化：复用 buffer 避免每帧创建新的 Float32Array
-function sitRenew(config, name, ndata1, smoothBig, particles) {
+// 使用优化版高斯模糊 + 复用 buffer
+function sitRenew(config, name, ndata1, smoothBig, particles, workBuf) {
   if (!particles || !particles.geometry) {
     return;
   }
@@ -434,7 +502,6 @@ function sitRenew(config, name, ndata1, smoothBig, particles) {
   const {sitnum1, sitnum2, sitInterp, sitInterp1, sitOrder} = config;
   const {amountX, amountY} = getInterpolatedGrid(config);
 
-  // 复用已有的 buffer attribute array，避免 GC 压力
   const posAttr = geometry.getAttribute('position');
   const colorAttr = geometry.getAttribute('color');
   const scalesAttr = geometry.getAttribute('aScale');
@@ -442,7 +509,7 @@ function sitRenew(config, name, ndata1, smoothBig, particles) {
   const colors = colorAttr.array;
   const scales = scalesAttr?.array instanceof Float32Array ? scalesAttr.array : null;
 
-  const {gauss, color, height, coherent} = DEFAULT_SETTINGS;
+  const {color, height, coherent} = DEFAULT_SETTINGS;
 
   const bigArr = lineInterpnew(ndata1, sitnum2, sitnum1, sitInterp1, sitInterp);
   const bigArrs = addSide(
@@ -452,11 +519,14 @@ function sitRenew(config, name, ndata1, smoothBig, particles) {
     sitOrder,
     sitOrder,
   );
-  const bigArrg = gaussBlur_return(
+
+  // 使用预计算权重的快速高斯模糊，复用 buffer
+  const gaussBuf = workBuf?.gaussBuf;
+  const bigArrg = gaussBlurFast(
     bigArrs,
     1 + (sitnum2 - 1) * sitInterp1 + sitOrder * 2,
     1 + (sitnum1 - 1) * sitInterp + sitOrder * 2,
-    gauss,
+    gaussBuf,
   );
 
   let k = 0;
@@ -489,7 +559,6 @@ function sitRenew(config, name, ndata1, smoothBig, particles) {
     }
   }
 
-  // 标记 buffer 需要更新（不创建新的 BufferAttribute）
   posAttr.needsUpdate = true;
   colorAttr.needsUpdate = true;
   if (scalesAttr) {
@@ -512,7 +581,6 @@ export default function CarAirRN({data = [], style}) {
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      // 确保在触摸数量变化时也能正确响应
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponderCapture: () => false,
 
@@ -533,6 +601,8 @@ export default function CarAirRN({data = [], style}) {
           controls.lastY = touches[0].pageY;
         }
         controls.isInteracting = true;
+        // 标记需要渲染
+        state.dirty = true;
       },
 
       onPanResponderMove: evt => {
@@ -546,14 +616,12 @@ export default function CarAirRN({data = [], style}) {
         // ── 双指缩放 ──
         if (touches.length === 2) {
           if (!controls.isPinching) {
-            // 从单指切换到双指时初始化
             controls.isPinching = true;
             controls.lastPinchDistance = getTouchDistance(touches[0], touches[1]);
             return;
           }
           const currentDistance = getTouchDistance(touches[0], touches[1]);
           if (controls.lastPinchDistance > 0) {
-            // 使用比例缩放而非线性偏移，手感更自然
             const pinchRatio = currentDistance / controls.lastPinchDistance;
             const nextDistance = clamp(
               controls.distance / pinchRatio,
@@ -565,6 +633,7 @@ export default function CarAirRN({data = [], style}) {
             state.camera.lookAt(0, 0, 0);
           }
           controls.lastPinchDistance = currentDistance;
+          state.dirty = true;
           return;
         }
 
@@ -585,16 +654,17 @@ export default function CarAirRN({data = [], style}) {
 
           state.rootGroup.rotation.y = controls.rotationY;
           state.rootGroup.rotation.x = controls.rotationX;
+          state.dirty = true;
         }
       },
 
       onPanResponderRelease: evt => {
-        const controls = stateRef.current.controls;
+        const state = stateRef.current;
+        const controls = state.controls;
         if (!controls) {
           return;
         }
         const touches = evt.nativeEvent.touches || [];
-        // 如果还有手指在屏幕上，重新初始化状态
         if (touches.length === 1) {
           controls.isPinching = false;
           controls.lastX = touches[0].pageX;
@@ -603,17 +673,21 @@ export default function CarAirRN({data = [], style}) {
           controls.isPinching = false;
           controls.lastPinchDistance = 0;
           controls.isInteracting = false;
+          // 手势结束后再渲染几帧确保画面更新
+          state.idleFrames = IDLE_RENDER_FRAMES;
         }
       },
 
       onPanResponderTerminate: () => {
-        const controls = stateRef.current.controls;
+        const state = stateRef.current;
+        const controls = state.controls;
         if (!controls) {
           return;
         }
         controls.isPinching = false;
         controls.lastPinchDistance = 0;
         controls.isInteracting = false;
+        state.idleFrames = IDLE_RENDER_FRAMES;
       },
     }),
   ).current;
@@ -642,10 +716,9 @@ export default function CarAirRN({data = [], style}) {
     const renderer = new THREE.WebGLRenderer({
       canvas,
       context: gl,
-      antialias: true,
+      antialias: false, // 关闭抗锯齿，显著降低 GPU 负载
     });
     renderer.setSize(width, height);
-    // 性能优化：限制像素比为 1，减少渲染像素量
     renderer.setPixelRatio(1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -662,6 +735,9 @@ export default function CarAirRN({data = [], style}) {
     applyPointScaleToMeshes(pointMeshes, POINT_MAP_SCALE_DEFAULT);
     applyPointRotateToGroup(pointGroup, DEFAULT_POINT_MAP_ROTATE);
     const smoothBig = createSmoothBig();
+
+    // 预分配工作缓冲区
+    const workBuffers = createWorkBuffers();
 
     // 控制器状态
     const controls = {
@@ -686,6 +762,8 @@ export default function CarAirRN({data = [], style}) {
         }
         stateRef.current.model = model;
         applyPointFitToModel(model, pointMeshes, DEFAULT_POINT_FIT_LAYOUT);
+        // 模型加载完成，标记需要渲染
+        stateRef.current.dirty = true;
         setLoading(false);
         if (!model) {
           setLoadError('model missing');
@@ -709,35 +787,76 @@ export default function CarAirRN({data = [], style}) {
       pointGroup,
       pointMeshes,
       smoothBig,
+      workBuffers,
       model: null,
       gl,
       controls,
+      dirty: true,          // 是否需要渲染
+      idleFrames: 0,        // 手势结束后的剩余渲染帧数
+      lastSeatUpdate: 0,
+      lastDataHash: 0,      // 用于检测数据是否变化
     };
 
-    // 渲染循环
+    // ─── 按需渲染循环 ─────────────────────────────────────────────────
+    // 核心优化：只在以下情况渲染：
+    //   1. dirty 标志为 true（手势交互、数据更新、模型加载完成）
+    //   2. idleFrames > 0（手势结束后的过渡帧）
+    // 空闲时跳过 renderer.render() 和 gl.endFrameEXP()，大幅降低 GPU 负载
     const animate = () => {
       const now = Date.now();
       const frameState = stateRef.current;
+
+      // 检查是否需要更新数据
+      let dataUpdated = false;
       if (
         !frameState.lastSeatUpdate ||
         now - frameState.lastSeatUpdate >= SEAT_UPDATE_INTERVAL
       ) {
-        const seatData = normalizeSeatData(dataRef.current);
-        const split = splitSeatData(seatData);
-        Object.keys(allConfig).forEach(key => {
-          const config = allConfig[key];
-          const name = config.name;
-          const mesh = frameState.pointMeshes?.[name];
-          const smooth = frameState.smoothBig?.[name];
-          if (!mesh || !smooth) {
-            return;
+        // 快速检测数据是否变化（避免无变化时重复计算）
+        const currentData = dataRef.current;
+        let hash = 0;
+        if (Array.isArray(currentData)) {
+          // 简单 hash：取几个采样点求和
+          for (let si = 0; si < currentData.length; si += 12) {
+            hash += (currentData[si] || 0);
           }
-          sitRenew(config.dataConfig, name, split[name], smooth, mesh);
-        });
+        }
+
+        if (hash !== frameState.lastDataHash || !frameState.lastSeatUpdate) {
+          frameState.lastDataHash = hash;
+          const seatData = normalizeSeatData(currentData);
+          const split = splitSeatData(seatData);
+          Object.keys(allConfig).forEach(key => {
+            const config = allConfig[key];
+            const name = config.name;
+            const mesh = frameState.pointMeshes?.[name];
+            const smooth = frameState.smoothBig?.[name];
+            if (!mesh || !smooth) {
+              return;
+            }
+            const workBuf = frameState.workBuffers?.[name];
+            sitRenew(config.dataConfig, name, split[name], smooth, mesh, workBuf);
+          });
+          dataUpdated = true;
+          frameState.dirty = true;
+        }
         frameState.lastSeatUpdate = now;
       }
-      renderer.render(scene, camera);
-      gl.endFrameEXP();
+
+      // 按需渲染：只在有变化时才调用 render
+      const shouldRender = frameState.dirty || frameState.idleFrames > 0;
+
+      if (shouldRender) {
+        renderer.render(scene, camera);
+        gl.endFrameEXP();
+
+        // 重置 dirty 标志
+        frameState.dirty = false;
+        if (frameState.idleFrames > 0) {
+          frameState.idleFrames--;
+        }
+      }
+
       frameRef.current = requestAnimationFrame(animate);
     };
     animate();
