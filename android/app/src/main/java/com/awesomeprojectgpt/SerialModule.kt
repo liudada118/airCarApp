@@ -297,7 +297,7 @@ class SerialModule(
             Log.i(logTag, "frame received: empty")
         }
         if (values.size == 51) {
-            Log.i(logTag, "mode frame ignored: size=${values.size}")
+            handleModeFrame(values, data)
             return
         }
         pythonExecutor.execute {
@@ -385,25 +385,60 @@ class SerialModule(
     private fun updateAutoWritePayloadFromResult(resultJson: String) {
         try {
             val json = JSONObject(resultJson)
-            if (!json.has("control_command") || json.isNull("control_command")) {
+
+            // 优先从 airbag_command.command 获取，其次从 control_command 获取
+            var arr: JSONArray? = null
+            if (json.has("airbag_command") && !json.isNull("airbag_command")) {
+                val airbagCmd = json.optJSONObject("airbag_command")
+                if (airbagCmd != null && airbagCmd.has("command") && !airbagCmd.isNull("command")) {
+                    arr = airbagCmd.optJSONArray("command")
+                }
+            }
+            if (arr == null) {
+                if (!json.has("control_command") || json.isNull("control_command")) {
+                    autoWriteText = null
+                    autoWriteBytes = null
+                    return
+                }
+                arr = json.optJSONArray("control_command")
+            }
+            if (arr == null) {
                 autoWriteText = null
+                autoWriteBytes = null
                 return
             }
-            val arr = json.optJSONArray("control_command") ?: return
+
             val hex = controlCommandToHex(arr)
             if (hex.isEmpty()) {
                 autoWriteText = null
+                autoWriteBytes = null
                 return
             }
+
+            // 将 hex 字符串解码为二进制 ByteArray（等价于 Node.js 的 Buffer.from(hexStr, 'hex')）
+            val bytes = hexStringToByteArray(hex)
             autoWriteText = hex
-            autoWriteBytes = null
+            autoWriteBytes = bytes
+
             if (hex != lastAutoWriteHex) {
                 lastAutoWriteHex = hex
-                Log.i(logTag, "auto write payload updated: hex=$hex")
+                Log.i(logTag, "auto write payload updated: hex=$hex (${bytes.size} bytes)")
             }
         } catch (e: Exception) {
             Log.e(logTag, "parse control_command failed", e)
         }
+    }
+
+    /** 将 hex 字符串解码为二进制 ByteArray，等价于 Node.js 的 Buffer.from(hexStr, 'hex') */
+    private fun hexStringToByteArray(hex: String): ByteArray {
+        val len = hex.length
+        val data = ByteArray(len / 2)
+        var i = 0
+        while (i < len) {
+            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
+            i += 2
+        }
+        return data
     }
 
     private fun controlCommandToHex(arr: JSONArray): String {
@@ -426,13 +461,29 @@ class SerialModule(
             }
             autoWriteTask = autoWriteScheduler.scheduleAtFixedRate({
                 try {
-                val payload = autoWriteText
-                if (payload.isNullOrEmpty()) return@scheduleAtFixedRate
-                when (val result = manager.write(payload)) {
-                    is SerialManager.OpenResult.Fail ->
-                        Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
-                    else -> {}
-                }
+                    // 优先使用二进制 ByteArray 发送（等价于 Node.js 的 port.write(Buffer.from(hexStr, 'hex'))）
+                    val bytes = autoWriteBytes
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        when (val result = manager.writeBytes(bytes)) {
+                            is SerialManager.OpenResult.Fail ->
+                                Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
+                            else -> {
+                                Log.d(logTag, "auto write sent ${bytes.size} bytes")
+                            }
+                        }
+                        return@scheduleAtFixedRate
+                    }
+                    // 回退：如果没有缓存的 bytes，尝试从 hex 字符串转换
+                    val payload = autoWriteText
+                    if (payload.isNullOrEmpty()) return@scheduleAtFixedRate
+                    val fallbackBytes = hexStringToByteArray(payload)
+                    when (val result = manager.writeBytes(fallbackBytes)) {
+                        is SerialManager.OpenResult.Fail ->
+                            Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
+                        else -> {
+                            Log.d(logTag, "auto write sent ${fallbackBytes.size} bytes (from hex)")
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.e(logTag, "auto write task crashed", e)
                 }

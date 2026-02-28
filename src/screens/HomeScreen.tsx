@@ -302,6 +302,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
     setRawCommand(parsed.rawCommand);
     setLivingStatus(parsed.livingStatus);
     setBodyType(parsed.bodyType);
+
+    // 打印气囊指令数据
+    if (parsed.rawCommand && parsed.rawCommand.length > 0) {
+      const hexStr = parsed.rawCommand
+        .map(v => v.toString(16).padStart(2, '0').toUpperCase())
+        .join(' ');
+      const stateStr = ALL_AIRBAG_ZONES.map((zone, i) => {
+        const cmd = parsed.commandStates[zone];
+        const label = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
+        return `${zone}:${label}`;
+      }).join(' | ');
+      console.log(
+        `[AirbagCmd] ${parsed.rawCommand.length}B: ${hexStr}\n` +
+        `[AirbagCmd] ${stateStr}`,
+      );
+    }
   }, []);
 
   // ─── 模拟串口逻辑 ──────────────────────────────────────
