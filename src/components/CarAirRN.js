@@ -25,8 +25,8 @@ const DEFAULT_SETTINGS = {
   height: 1,
   coherent: 1,
 };
-// 数据更新频率：10fps
-const SEAT_UPDATE_INTERVAL = 1000 / 10;
+// 数据更新频率：15Hz
+const SEAT_UPDATE_INTERVAL = 1000 / 15;
 const MODEL_TARGET_SIZE = 220;
 const CAMERA_MIN_DISTANCE = 80;
 const CAMERA_MAX_DISTANCE = 600;
