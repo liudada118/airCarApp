@@ -261,11 +261,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   const [connectionErrorMessage, setConnectionErrorMessage] = useState('');
 
   const [airbagValues] = useState<AirbagValues>({
-    shoulder: 3,
-    lumbar: 5,
-    sideWing: 4,
-    hipFirmness: 2,
-    legRest: 3,
+    shoulderL: 3,
+    shoulderR: 3,
+    sideWingL: 4,
+    sideWingR: 4,
+    lumbarUp: 5,
+    lumbarDown: 5,
+    cushionFL: 2,
+    cushionFR: 2,
+    cushionRL: 3,
+    cushionRR: 3,
   });
 
   const [sensorData, setSensorData] = useState<number[]>(INITIAL_SENSOR_FRAME);

@@ -1,7 +1,10 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Colors, BorderRadius } from '../theme';
-import type { AirbagZone } from '../types';
+import {View, Image, StyleSheet} from 'react-native';
+import {Colors} from '../theme';
+import type {AirbagZone, AirbagValues} from '../types';
+
+// 座椅背景图
+const SEAT_BG = require('../assets/images/seat_bg.png');
 
 interface SeatDiagramProps {
   activeZone: AirbagZone | null;
@@ -10,18 +13,16 @@ interface SeatDiagramProps {
   /** 是否显示所有气囊激活状态（首页缩略图用） */
   showAllActive?: boolean;
   /** 各气囊的数值，用于判断是否激活 */
-  values?: Record<AirbagZone, number>;
+  values?: Partial<AirbagValues>;
 }
 
 /**
- * 箭头指示器
+ * 箭头指示器（三角形）
  */
 const ArrowIndicator: React.FC<{
   direction: 'up' | 'down' | 'left' | 'right';
-  active: boolean;
   size?: number;
-}> = ({ direction, active, size = 14 }) => {
-  const color = active ? Colors.primary : Colors.airbagInactive;
+}> = ({direction, size = 10}) => {
   const rotations: Record<string, string> = {
     up: '0deg',
     right: '90deg',
@@ -30,21 +31,16 @@ const ArrowIndicator: React.FC<{
   };
 
   return (
-    <View
-      style={[
-        arrowStyles.container,
-        { width: size, height: size },
-      ]}
-    >
+    <View style={[arrowStyles.container, {width: size, height: size}]}>
       <View
         style={[
           arrowStyles.arrow,
           {
-            borderBottomColor: color,
             borderLeftWidth: size * 0.35,
             borderRightWidth: size * 0.35,
             borderBottomWidth: size * 0.5,
-            transform: [{ rotate: rotations[direction] }],
+            borderBottomColor: 'rgba(255,255,255,0.7)',
+            transform: [{rotate: rotations[direction]}],
           },
         ]}
       />
@@ -67,6 +63,15 @@ const arrowStyles = StyleSheet.create({
   },
 });
 
+/**
+ * 10 个气囊的座椅示意图
+ *
+ * 布局参照用户提供的设计稿截图：
+ *   靠背上部: 1(shoulderL)  2(shoulderR)
+ *   靠背中部: 3(sideWingL)  5(lumbarUp)/6(lumbarDown)  4(sideWingR)
+ *   坐垫前部: 7(cushionFL)  8(cushionFR)
+ *   坐垫后部: 9(cushionRL)  10(cushionRR)
+ */
 const SeatDiagram: React.FC<SeatDiagramProps> = ({
   activeZone,
   scale = 1,
@@ -75,299 +80,221 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
 }) => {
   const isZoneActive = (zone: AirbagZone) => {
     if (showAllActive && values) {
-      return values[zone] > 0;
+      return (values[zone] ?? 0) > 0;
     }
     return activeZone === zone;
   };
 
-  const getZoneColor = (zone: AirbagZone) => {
-    return isZoneActive(zone) ? Colors.seatHighlight : 'rgba(100, 100, 120, 0.2)';
+  const getZoneStyle = (zone: AirbagZone) => {
+    const active = isZoneActive(zone);
+    return {
+      backgroundColor: active
+        ? 'rgba(0, 150, 255, 0.45)'
+        : 'rgba(100, 120, 160, 0.15)',
+      borderColor: active
+        ? 'rgba(0, 150, 255, 0.6)'
+        : 'rgba(150, 160, 180, 0.25)',
+    };
   };
 
   const s = scale;
 
+  // 基准尺寸（设计稿中座椅图的参考尺寸）
+  const W = 240 * s;
+  const H = 380 * s;
+
   return (
-    <View style={[styles.container, { width: 220 * s, height: 340 * s }]}>
-      {/* 头枕 */}
+    <View style={[styles.container, {width: W, height: H}]}>
+      {/* 座椅背景图 */}
+      <Image
+        source={SEAT_BG}
+        style={[styles.bgImage, {width: W, height: H}]}
+        resizeMode="contain"
+      />
+
+      {/* ─── 靠背上部: 1(shoulderL) 2(shoulderR) ─── */}
       <View
         style={[
-          styles.headrest,
+          styles.zone,
+          getZoneStyle('shoulderL'),
           {
-            width: 60 * s,
-            height: 40 * s,
-            borderRadius: 12 * s,
-            top: 0,
+            top: 52 * s,
+            left: 48 * s,
+            width: 62 * s,
+            height: 30 * s,
+            borderRadius: 10 * s,
           },
-        ]}
-      >
-        {/* 头枕开口 */}
+        ]}>
+        {isZoneActive('shoulderL') && <ArrowIndicator direction="up" size={8 * s} />}
+      </View>
+      <View
+        style={[
+          styles.zone,
+          getZoneStyle('shoulderR'),
+          {
+            top: 52 * s,
+            right: 48 * s,
+            width: 62 * s,
+            height: 30 * s,
+            borderRadius: 10 * s,
+          },
+        ]}>
+        {isZoneActive('shoulderR') && <ArrowIndicator direction="up" size={8 * s} />}
+      </View>
+
+      {/* ─── 靠背中部: 3(sideWingL) ─── */}
+      <View
+        style={[
+          styles.zone,
+          getZoneStyle('sideWingL'),
+          {
+            top: 120 * s,
+            left: 28 * s,
+            width: 26 * s,
+            height: 60 * s,
+            borderRadius: 10 * s,
+          },
+        ]}>
+        {isZoneActive('sideWingL') && <ArrowIndicator direction="right" size={8 * s} />}
+      </View>
+
+      {/* ─── 靠背中部: 4(sideWingR) ─── */}
+      <View
+        style={[
+          styles.zone,
+          getZoneStyle('sideWingR'),
+          {
+            top: 120 * s,
+            right: 28 * s,
+            width: 26 * s,
+            height: 60 * s,
+            borderRadius: 10 * s,
+          },
+        ]}>
+        {isZoneActive('sideWingR') && <ArrowIndicator direction="left" size={8 * s} />}
+      </View>
+
+      {/* ─── 靠背中部: 5(lumbarUp) 6(lumbarDown) ─── */}
+      {/* 外框容器 */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 112 * s,
+          left: 62 * s,
+          right: 62 * s,
+          height: 76 * s,
+        }}>
+        {/* 5: lumbarUp - 上半部分 */}
         <View
           style={[
-            styles.headrestSlot,
+            styles.zone,
+            getZoneStyle('lumbarUp'),
             {
-              width: 30 * s,
-              height: 6 * s,
-              borderRadius: 3 * s,
+              position: 'relative',
+              width: '100%',
+              height: '50%',
+              borderTopLeftRadius: 8 * s,
+              borderTopRightRadius: 8 * s,
+              borderBottomLeftRadius: 0,
+              borderBottomRightRadius: 0,
+            },
+          ]}
+        />
+        {/* 虚线分隔 */}
+        <View style={[styles.dashedLine, {height: 1 * s}]} />
+        {/* 6: lumbarDown - 下半部分 */}
+        <View
+          style={[
+            styles.zone,
+            getZoneStyle('lumbarDown'),
+            {
+              position: 'relative',
+              width: '100%',
+              height: '50%',
+              borderTopLeftRadius: 0,
+              borderTopRightRadius: 0,
+              borderBottomLeftRadius: 8 * s,
+              borderBottomRightRadius: 8 * s,
             },
           ]}
         />
       </View>
 
-      {/* 靠背 */}
+      {/* ─── 坐垫前部: 7(cushionFL) 8(cushionFR) ─── */}
       <View
-        style={[
-          styles.backrest,
-          {
-            width: 160 * s,
-            height: 180 * s,
-            borderRadius: 16 * s,
-            top: 35 * s,
-          },
-        ]}
-      >
-        {/* 肩部气囊区域 */}
-        <View style={[styles.shoulderRow, { top: 20 * s, gap: 8 * s }]}>
-          <View
-            style={[
-              styles.airbagZone,
-              {
-                width: 50 * s,
-                height: 24 * s,
-                borderRadius: 8 * s,
-                backgroundColor: getZoneColor('shoulder'),
-              },
-            ]}
-          >
-            {isZoneActive('shoulder') && (
-              <ArrowIndicator direction="up" active size={10 * s} />
-            )}
-          </View>
-          <View
-            style={[
-              styles.airbagZone,
-              {
-                width: 50 * s,
-                height: 24 * s,
-                borderRadius: 8 * s,
-                backgroundColor: getZoneColor('shoulder'),
-              },
-            ]}
-          >
-            {isZoneActive('shoulder') && (
-              <ArrowIndicator direction="up" active size={10 * s} />
-            )}
-          </View>
+        style={{
+          position: 'absolute',
+          top: 248 * s,
+          left: 52 * s,
+          right: 52 * s,
+          height: 42 * s,
+          flexDirection: 'row',
+        }}>
+        {/* 7: cushionFL */}
+        <View
+          style={[
+            styles.zone,
+            getZoneStyle('cushionFL'),
+            {
+              position: 'relative',
+              flex: 1,
+              height: '100%',
+              borderTopLeftRadius: 8 * s,
+              borderBottomLeftRadius: 8 * s,
+              borderTopRightRadius: 0,
+              borderBottomRightRadius: 0,
+            },
+          ]}>
+          <ArrowIndicator direction="up" size={10 * s} />
         </View>
-
-        {/* 腰托气囊区域 */}
-        <View style={[styles.lumbarRow, { top: 70 * s, gap: 4 * s }]}>
-          <View
-            style={[
-              styles.airbagZoneSide,
-              {
-                width: 22 * s,
-                height: 50 * s,
-                borderRadius: 8 * s,
-                backgroundColor: getZoneColor('lumbar'),
-              },
-            ]}
-          >
-            {isZoneActive('lumbar') && (
-              <ArrowIndicator direction="right" active size={10 * s} />
-            )}
-          </View>
-          <View style={{ flexDirection: 'column', gap: 4 * s }}>
-            <View
-              style={[
-                styles.airbagZone,
-                {
-                  width: 45 * s,
-                  height: 22 * s,
-                  borderRadius: 6 * s,
-                  backgroundColor: getZoneColor('lumbar'),
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.airbagZone,
-                {
-                  width: 45 * s,
-                  height: 22 * s,
-                  borderRadius: 6 * s,
-                  backgroundColor: getZoneColor('lumbar'),
-                },
-              ]}
-            />
-          </View>
-          <View style={{ flexDirection: 'column', gap: 4 * s }}>
-            <View
-              style={[
-                styles.airbagZone,
-                {
-                  width: 45 * s,
-                  height: 22 * s,
-                  borderRadius: 6 * s,
-                  backgroundColor: getZoneColor('lumbar'),
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.airbagZone,
-                {
-                  width: 45 * s,
-                  height: 22 * s,
-                  borderRadius: 6 * s,
-                  backgroundColor: getZoneColor('lumbar'),
-                },
-              ]}
-            />
-          </View>
-          <View
-            style={[
-              styles.airbagZoneSide,
-              {
-                width: 22 * s,
-                height: 50 * s,
-                borderRadius: 8 * s,
-                backgroundColor: getZoneColor('lumbar'),
-              },
-            ]}
-          >
-            {isZoneActive('lumbar') && (
-              <ArrowIndicator direction="left" active size={10 * s} />
-            )}
-          </View>
+        {/* 竖向虚线分隔 */}
+        <View style={[styles.dashedLineVertical, {width: 1 * s}]} />
+        {/* 8: cushionFR */}
+        <View
+          style={[
+            styles.zone,
+            getZoneStyle('cushionFR'),
+            {
+              position: 'relative',
+              flex: 1,
+              height: '100%',
+              borderTopLeftRadius: 0,
+              borderBottomLeftRadius: 0,
+              borderTopRightRadius: 8 * s,
+              borderBottomRightRadius: 8 * s,
+            },
+          ]}>
+          <ArrowIndicator direction="up" size={10 * s} />
         </View>
       </View>
 
-      {/* 坐垫 */}
+      {/* ─── 坐垫后部: 9(cushionRL) 10(cushionRR) ─── */}
       <View
         style={[
-          styles.cushion,
+          styles.zone,
+          getZoneStyle('cushionRL'),
           {
-            width: 180 * s,
-            height: 70 * s,
-            borderRadius: 14 * s,
-            top: 220 * s,
-          },
-        ]}
-      >
-        {/* 侧翼气囊 */}
-        <View style={[styles.sideWingRow, { gap: 60 * s }]}>
-          <View
-            style={[
-              styles.airbagZone,
-              {
-                width: 28 * s,
-                height: 40 * s,
-                borderRadius: 8 * s,
-                backgroundColor: getZoneColor('sideWing'),
-              },
-            ]}
-          >
-            {isZoneActive('sideWing') && (
-              <ArrowIndicator direction="right" active size={8 * s} />
-            )}
-          </View>
-          <View
-            style={[
-              styles.airbagZone,
-              {
-                width: 28 * s,
-                height: 40 * s,
-                borderRadius: 8 * s,
-                backgroundColor: getZoneColor('sideWing'),
-              },
-            ]}
-          >
-            {isZoneActive('sideWing') && (
-              <ArrowIndicator direction="left" active size={8 * s} />
-            )}
-          </View>
-        </View>
-
-        {/* 臀部软硬度气囊 */}
-        <View style={[styles.hipRow, { bottom: -2 * s }]}>
-          <View
-            style={[
-              styles.airbagZone,
-              {
-                width: 50 * s,
-                height: 18 * s,
-                borderRadius: 6 * s,
-                backgroundColor: getZoneColor('hipFirmness'),
-              },
-            ]}
-          >
-            {isZoneActive('hipFirmness') && (
-              <ArrowIndicator direction="down" active size={8 * s} />
-            )}
-          </View>
-          <View
-            style={[
-              styles.airbagZone,
-              {
-                width: 50 * s,
-                height: 18 * s,
-                borderRadius: 6 * s,
-                backgroundColor: getZoneColor('hipFirmness'),
-              },
-            ]}
-          >
-            {isZoneActive('hipFirmness') && (
-              <ArrowIndicator direction="down" active size={8 * s} />
-            )}
-          </View>
-        </View>
-      </View>
-
-      {/* 腿托 */}
-      <View
-        style={[
-          styles.legRest,
-          {
-            width: 160 * s,
-            height: 45 * s,
+            top: 298 * s,
+            left: 52 * s,
+            width: 58 * s,
+            height: 28 * s,
             borderRadius: 10 * s,
-            top: 290 * s,
           },
         ]}
-      >
-        <View style={[styles.legRestRow, { gap: 6 * s }]}>
-          <View
-            style={[
-              styles.airbagZone,
-              {
-                width: 60 * s,
-                height: 22 * s,
-                borderRadius: 6 * s,
-                backgroundColor: getZoneColor('legRest'),
-              },
-            ]}
-          >
-            {isZoneActive('legRest') && (
-              <ArrowIndicator direction="up" active size={8 * s} />
-            )}
-          </View>
-          <View
-            style={[
-              styles.airbagZone,
-              {
-                width: 60 * s,
-                height: 22 * s,
-                borderRadius: 6 * s,
-                backgroundColor: getZoneColor('legRest'),
-              },
-            ]}
-          >
-            {isZoneActive('legRest') && (
-              <ArrowIndicator direction="up" active size={8 * s} />
-            )}
-          </View>
-        </View>
-      </View>
+      />
+      <View
+        style={[
+          styles.zone,
+          getZoneStyle('cushionRR'),
+          {
+            top: 298 * s,
+            right: 52 * s,
+            width: 58 * s,
+            height: 28 * s,
+            borderRadius: 10 * s,
+          },
+        ]}
+      />
     </View>
   );
 };
@@ -375,84 +302,29 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
-    alignItems: 'center',
   },
-  headrest: {
+  bgImage: {
     position: 'absolute',
-    backgroundColor: 'rgba(140, 140, 160, 0.3)',
-    alignSelf: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headrestSlot: {
-    backgroundColor: 'rgba(30, 30, 50, 0.6)',
-  },
-  backrest: {
-    position: 'absolute',
-    backgroundColor: 'rgba(120, 120, 140, 0.25)',
-    alignSelf: 'center',
-  },
-  shoulderRow: {
-    position: 'absolute',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignSelf: 'center',
+    top: 0,
     left: 0,
-    right: 0,
-    alignItems: 'center',
   },
-  lumbarRow: {
+  zone: {
     position: 'absolute',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  cushion: {
-    position: 'absolute',
-    backgroundColor: 'rgba(140, 140, 160, 0.2)',
-    alignSelf: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sideWingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  hipRow: {
-    position: 'absolute',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-    alignSelf: 'center',
-  },
-  legRest: {
-    position: 'absolute',
-    backgroundColor: 'rgba(140, 140, 160, 0.15)',
-    alignSelf: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  legRestRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  airbagZone: {
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(150, 150, 170, 0.3)',
     borderStyle: 'dashed',
   },
-  airbagZoneSide: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(150, 150, 170, 0.3)',
+  dashedLine: {
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(150, 160, 180, 0.4)',
+    borderStyle: 'dashed',
+  },
+  dashedLineVertical: {
+    height: '100%',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(150, 160, 180, 0.4)',
     borderStyle: 'dashed',
   },
 });

@@ -1,12 +1,45 @@
 /**
- * Airbag zone type
+ * Airbag zone type - 10 个独立气囊
+ *
+ * 靠背区域:
+ *   1: shoulderL  - 肩部左
+ *   2: shoulderR  - 肩部右
+ *   3: sideWingL  - 腰部侧翼左
+ *   4: sideWingR  - 腰部侧翼右
+ *   5: lumbarUp   - 腰部中间上
+ *   6: lumbarDown - 腰部中间下
+ *
+ * 坐垫区域:
+ *   7: cushionFL  - 坐垫前左
+ *   8: cushionFR  - 坐垫前右
+ *   9: cushionRL  - 坐垫后左
+ *  10: cushionRR  - 坐垫后右
  */
 export type AirbagZone =
-  | 'shoulder'
-  | 'lumbar'
-  | 'sideWing'
-  | 'hipFirmness'
-  | 'legRest';
+  | 'shoulderL'
+  | 'shoulderR'
+  | 'sideWingL'
+  | 'sideWingR'
+  | 'lumbarUp'
+  | 'lumbarDown'
+  | 'cushionFL'
+  | 'cushionFR'
+  | 'cushionRL'
+  | 'cushionRR';
+
+/** 所有气囊 zone 的有序列表（1-10） */
+export const ALL_AIRBAG_ZONES: AirbagZone[] = [
+  'shoulderL',
+  'shoulderR',
+  'sideWingL',
+  'sideWingR',
+  'lumbarUp',
+  'lumbarDown',
+  'cushionFL',
+  'cushionFR',
+  'cushionRL',
+  'cushionRR',
+];
 
 /**
  * Airbag zone config
@@ -21,6 +54,20 @@ export interface AirbagZoneConfig {
  * Airbag values (0-10)
  */
 export type AirbagValues = Record<AirbagZone, number>;
+
+/** 默认气囊值（全部为 0） */
+export const DEFAULT_AIRBAG_VALUES: AirbagValues = {
+  shoulderL: 0,
+  shoulderR: 0,
+  sideWingL: 0,
+  sideWingR: 0,
+  lumbarUp: 0,
+  lumbarDown: 0,
+  cushionFL: 0,
+  cushionFR: 0,
+  cushionRL: 0,
+  cushionRR: 0,
+};
 
 /**
  * Seat status

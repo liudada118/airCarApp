@@ -18,24 +18,23 @@ import type {
   ModalType,
   ConnectionStatus,
 } from '../types';
+import {DEFAULT_AIRBAG_VALUES} from '../types';
 
-/** 气囊区域配置 */
+/** 气囊区域配置 - 10 个独立气囊 */
 const AIRBAG_ZONES: AirbagZoneConfig[] = [
-  {key: 'shoulder', label: '肩部气囊', side: 'left'},
-  {key: 'lumbar', label: '腰托气囊', side: 'left'},
-  {key: 'legRest', label: '腿托气囊', side: 'left'},
-  {key: 'sideWing', label: '侧翼气囊', side: 'right'},
-  {key: 'hipFirmness', label: '臀部软硬度气囊', side: 'right'},
+  // 左侧标签（靠背左 + 坐垫左）
+  {key: 'shoulderL', label: '肩部左', side: 'left'},
+  {key: 'sideWingL', label: '侧翼左', side: 'left'},
+  {key: 'lumbarUp', label: '腰部上', side: 'left'},
+  {key: 'cushionFL', label: '坐垫前左', side: 'left'},
+  {key: 'cushionRL', label: '坐垫后左', side: 'left'},
+  // 右侧标签（靠背右 + 坐垫右）
+  {key: 'shoulderR', label: '肩部右', side: 'right'},
+  {key: 'sideWingR', label: '侧翼右', side: 'right'},
+  {key: 'lumbarDown', label: '腰部下', side: 'right'},
+  {key: 'cushionFR', label: '坐垫前右', side: 'right'},
+  {key: 'cushionRR', label: '坐垫后右', side: 'right'},
 ];
-
-/** 默认气囊值 */
-const DEFAULT_VALUES: AirbagValues = {
-  shoulder: 0,
-  lumbar: 0,
-  sideWing: 0,
-  hipFirmness: 0,
-  legRest: 0,
-};
 
 const MAX_VALUE = 10;
 const MIN_VALUE = 0;
@@ -52,14 +51,19 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   initialValues,
 }) => {
   const [connectionStatus] = useState<ConnectionStatus>('connected');
-  const [selectedZone, setSelectedZone] = useState<AirbagZone>('lumbar');
+  const [selectedZone, setSelectedZone] = useState<AirbagZone>('lumbarUp');
   const [airbagValues, setAirbagValues] = useState<AirbagValues>(
     initialValues || {
-      shoulder: 3,
-      lumbar: 5,
-      sideWing: 4,
-      hipFirmness: 2,
-      legRest: 3,
+      shoulderL: 3,
+      shoulderR: 3,
+      sideWingL: 4,
+      sideWingR: 4,
+      lumbarUp: 5,
+      lumbarDown: 5,
+      cushionFL: 2,
+      cushionFR: 2,
+      cushionRL: 3,
+      cushionRR: 3,
     },
   );
   const [modalType, setModalType] = useState<ModalType>(null);
@@ -131,8 +135,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   // 确认恢复默认
   const handleConfirmRestore = useCallback(() => {
     setModalType(null);
-    setAirbagValues({...DEFAULT_VALUES});
-    setSelectedZone('lumbar');
+    setAirbagValues({...DEFAULT_AIRBAG_VALUES});
+    setSelectedZone('lumbarUp');
     setToast({
       visible: true,
       message: '已恢复默认参数',
@@ -192,23 +196,15 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
           {/* 左侧标签 */}
           <View style={styles.leftLabels}>
-            {leftZones.map((zone, index) => (
-              <View
+            {leftZones.map(zone => (
+              <AirbagLabel
                 key={zone.key}
-                style={[
-                  styles.labelPosition,
-                  index === 0 && styles.labelTop,
-                  index === 1 && styles.labelMiddle,
-                  index === 2 && styles.labelBottom,
-                ]}>
-                <AirbagLabel
-                  zone={zone.key}
-                  label={zone.label}
-                  isActive={selectedZone === zone.key}
-                  onPress={handleSelectZone}
-                  lineDirection="left"
-                />
-              </View>
+                zone={zone.key}
+                label={zone.label}
+                isActive={selectedZone === zone.key}
+                onPress={handleSelectZone}
+                lineDirection="left"
+              />
             ))}
           </View>
 
@@ -223,22 +219,15 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
           {/* 右侧标签 */}
           <View style={styles.rightLabels}>
-            {rightZones.map((zone, index) => (
-              <View
+            {rightZones.map(zone => (
+              <AirbagLabel
                 key={zone.key}
-                style={[
-                  styles.labelPosition,
-                  index === 0 && styles.rightLabelTop,
-                  index === 1 && styles.rightLabelBottom,
-                ]}>
-                <AirbagLabel
-                  zone={zone.key}
-                  label={zone.label}
-                  isActive={selectedZone === zone.key}
-                  onPress={handleSelectZone}
-                  lineDirection="right"
-                />
-              </View>
+                zone={zone.key}
+                label={zone.label}
+                isActive={selectedZone === zone.key}
+                onPress={handleSelectZone}
+                lineDirection="right"
+              />
             ))}
           </View>
         </View>
@@ -367,22 +356,14 @@ const styles = StyleSheet.create({
   },
   leftLabels: {
     justifyContent: 'space-around',
-    height: 280,
+    height: 320,
     paddingRight: Spacing.sm,
   },
   rightLabels: {
     justifyContent: 'space-around',
-    height: 220,
+    height: 320,
     paddingLeft: Spacing.sm,
   },
-  labelPosition: {
-    marginVertical: Spacing.sm,
-  },
-  labelTop: {},
-  labelMiddle: {},
-  labelBottom: {},
-  rightLabelTop: {},
-  rightLabelBottom: {},
   seatContainer: {
     alignItems: 'center',
     justifyContent: 'center',
