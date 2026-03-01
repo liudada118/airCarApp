@@ -565,102 +565,92 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf) {
 
 // ─── 简易滑块组件（纯 RN 实现，无需额外依赖） ──────────────────────────────
 
-function MiniSlider({label, value, min, max, step, onValueChange}) {
-  const trackRef = useRef(null);
-  const trackWidth = useRef(0);
-  const ratio = (value - min) / (max - min);
-
-  const onLayout = e => {
-    trackWidth.current = e.nativeEvent.layout.width;
-  };
-
-  const handleTouch = (evt) => {
-    if (trackWidth.current <= 0) return;
-    const x = evt.nativeEvent.locationX;
-    const r = clamp(x / trackWidth.current, 0, 1);
-    let newVal = min + r * (max - min);
-    if (step > 0) {
-      newVal = Math.round(newVal / step) * step;
-    }
+function StepControl({label, value, min, max, step, onValueChange, decimals = 2}) {
+  const doStep = (direction) => {
+    let newVal = value + direction * step;
     newVal = clamp(newVal, min, max);
-    onValueChange(parseFloat(newVal.toFixed(4)));
+    onValueChange(parseFloat(newVal.toFixed(decimals)));
   };
 
-  const sliderPan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: handleTouch,
-      onPanResponderMove: handleTouch,
-    }),
-  ).current;
+  // 长按连续调节
+  const timerRef = useRef(null);
+  const startRepeat = (direction) => {
+    doStep(direction);
+    timerRef.current = setInterval(() => doStep(direction), 120);
+  };
+  const stopRepeat = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
 
   return (
-    <View style={sliderStyles.row}>
-      <Text style={sliderStyles.label}>{label}</Text>
-      <View
-        ref={trackRef}
-        style={sliderStyles.track}
-        onLayout={onLayout}
-        {...sliderPan.panHandlers}>
-        <View style={[sliderStyles.fill, {width: `${ratio * 100}%`}]} />
-        <View
-          style={[
-            sliderStyles.thumb,
-            {left: `${ratio * 100}%`},
-          ]}
-        />
+    <View style={stepStyles.row}>
+      <Text style={stepStyles.label}>{label}</Text>
+      <TouchableOpacity
+        style={stepStyles.btn}
+        onPress={() => doStep(-1)}
+        onLongPress={() => startRepeat(-1)}
+        onPressOut={stopRepeat}
+        activeOpacity={0.5}>
+        <Text style={stepStyles.btnText}>−</Text>
+      </TouchableOpacity>
+      <View style={stepStyles.valueBox}>
+        <Text style={stepStyles.valueText}>{value.toFixed(decimals)}</Text>
       </View>
-      <Text style={sliderStyles.valueText}>{value.toFixed(2)}</Text>
+      <TouchableOpacity
+        style={stepStyles.btn}
+        onPress={() => doStep(1)}
+        onLongPress={() => startRepeat(1)}
+        onPressOut={stopRepeat}
+        activeOpacity={0.5}>
+        <Text style={stepStyles.btnText}>+</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
-const sliderStyles = StyleSheet.create({
+const stepStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
-    height: 28,
+    marginBottom: 4,
+    height: 30,
   },
   label: {
     color: '#aac',
     fontSize: 11,
-    width: 28,
+    width: 24,
     textAlign: 'right',
     marginRight: 6,
   },
-  track: {
-    flex: 1,
-    height: 16,
-    backgroundColor: '#1a2030',
-    borderRadius: 8,
+  btn: {
+    width: 32,
+    height: 26,
+    borderRadius: 4,
+    backgroundColor: '#1a3050',
+    alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
   },
-  fill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: '#2a5a8a',
-    borderRadius: 8,
+  btnText: {
+    color: '#7af',
+    fontSize: 16,
+    fontWeight: 'bold',
+    lineHeight: 18,
   },
-  thumb: {
-    position: 'absolute',
-    top: 2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#5af',
-    marginLeft: -6,
+  valueBox: {
+    flex: 1,
+    height: 26,
+    marginHorizontal: 4,
+    borderRadius: 4,
+    backgroundColor: '#0d1520',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   valueText: {
-    color: '#8aa',
-    fontSize: 10,
-    width: 42,
-    textAlign: 'right',
+    color: '#cde',
+    fontSize: 11,
     fontFamily: 'monospace',
   },
 });
@@ -1122,66 +1112,73 @@ export default function CarAirRN({data = [], style}) {
 
           {/* 位置调节 */}
           <Text style={styles.sectionLabel}>位置 Position</Text>
-          <MiniSlider
+          <StepControl
             label="X"
             value={zoneLayout.px ?? 0}
-            min={-120}
-            max={120}
+            min={-200}
+            max={200}
             step={1}
+            decimals={0}
             onValueChange={v => updateZoneParam(activeZone, 'px', v)}
           />
-          <MiniSlider
+          <StepControl
             label="Y"
             value={zoneLayout.py ?? 0}
-            min={-150}
-            max={50}
+            min={-200}
+            max={200}
             step={1}
+            decimals={0}
             onValueChange={v => updateZoneParam(activeZone, 'py', v)}
           />
-          <MiniSlider
+          <StepControl
             label="Z"
             value={zoneLayout.pz ?? 0}
-            min={-120}
-            max={120}
+            min={-200}
+            max={200}
             step={1}
+            decimals={0}
             onValueChange={v => updateZoneParam(activeZone, 'pz', v)}
           />
 
           {/* 旋转调节 */}
           <Text style={styles.sectionLabel}>旋转 Rotation</Text>
-          <MiniSlider
+          <StepControl
             label="Rx"
             value={zoneLayout.rx ?? 0}
             min={-Math.PI}
             max={Math.PI}
             step={0.01}
+            decimals={2}
             onValueChange={v => updateZoneParam(activeZone, 'rx', v)}
           />
-          <MiniSlider
+          <StepControl
             label="Ry"
             value={zoneLayout.ry ?? 0}
             min={-Math.PI}
             max={Math.PI}
             step={0.01}
+            decimals={2}
             onValueChange={v => updateZoneParam(activeZone, 'ry', v)}
           />
-          <MiniSlider
+          <StepControl
             label="Rz"
             value={zoneLayout.rz ?? 0}
             min={-Math.PI}
             max={Math.PI}
             step={0.01}
+            decimals={2}
             onValueChange={v => updateZoneParam(activeZone, 'rz', v)}
           />
 
           {/* 整体缩放 */}
           <Text style={styles.sectionLabel}>整体缩放 Scale</Text>
-          <MiniSlider
+          <StepControl
             label="S"
             value={globalScale}
             min={0.5}
             max={5}
             step={0.1}
+            decimals={1}
             onValueChange={updateScale}
           />
 

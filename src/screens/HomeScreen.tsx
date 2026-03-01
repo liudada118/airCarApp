@@ -762,46 +762,31 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
             </View>
           </View>
 
-          {/* 气囊指令打印 */}
+          {/* 气囊指令打印（紧凑版） */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <IconFont name="bianji" size={14} color={Colors.textGray} />
-              <Text style={styles.sectionTitle}>气囊指令数据</Text>
+              <Text style={styles.sectionTitle}>气囊指令</Text>
             </View>
             <View style={styles.commandDebugCard}>
-              {/* 原始 55 字节数据 */}
-              <Text style={styles.commandDebugLabel}>原始指令 ({rawCommand ? rawCommand.length : 0} 字节):</Text>
+              {/* 原始字节数据（单行紧凑） */}
               <View style={styles.commandRawContainer}>
-                <Text style={styles.commandRawText} selectable>
+                <Text style={styles.commandRawText} selectable numberOfLines={2}>
                   {rawCommand
-                    ? rawCommand.map((v, i) => {
-                        // 高亮帧头和前 10 对数据
-                        const hex = v.toString(16).toUpperCase().padStart(2, '0');
-                        return `${hex}`;
-                      }).join(' ')
+                    ? rawCommand.map(v => v.toString(16).toUpperCase().padStart(2, '0')).join(' ')
                     : '无数据'}
                 </Text>
               </View>
-
-              {/* 解析后的10个气囊状态 */}
-              <Text style={[styles.commandDebugLabel, {marginTop: Spacing.md}]}>解析结果 (10个气囊):</Text>
-              <View style={styles.commandParsedContainer}>
+              {/* 解析结果（两列紧凑排列） */}
+              <View style={styles.commandParsedGrid}>
                 {ALL_AIRBAG_ZONES.map((zone, idx) => {
                   const cmd = commandStates[zone];
-                  const cmdLabel = cmd === 3 ? '充气↑' : cmd === 4 ? '放气↓' : '空闲';
+                  const cmdLabel = cmd === 3 ? '充↑' : cmd === 4 ? '放↓' : '--';
                   const cmdColor = cmd === 3 ? '#5AC8FA' : cmd === 4 ? '#FF9500' : Colors.textGray;
-                  const rawIdx = rawCommand ? rawCommand[1 + idx * 2] : '-';
-                  const rawCmd = rawCommand ? rawCommand[1 + idx * 2 + 1] : '-';
                   return (
-                    <View key={zone} style={styles.commandParsedRow}>
-                      <Text style={styles.commandZoneIndex}>{idx + 1}</Text>
-                      <Text style={styles.commandZoneName}>{zone}</Text>
-                      <Text style={[styles.commandZoneState, {color: cmdColor}]}>
-                        {cmdLabel}
-                      </Text>
-                      <Text style={styles.commandZoneRaw}>
-                        [{rawIdx}, {rawCmd}]
-                      </Text>
+                    <View key={zone} style={styles.commandParsedCell}>
+                      <Text style={styles.commandCellName}>{zone}</Text>
+                      <Text style={[styles.commandCellState, {color: cmdColor}]}>{cmdLabel}</Text>
                     </View>
                   );
                 })}
@@ -1106,61 +1091,45 @@ const styles = StyleSheet.create({
   // ─── 气囊指令打印 ───
   commandDebugCard: {
     backgroundColor: Colors.cardBackground,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-  },
-  commandDebugLabel: {
-    fontSize: FontSize.sm,
-    color: Colors.textGray,
-    fontWeight: '600',
-    marginBottom: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
   },
   commandRawContainer: {
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    marginBottom: 4,
   },
   commandRawText: {
-    fontSize: 10,
+    fontSize: 8,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     color: '#00FF88',
-    lineHeight: 16,
+    lineHeight: 12,
   },
-  commandParsedContainer: {
+  commandParsedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 2,
   },
-  commandParsedRow: {
+  commandParsedCell: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 3,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.sm,
+    width: '48%' as any,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    borderRadius: 3,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
-  commandZoneIndex: {
-    width: 20,
-    fontSize: FontSize.xs,
-    color: Colors.textGray,
-    textAlign: 'center',
-  },
-  commandZoneName: {
+  commandCellName: {
     flex: 1,
-    fontSize: FontSize.xs,
+    fontSize: 9,
     color: Colors.textLightGray,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  commandZoneState: {
-    width: 50,
-    fontSize: FontSize.xs,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  commandZoneRaw: {
-    width: 55,
-    fontSize: 10,
-    color: Colors.textGray,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    textAlign: 'right',
+  commandCellState: {
+    fontSize: 9,
+    fontWeight: '700',
   },
   // ─── 右侧面板 ───
   rightPanel: {
