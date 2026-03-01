@@ -729,49 +729,42 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
             </View>
           </View>
 
-          {/* 气囊状态 */}
+          {/* 气囊状态（紧凑版） */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <IconFont name="bianji" size={14} color={Colors.textGray} />
               <Text style={styles.sectionTitle}>气囊状态</Text>
             </View>
             <View style={styles.airbagStatusCard}>
-              <Text style={styles.airbagStatusText}>
-                {adaptiveEnabled ? '当前为自适应调节状态' : '自适应调节已关闭'}
-              </Text>
-              <View style={styles.seatThumbnail}>
-                <SeatDiagram
-                  activeZone={null}
-                  scale={0.55}
-                  commandStates={commandStates}
-                />
-              </View>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                onPress={onNavigateToCustomize}
-                activeOpacity={0.7}>
-                <View style={styles.customizeLinkRow}>
-                  <IconFont
-                    name="keshihuatiaojie"
-                    size={14}
-                    color={Colors.primary}
+              <View style={styles.airbagCompactRow}>
+                <View style={styles.seatThumbnail}>
+                  <SeatDiagram
+                    activeZone={null}
+                    scale={0.35}
+                    commandStates={commandStates}
                   />
-                  <Text style={styles.customizeLink}>自定义气囊调节</Text>
                 </View>
-              </TouchableOpacity>
+                <View style={styles.airbagInfoCol}>
+                  <Text style={styles.airbagStatusText}>
+                    {adaptiveEnabled ? '自适应调节中' : '调节已关闭'}
+                  </Text>
+                  <Text style={styles.commandMiniText} numberOfLines={1}>
+                    {ALL_AIRBAG_ZONES.map(zone => {
+                      const cmd = commandStates[zone];
+                      const s = cmd === 3 ? '↑' : cmd === 4 ? '↓' : '-';
+                      return `${zone.replace('cushion','c').replace('shoulder','s').replace('sideWing','w').replace('lumbar','l')}${s}`;
+                    }).join(' ')}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={onNavigateToCustomize}
+                    activeOpacity={0.7}
+                    style={styles.customizeLinkRow}>
+                    <IconFont name="keshihuatiaojie" size={12} color={Colors.primary} />
+                    <Text style={styles.customizeLink}>自定义调节</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
-
-          {/* 气囊指令（单行摘要） */}
-          <View style={styles.commandMiniBar}>
-            <Text style={styles.commandMiniLabel}>指令</Text>
-            <Text style={styles.commandMiniText} numberOfLines={1}>
-              {ALL_AIRBAG_ZONES.map(zone => {
-                const cmd = commandStates[zone];
-                const s = cmd === 3 ? '↑' : cmd === 4 ? '↓' : '-';
-                return `${zone.replace('cushion','c').replace('shoulder','s').replace('sideWing','w').replace('lumbar','l')}${s}`;
-              }).join(' ')}
-            </Text>
           </View>
         </ScrollView>
 
@@ -1041,22 +1034,30 @@ const styles = StyleSheet.create({
   airbagStatusCard: {
     backgroundColor: Colors.cardBackground,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
+    padding: Spacing.sm,
   },
-  airbagStatusText: {
-    fontSize: FontSize.md,
-    color: Colors.textWhite,
-    fontWeight: '600',
-    marginBottom: Spacing.md,
+  airbagCompactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   seatThumbnail: {
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    marginRight: Spacing.sm,
   },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.borderGray,
-    marginVertical: Spacing.md,
+  airbagInfoCol: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  airbagStatusText: {
+    fontSize: FontSize.sm,
+    color: Colors.textWhite,
+    fontWeight: '600',
+  },
+  commandMiniText: {
+    fontSize: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#8ab4d0',
   },
   customizeLinkRow: {
     flexDirection: 'row',
@@ -1064,31 +1065,9 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   customizeLink: {
-    fontSize: FontSize.md,
+    fontSize: FontSize.sm,
     color: Colors.primary,
     fontWeight: '500',
-  },
-  // ─── 气囊指令摘要 ───
-  commandMiniBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.cardBackground,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    marginTop: Spacing.sm,
-  },
-  commandMiniLabel: {
-    fontSize: 10,
-    color: Colors.textGray,
-    fontWeight: '600',
-    marginRight: 6,
-  },
-  commandMiniText: {
-    flex: 1,
-    fontSize: 9,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#8ab4d0',
   },
   // ─── 右侧面板 ───
   rightPanel: {
