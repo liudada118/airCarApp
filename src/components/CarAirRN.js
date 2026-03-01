@@ -70,21 +70,29 @@ const allConfig = {
     dataConfig: sitConfig,
     name: 'center',
     pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+    flipRow: true,     // 座椅前后矩阵顺序翻转
+    flipHeight: false,
   },
   necksit: {
     dataConfig: backConfig,
     name: 'leftsit',
     pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+    flipRow: false,
+    flipHeight: false,
   },
   backsit: {
     dataConfig: backConfig,
     name: 'rightsit',
     pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+    flipRow: false,
+    flipHeight: false,
   },
   sitsit: {
     dataConfig: sitConfigBack,
     name: 'centersit',
     pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+    flipRow: false,
+    flipHeight: true,  // 靠背高度方向翻转
   },
 };
 
@@ -507,7 +515,7 @@ function applyPointRotateToGroup(pointGroup, rotateMap = DEFAULT_POINT_MAP_ROTAT
   pointGroup.rotation.set(x, y, z);
 }
 
-function sitRenew(config, name, ndata1, smoothBig, particles, workBuf) {
+function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow = false, flipHeight = false) {
   if (!particles || !particles.geometry) {
     return;
   }
@@ -541,18 +549,21 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf) {
     gaussBuf,
   );
 
+  const heightSign = flipHeight ? 1 : -1;
   let k = 0;
-  let l = 0;
   let j = 0;
   const hideThreshold = color * HIDE_THRESHOLD_RATIO;
   for (let ix = 0; ix < amountX; ix += 1) {
+    // flipRow: 翻转行遍历方向（座椅前后）
+    const dataRow = flipRow ? (amountX - 1 - ix) : ix;
     for (let iy = 0; iy < amountY; iy += 1) {
+      const l = dataRow * amountY + iy;
       const rawValue = Number(bigArrg[l]) * 10;
       const value = Number.isFinite(rawValue) ? rawValue : 0;
       smoothBig[l] = smoothBig[l] + (value - smoothBig[l]) / coherent;
 
       position[k] = iy * SEPARATION - (amountX * SEPARATION) / 2;
-      position[k + 1] = -smoothBig[l] * height;
+      position[k + 1] = heightSign * smoothBig[l] * height;
       position[k + 2] = ix * SEPARATION - (amountY * SEPARATION) / 2;
 
       if (scales) {
@@ -566,7 +577,6 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf) {
       colors[k + 2] = rgb[2] / 255;
 
       k += 3;
-      l += 1;
       j += 1;
     }
   }
@@ -1058,7 +1068,7 @@ export default function CarAirRN({data = [], style}) {
             const smooth = frameState.smoothBig?.[name];
             if (!mesh || !smooth) return;
             const workBuf = frameState.workBuffers?.[name];
-            sitRenew(config.dataConfig, name, split[name], smooth, mesh, workBuf);
+            sitRenew(config.dataConfig, name, split[name], smooth, mesh, workBuf, config.flipRow, config.flipHeight);
           });
           frameState.dirty = true;
         }
