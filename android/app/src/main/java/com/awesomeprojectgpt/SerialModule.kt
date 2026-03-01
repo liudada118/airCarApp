@@ -29,7 +29,31 @@ class SerialModule(
     private val reactContext: ReactApplicationContext
 ) : ReactContextBaseJavaModule(reactContext) {
 
-    private val manager = SerialManager(reactContext)
+    companion object {
+        /** 全局单例保护：reload 时确保旧实例的串口被关闭 */
+        @Volatile
+        private var activeManager: SerialManager? = null
+
+        @Synchronized
+        fun getOrCreateManager(context: Context): SerialManager {
+            // reload 时旧 manager 仍然存活，先关闭它
+            val existing = activeManager
+            if (existing != null) {
+                try { existing.close() } catch (_: Exception) {}
+            }
+            val m = SerialManager(context)
+            activeManager = m
+            return m
+        }
+
+        @Synchronized
+        fun closeActiveManager() {
+            try { activeManager?.close() } catch (_: Exception) {}
+            activeManager = null
+        }
+    }
+
+    private val manager = getOrCreateManager(reactContext)
     private val usbManager =
         reactContext.getSystemService(Context.USB_SERVICE) as UsbManager
     private val permissionAction = "com.awesomeprojectgpt.USB_PERMISSION"
@@ -232,7 +256,7 @@ class SerialModule(
     fun close() {
         stopAutoWrite()
         try {
-            manager.close()
+            closeActiveManager()
         } catch (e: Exception) {
             Log.w("SerialModule", "close: ${e.message}")
         }
@@ -251,16 +275,18 @@ class SerialModule(
         stopAutoWrite()
         autoWriteScheduler.shutdownNow()
         pythonExecutor.shutdownNow()
-        try {
-            manager.close()
-        } catch (_: Exception) {
-            // ignore
-        }
+        closeActiveManager()
         try {
             reactContext.unregisterReceiver(permissionReceiver)
         } catch (_: Exception) {
             // ignore
         }
+    }
+
+    override fun onCatalystInstanceDestroy() {
+        // reload 时的兆底清理
+        invalidate()
+        super.onCatalystInstanceDestroy()
     }
 
     private fun requestPermission(device: UsbDevice) {
@@ -300,11 +326,7 @@ class SerialModule(
             emitSerialResult(data, null, "PARSE_ERROR")
             return
         }
-        if (values.isNotEmpty()) {
-            Log.i(logTag, "frame received: size=${values.size} first=${values.first()} last=${values.last()}")
-        } else {
-            Log.i(logTag, "frame received: empty")
-        }
+        // frame log disabled
         if (values.size == 51) {
             handleModeFrame(values, data)
             return
@@ -357,20 +379,20 @@ class SerialModule(
 
     private fun handleModeFrame(values: List<Int>, data: String) {
         val modeValue = values.getOrNull(49) ?: -1
-        Log.i(logTag, "mode frame received: size=${values.size} modeValue=$modeValue")
+        // mode frame log disabled
         emitSerialMode(data, modeValue)
         when (modeValue) {
             0 -> {
                 if (!isAutoMode) {
                     isAutoMode = true
-                    Log.i(logTag, "auto mode enabled")
+                    // Log.i(logTag, "auto mode enabled")
                     startAutoWrite()
                 }
             }
             1 -> {
                 if (isAutoMode) {
                     isAutoMode = false
-                    Log.i(logTag, "auto mode disabled")
+                    // Log.i(logTag, "auto mode disabled")
                     stopAutoWrite()
                 }
             }
@@ -429,10 +451,7 @@ class SerialModule(
             autoWriteText = hex
             autoWriteBytes = bytes
 
-            if (hex != lastAutoWriteHex) {
-                lastAutoWriteHex = hex
-                Log.i(logTag, "auto write payload updated: hex=$hex (${bytes.size} bytes)")
-            }
+            lastAutoWriteHex = hex
         } catch (e: Exception) {
             Log.e(logTag, "parse control_command failed", e)
         }

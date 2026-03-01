@@ -126,18 +126,36 @@ class SerialManager(private val context: Context) {
     }
 
     fun close() {
-        readThread?.shutdown()
+        val t = readThread
+        val p = port
+        readThread = null
+        port = null
+
+        // 1. 先标记线程停止
+        t?.shutdown()
+
+        // 2. 关闭端口，使阻塞的 port.read() 立即抛异常退出
         try {
-            readThread?.join(300)
+            p?.close()
+        } catch (_: Exception) {
+            // port may already be closed or disconnected
+        }
+
+        // 3. 等待线程退出（端口关闭后 read 会立即失败，所以 500ms 足够）
+        try {
+            t?.join(500)
         } catch (_: Exception) {
             // ignore
         }
-        readThread = null
-        try {
-            port?.close()
-        } catch (_: Exception) {
-            // ignore: port may already be closed or disconnected
+
+        // 4. 如果线程仍然存活，强制中断
+        if (t?.isAlive == true) {
+            t.interrupt()
+            try {
+                t.join(200)
+            } catch (_: Exception) {
+                // ignore
+            }
         }
-        port = null
     }
 }
