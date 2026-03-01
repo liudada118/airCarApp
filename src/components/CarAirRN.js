@@ -25,14 +25,14 @@ const ENABLE_POINT_HIDE = true;
 const MODEL_ASSET = require('../../image/chair3.glb');
 const DEFAULT_SETTINGS = {
   gauss: 1,
-  color: 350, // 色阶映射范围：降低使数据能覆盖完整色谱（原2550太大，所有数据都映射到白/蓝色）
+  color: 350, // 色阶映射范围
   height: 1,
-  coherent: 2, // 第二层平滑（插值后）：降低以提高响应速度
-  rawSmooth: 2, // 第一层平滑（插值前）：原始 144 字节数据帧间混合
+  coherent: 1.5, // 第二层平滑（插值后）：1.5 几乎无延迟
+  rawSmooth: 1.5, // 第一层平滑（插值前）：1.5 几乎无延迟
   deadZone: 0, // 死区阈值：0=不启用死区
 };
-// 数据更新频率：20Hz
-const SEAT_UPDATE_INTERVAL = 1000 / 20;
+// 数据更新频率：30Hz
+const SEAT_UPDATE_INTERVAL = 1000 / 30;
 const MODEL_TARGET_SIZE = 220;
 const CAMERA_MIN_DISTANCE = 80;
 const CAMERA_MAX_DISTANCE = 600;
@@ -1257,6 +1257,35 @@ function CarAirRNInner({data = [], style}, ref) {
           {/* 标题 */}
           <Text style={styles.panelTitle}>点图参数调节</Text>
 
+          {/* 清零预压力 */}
+          <View style={styles.btnRow}>
+            <TouchableOpacity
+              style={[styles.actionBtn, {flex: 1}, baselineActive && {backgroundColor: '#e74c3c'}]}
+              onPress={() => {
+                if (baselineActive) {
+                  const fs = stateRef.current;
+                  fs.baseline = null;
+                  fs.rawSmoothInited = false;
+                  fs.dirty = true;
+                  setBaselineActive(false);
+                } else {
+                  const fs = stateRef.current;
+                  const currentData = dataRef.current;
+                  if (Array.isArray(currentData) && currentData.length >= 144) {
+                    const normalized = normalizeSeatData(currentData);
+                    fs.baseline = normalized.slice(0, 144);
+                    fs.rawSmoothInited = false;
+                    fs.dirty = true;
+                    setBaselineActive(true);
+                  }
+                }
+              }}>
+              <Text style={styles.actionBtnText}>
+                {baselineActive ? '✖ 取消清零' : '清零预压力'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* 区域选择 */}
           <View style={styles.zoneTabs}>
             {ZONE_NAMES.map(name => (
@@ -1450,35 +1479,6 @@ function CarAirRNInner({data = [], style}, ref) {
             </TouchableOpacity>
           </View>
 
-          {/* 清零按钮 */}
-          <Text style={styles.sectionLabel}>数据清零</Text>
-          <View style={styles.btnRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, baselineActive && {backgroundColor: '#e74c3c'}]}
-              onPress={() => {
-                if (baselineActive) {
-                  const fs = stateRef.current;
-                  fs.baseline = null;
-                  fs.rawSmoothInited = false;
-                  fs.dirty = true;
-                  setBaselineActive(false);
-                } else {
-                  const fs = stateRef.current;
-                  const currentData = dataRef.current;
-                  if (Array.isArray(currentData) && currentData.length >= 144) {
-                    const normalized = normalizeSeatData(currentData);
-                    fs.baseline = normalized.slice(0, 144);
-                    fs.rawSmoothInited = false;
-                    fs.dirty = true;
-                    setBaselineActive(true);
-                  }
-                }
-              }}>
-              <Text style={styles.actionBtnText}>
-                {baselineActive ? '取消清零' : '清零预压力'}
-              </Text>
-            </TouchableOpacity>
-          </View>
         </ScrollView>
       </Animated.View>
 
