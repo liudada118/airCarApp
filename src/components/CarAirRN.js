@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -580,6 +581,9 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf) {
 // ─── 简易滑块组件（纯 RN 实现，无需额外依赖） ──────────────────────────────
 
 function StepControl({label, value, min, max, step, onValueChange, decimals = 2}) {
+  const [editing, setEditing] = useState(false);
+  const [inputText, setInputText] = useState('');
+
   const doStep = (direction) => {
     let newVal = value + direction * step;
     newVal = clamp(newVal, min, max);
@@ -599,6 +603,20 @@ function StepControl({label, value, min, max, step, onValueChange, decimals = 2}
     }
   };
 
+  const handleFocus = () => {
+    setEditing(true);
+    setInputText(value.toFixed(decimals));
+  };
+
+  const handleSubmit = () => {
+    setEditing(false);
+    const parsed = parseFloat(inputText);
+    if (Number.isFinite(parsed)) {
+      const clamped = clamp(parsed, min, max);
+      onValueChange(parseFloat(clamped.toFixed(decimals)));
+    }
+  };
+
   return (
     <View style={stepStyles.row}>
       <Text style={stepStyles.label}>{label}</Text>
@@ -611,7 +629,17 @@ function StepControl({label, value, min, max, step, onValueChange, decimals = 2}
         <Text style={stepStyles.btnText}>−</Text>
       </TouchableOpacity>
       <View style={stepStyles.valueBox}>
-        <Text style={stepStyles.valueText}>{value.toFixed(decimals)}</Text>
+        <TextInput
+          style={stepStyles.valueInput}
+          value={editing ? inputText : value.toFixed(decimals)}
+          onChangeText={setInputText}
+          onFocus={handleFocus}
+          onBlur={handleSubmit}
+          onSubmitEditing={handleSubmit}
+          keyboardType="numeric"
+          selectTextOnFocus
+          returnKeyType="done"
+        />
       </View>
       <TouchableOpacity
         style={stepStyles.btn}
@@ -662,10 +690,15 @@ const stepStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  valueText: {
+  valueInput: {
+    flex: 1,
     color: '#cde',
     fontSize: 11,
     fontFamily: 'monospace',
+    textAlign: 'center',
+    padding: 0,
+    margin: 0,
+    height: 26,
   },
 });
 
