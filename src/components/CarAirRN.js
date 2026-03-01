@@ -27,7 +27,8 @@ const DEFAULT_SETTINGS = {
   gauss: 1,
   color: 350, // 色阶映射范围：降低使数据能覆盖完整色谱（原2550太大，所有数据都映射到白/蓝色）
   height: 1,
-  coherent: 5, // 平滑系数：越大越平滑，抑制点图抖动（1=无平滑，5=适中）
+  coherent: 3, // 第二层平滑（插值后）：降低以保持响应速度，因为第一层已预平滑
+  rawSmooth: 4, // 第一层平滑（插值前）：原始 144 字节数据帧间混合，在放大之前就消除波动
   deadZone: 0, // 死区阈值：0=不启用死区
 };
 // 数据更新频率：15Hz
@@ -1076,6 +1077,10 @@ export default function CarAirRN({data = [], style}) {
         setLoadError(err?.message || String(err));
       });
 
+    // 第一层平滑缓冲区：原始 144 字节数据的帧间混合
+    const rawSmoothBuf = new Float32Array(144);
+    let rawSmoothInited = false;
+
     stateRef.current = {
       scene,
       camera,
@@ -1085,6 +1090,8 @@ export default function CarAirRN({data = [], style}) {
       pointMeshes,
       smoothBig,
       workBuffers,
+      rawSmoothBuf,
+      rawSmoothInited,
       model: null,
       gl,
       controls,
@@ -1113,7 +1120,24 @@ export default function CarAirRN({data = [], style}) {
         if (hash !== frameState.lastDataHash || !frameState.lastSeatUpdate) {
           frameState.lastDataHash = hash;
           const seatData = normalizeSeatData(currentData);
-          const split = splitSeatData(seatData);
+
+          // 第一层平滑：原始 144 字节数据帧间混合（在插值放大之前）
+          const rawBuf = frameState.rawSmoothBuf;
+          const rawAlpha = DEFAULT_SETTINGS.rawSmooth || 1;
+          if (!frameState.rawSmoothInited) {
+            // 第一帧直接拷贝
+            for (let ri = 0; ri < 144; ri++) {
+              rawBuf[ri] = seatData[ri];
+            }
+            frameState.rawSmoothInited = true;
+          } else {
+            for (let ri = 0; ri < 144; ri++) {
+              rawBuf[ri] = rawBuf[ri] + (seatData[ri] - rawBuf[ri]) / rawAlpha;
+            }
+          }
+          // 用平滑后的数据进行分割和插值
+          const smoothedRaw = Array.from(rawBuf, v => Math.round(v));
+          const split = splitSeatData(smoothedRaw);
 
           // 打印每个区域的原始数据
           console.log('[PointData] raw(' + (currentData?.length || 0) + '):', JSON.stringify(currentData?.slice(0, 20)) + '...');
