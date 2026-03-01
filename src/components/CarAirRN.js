@@ -765,6 +765,10 @@ export default function CarAirRN({data = [], style}) {
     rootPx: 0,      // rootGroup X 位移
     rootPy: 0,      // rootGroup Y 位移
     rootPz: 0,      // rootGroup Z 位移
+    // pointGroup 整体旋转
+    grpRx: DEFAULT_POINT_MAP_ROTATE.x,
+    grpRy: DEFAULT_POINT_MAP_ROTATE.y,
+    grpRz: DEFAULT_POINT_MAP_ROTATE.z,
   });
 
   // 将布局变化应用到 3D 场景
@@ -825,6 +829,12 @@ export default function CarAirRN({data = [], style}) {
         s.rootGroup.position.y = value;
       } else if (param === 'rootPz') {
         s.rootGroup.position.z = value;
+      } else if (param === 'grpRx') {
+        if (s.pointGroup) s.pointGroup.rotation.x = value;
+      } else if (param === 'grpRy') {
+        if (s.pointGroup) s.pointGroup.rotation.y = value;
+      } else if (param === 'grpRz') {
+        if (s.pointGroup) s.pointGroup.rotation.z = value;
       }
       s.dirty = true;
       return next;
@@ -895,6 +905,7 @@ export default function CarAirRN({data = [], style}) {
       camDist: viewParams.camDist,
       rootRotation: [parseFloat(viewParams.rootRx.toFixed(4)), parseFloat(viewParams.rootRy.toFixed(4))],
       rootPosition: [parseFloat(viewParams.rootPx.toFixed(2)), parseFloat(viewParams.rootPy.toFixed(2)), parseFloat(viewParams.rootPz.toFixed(2))],
+      groupRotation: [parseFloat(viewParams.grpRx.toFixed(4)), parseFloat(viewParams.grpRy.toFixed(4)), parseFloat(viewParams.grpRz.toFixed(4))],
     }, null, 2));
   }, [layout, viewParams]);
 
@@ -1370,6 +1381,36 @@ export default function CarAirRN({data = [], style}) {
             step={1}
             decimals={0}
             onValueChange={v => updateViewParam('rootPz', v)}
+          />
+
+          {/* 点图 Group 整体旋转 */}
+          <Text style={[styles.sectionLabel, {marginTop: 12, borderTopWidth: 1, borderTopColor: '#334', paddingTop: 8}]}>点图 Group 旋转</Text>
+          <StepControl
+            label="Gx"
+            value={viewParams.grpRx}
+            min={-Math.PI}
+            max={Math.PI}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('grpRx', v)}
+          />
+          <StepControl
+            label="Gy"
+            value={viewParams.grpRy}
+            min={-Math.PI}
+            max={Math.PI}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('grpRy', v)}
+          />
+          <StepControl
+            label="Gz"
+            value={viewParams.grpRz}
+            min={-Math.PI}
+            max={Math.PI}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('grpRz', v)}
           />
 
           {/* 操作按钮 */}

@@ -253,7 +253,34 @@ function getSeatStateLabel(state: AlgoSeatStatus): string {
   return '未知';
 }
 
-// ─── 组件 ────────────────────────────────────────────────────────
+// ─── 矩阵热力图颜色映射 ────────────────────────────────────────────
+
+/** 将传感器值(0-255)映射为热力图颜色 */
+function matrixCellColor(val: number): string {
+  if (val <= 0) return '#1a1a2e';
+  const t = Math.min(val / 255, 1);
+  // 蓝 -> 青 -> 绿 -> 黄 -> 红
+  const stops = [
+    {p: 0.0, r: 0, g: 0, b: 80},
+    {p: 0.25, r: 0, g: 100, b: 200},
+    {p: 0.5, r: 0, g: 200, b: 100},
+    {p: 0.75, r: 220, g: 200, b: 0},
+    {p: 1.0, r: 255, g: 50, b: 20},
+  ];
+  let i = 0;
+  for (i = 0; i < stops.length - 1; i++) {
+    if (t <= stops[i + 1].p) break;
+  }
+  const s0 = stops[i];
+  const s1 = stops[Math.min(i + 1, stops.length - 1)];
+  const f = s1.p === s0.p ? 0 : (t - s0.p) / (s1.p - s0.p);
+  const r = Math.round(s0.r + (s1.r - s0.r) * f);
+  const g = Math.round(s0.g + (s1.g - s0.g) * f);
+  const b = Math.round(s0.b + (s1.b - s0.b) * f);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ─── 组件 ────────────────────────────────────────────────────────────
 
 const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   const [seatStatus, setSeatStatus] = useState<SeatStatus>('away');
@@ -814,6 +841,145 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               style={styles.carAir3D}
             />
           </View>
+
+          {/* 原始传感器矩阵热力图 */}
+          <View style={styles.matrixContainer}>
+            <Text style={styles.matrixTitle}>原始矩阵</Text>
+            <View style={styles.matrixRow}>
+              {/* 靠背区域：左侧翼(3×2) + 靠背(10×6) + 右侧翼(3×2) */}
+              <View style={styles.matrixBlock}>
+                <Text style={styles.matrixLabel}>靠背</Text>
+                <View style={styles.matrixGrid}>
+                  {Array.from({length: 10}, (_, row) => (
+                    <View key={`back-r${row}`} style={styles.matrixGridRow}>
+                      {Array.from({length: 6}, (_, col) => {
+                        const idx = 12 + row * 6 + col;
+                        const val = sensorData[idx] || 0;
+                        return (
+                          <View
+                            key={`back-${row}-${col}`}
+                            style={[
+                              styles.matrixCell,
+                              {backgroundColor: matrixCellColor(val)},
+                            ]}>
+                            <Text style={styles.matrixCellText}>{val}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </View>
+              {/* 侧翼 */}
+              <View style={styles.matrixBlock}>
+                <Text style={styles.matrixLabel}>左/右翼</Text>
+                <View style={styles.matrixGrid}>
+                  {Array.from({length: 3}, (_, row) => (
+                    <View key={`wing-r${row}`} style={styles.matrixGridRow}>
+                      {/* 左侧翼 */}
+                      {Array.from({length: 2}, (_, col) => {
+                        const idx = 0 + row * 2 + col;
+                        const val = sensorData[idx] || 0;
+                        return (
+                          <View
+                            key={`lw-${row}-${col}`}
+                            style={[
+                              styles.matrixCell,
+                              {backgroundColor: matrixCellColor(val)},
+                            ]}>
+                            <Text style={styles.matrixCellText}>{val}</Text>
+                          </View>
+                        );
+                      })}
+                      <View style={styles.matrixCellSpacer} />
+                      {/* 右侧翼 */}
+                      {Array.from({length: 2}, (_, col) => {
+                        const idx = 6 + row * 2 + col;
+                        const val = sensorData[idx] || 0;
+                        return (
+                          <View
+                            key={`rw-${row}-${col}`}
+                            style={[
+                              styles.matrixCell,
+                              {backgroundColor: matrixCellColor(val)},
+                            ]}>
+                            <Text style={styles.matrixCellText}>{val}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+            <View style={[styles.matrixRow, {marginTop: 4}]}>
+              {/* 坐垫区域：左坐垫(3×2) + 坐垫(10×6) + 右坐垫(3×2) */}
+              <View style={styles.matrixBlock}>
+                <Text style={styles.matrixLabel}>坐垫</Text>
+                <View style={styles.matrixGrid}>
+                  {Array.from({length: 10}, (_, row) => (
+                    <View key={`sit-r${row}`} style={styles.matrixGridRow}>
+                      {Array.from({length: 6}, (_, col) => {
+                        const idx = 84 + row * 6 + col;
+                        const val = sensorData[idx] || 0;
+                        return (
+                          <View
+                            key={`sit-${row}-${col}`}
+                            style={[
+                              styles.matrixCell,
+                              {backgroundColor: matrixCellColor(val)},
+                            ]}>
+                            <Text style={styles.matrixCellText}>{val}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </View>
+              {/* 坐垫侧翼 */}
+              <View style={styles.matrixBlock}>
+                <Text style={styles.matrixLabel}>左/右垫翼</Text>
+                <View style={styles.matrixGrid}>
+                  {Array.from({length: 3}, (_, row) => (
+                    <View key={`swing-r${row}`} style={styles.matrixGridRow}>
+                      {/* 左坐垫侧翼 */}
+                      {Array.from({length: 2}, (_, col) => {
+                        const idx = 72 + row * 2 + col;
+                        const val = sensorData[idx] || 0;
+                        return (
+                          <View
+                            key={`lsw-${row}-${col}`}
+                            style={[
+                              styles.matrixCell,
+                              {backgroundColor: matrixCellColor(val)},
+                            ]}>
+                            <Text style={styles.matrixCellText}>{val}</Text>
+                          </View>
+                        );
+                      })}
+                      <View style={styles.matrixCellSpacer} />
+                      {/* 右坐垫侧翼 */}
+                      {Array.from({length: 2}, (_, col) => {
+                        const idx = 78 + row * 2 + col;
+                        const val = sensorData[idx] || 0;
+                        return (
+                          <View
+                            key={`rsw-${row}-${col}`}
+                            style={[
+                              styles.matrixCell,
+                              {backgroundColor: matrixCellColor(val)},
+                            ]}>
+                            <Text style={styles.matrixCellText}>{val}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -1108,6 +1274,55 @@ const styles = StyleSheet.create({
   },
   carAir3D: {
     flex: 1,
+  },
+  // ─── 矩阵热力图 ───
+  matrixContainer: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  matrixTitle: {
+    fontSize: FontSize.sm,
+    color: Colors.textGray,
+    fontWeight: '600',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  matrixRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
+  matrixBlock: {
+    alignItems: 'center',
+  },
+  matrixLabel: {
+    fontSize: 9,
+    color: Colors.textGray,
+    marginBottom: 2,
+  },
+  matrixGrid: {
+    gap: 1,
+  },
+  matrixGridRow: {
+    flexDirection: 'row',
+    gap: 1,
+  },
+  matrixCell: {
+    width: 16,
+    height: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 1,
+  },
+  matrixCellText: {
+    fontSize: 6,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '500',
+  },
+  matrixCellSpacer: {
+    width: 4,
   },
   // ─── 错误提示 ───
   errorHint: {
