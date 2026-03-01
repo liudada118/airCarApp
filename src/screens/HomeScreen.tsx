@@ -341,10 +341,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
         const label = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
         return `${zone}:${label}`;
       }).join(' | ');
-      console.log(
-        `[AirbagCmd] ${parsed.rawCommand.length}B: ${hexStr}\n` +
-        `[AirbagCmd] ${stateStr}`,
-      );
+      // [AirbagCmd] log disabled
     }
   }, []);
 

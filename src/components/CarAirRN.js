@@ -27,12 +27,12 @@ const DEFAULT_SETTINGS = {
   gauss: 1,
   color: 350, // 色阶映射范围：降低使数据能覆盖完整色谱（原2550太大，所有数据都映射到白/蓝色）
   height: 1,
-  coherent: 3, // 第二层平滑（插值后）：降低以保持响应速度，因为第一层已预平滑
-  rawSmooth: 4, // 第一层平滑（插值前）：原始 144 字节数据帧间混合，在放大之前就消除波动
+  coherent: 2, // 第二层平滑（插值后）：降低以提高响应速度
+  rawSmooth: 2, // 第一层平滑（插值前）：原始 144 字节数据帧间混合
   deadZone: 0, // 死区阈值：0=不启用死区
 };
-// 数据更新频率：15Hz
-const SEAT_UPDATE_INTERVAL = 1000 / 15;
+// 数据更新频率：20Hz
+const SEAT_UPDATE_INTERVAL = 1000 / 20;
 const MODEL_TARGET_SIZE = 220;
 const CAMERA_MIN_DISTANCE = 80;
 const CAMERA_MAX_DISTANCE = 600;
@@ -213,11 +213,11 @@ async function loadSeatModel(group) {
     console.warn('glb: missing asset uri');
     return null;
   }
-  console.log('glb: loading', uri);
+  // console.log('glb: loading', uri);
 
   const file = new FileSystem.File(uri);
   const buffer = await file.arrayBuffer();
-  console.log('glb: bytes', buffer.byteLength);
+  // console.log('glb: bytes', buffer.byteLength);
 
   const loader = new GLTFLoader();
   return new Promise((resolve, reject) => {
@@ -259,12 +259,7 @@ async function loadSeatModel(group) {
         const size2 = new THREE.Vector3();
         box2.getCenter(center2);
         box2.getSize(size2);
-        console.log('[Model] position:', JSON.stringify({x: model.position.x.toFixed(2), y: model.position.y.toFixed(2), z: model.position.z.toFixed(2)}));
-        console.log('[Model] scale:', model.scale.x.toFixed(4));
-        console.log('[Model] bbox center:', JSON.stringify({x: center2.x.toFixed(2), y: center2.y.toFixed(2), z: center2.z.toFixed(2)}));
-        console.log('[Model] bbox size:', JSON.stringify({x: size2.x.toFixed(2), y: size2.y.toFixed(2), z: size2.z.toFixed(2)}));
-        console.log('[Model] bbox min:', JSON.stringify({x: box2.min.x.toFixed(2), y: box2.min.y.toFixed(2), z: box2.min.z.toFixed(2)}));
-        console.log('[Model] bbox max:', JSON.stringify({x: box2.max.x.toFixed(2), y: box2.max.y.toFixed(2), z: box2.max.z.toFixed(2)}));
+        // [Model] logs disabled for production
 
         resolve(model);
       },
@@ -496,7 +491,7 @@ function applyPointFitToModel(model, pointMeshes, layoutMap = DEFAULT_POINT_FIT_
     const meshScale = POINT_SCALE * safeFactor;
     mesh.scale.set(meshScale, meshScale, meshScale);
 
-    console.log('[PointFit]', name, 'pos:', JSON.stringify({x: mesh.position.x.toFixed(2), y: mesh.position.y.toFixed(2), z: mesh.position.z.toFixed(2)}), 'scale:', scaleFactor.toFixed(2));
+    // [PointFit] log disabled
   });
 }
 
@@ -760,10 +755,10 @@ export default function CarAirRN({data = [], style}) {
   // 整体视角参数
   const [viewParams, setViewParams] = useState({
     camDist: 300,   // 相机距离
-    rootRx: -Math.PI / 3, // rootGroup X 旋转
-    rootRy: 0,      // rootGroup Y 旋转
+    rootRx: 0.21,   // rootGroup X 旋转
+    rootRy: -0.54,  // rootGroup Y 旋转
     rootPx: 0,      // rootGroup X 位移
-    rootPy: 0,      // rootGroup Y 位移
+    rootPy: 13,     // rootGroup Y 位移
     rootPz: 0,      // rootGroup Z 位移
     // pointGroup 整体旋转
     grpRx: DEFAULT_POINT_MAP_ROTATE.x,
@@ -900,13 +895,7 @@ export default function CarAirRN({data = [], style}) {
         scale: parseFloat(l.s.toFixed(2)),
       };
     });
-    console.log('[PointFit] layout:', JSON.stringify(output, null, 2));
-    console.log('[PointFit] view:', JSON.stringify({
-      camDist: viewParams.camDist,
-      rootRotation: [parseFloat(viewParams.rootRx.toFixed(4)), parseFloat(viewParams.rootRy.toFixed(4))],
-      rootPosition: [parseFloat(viewParams.rootPx.toFixed(2)), parseFloat(viewParams.rootPy.toFixed(2)), parseFloat(viewParams.rootPz.toFixed(2))],
-      groupRotation: [parseFloat(viewParams.grpRx.toFixed(4)), parseFloat(viewParams.grpRy.toFixed(4)), parseFloat(viewParams.grpRz.toFixed(4))],
-    }, null, 2));
+    // [PointFit] layout/view logs disabled
   }, [layout, viewParams]);
 
   // 手势响应器：单指旋转 + 双指缩放
@@ -1057,8 +1046,8 @@ export default function CarAirRN({data = [], style}) {
     const workBuffers = createWorkBuffers();
 
     const controls = {
-      rotationX: -Math.PI / 3,
-      rotationY: 0,
+      rotationX: 0.21,
+      rotationY: -0.54,
       distance: camera.position.z,
       lastX: 0,
       lastY: 0,
@@ -1067,6 +1056,8 @@ export default function CarAirRN({data = [], style}) {
       isInteracting: false,
     };
     rootGroup.rotation.x = controls.rotationX;
+    rootGroup.rotation.y = controls.rotationY;
+    rootGroup.position.y = 13;
 
     setLoading(true);
     setLoadError(null);
@@ -1150,11 +1141,6 @@ export default function CarAirRN({data = [], style}) {
           const smoothedRaw = Array.from(rawBuf, v => Math.round(v));
           const split = splitSeatData(smoothedRaw);
 
-          // 打印每个区域的原始数据
-          console.log('[PointData] raw(' + (currentData?.length || 0) + '):', JSON.stringify(currentData?.slice(0, 20)) + '...');
-          Object.keys(split).forEach(sn => {
-            console.log('[PointData]', sn, '(' + split[sn].length + '):', JSON.stringify(split[sn]));
-          });
 
           Object.keys(allConfig).forEach(key => {
             const config = allConfig[key];
