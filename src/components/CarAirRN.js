@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -721,13 +721,43 @@ const stepStyles = StyleSheet.create({
 
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
-export default function CarAirRN({data = [], style}) {
+function CarAirRNInner({data = [], style}, ref) {
   const stateRef = useRef({});
   const dataRef = useRef(data);
   const frameRef = useRef(null);
   const mountedRef = useRef(true);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [baselineActive, setBaselineActive] = useState(false);
+
+  // 暴露清零/取消清零方法给父组件
+  useImperativeHandle(ref, () => ({
+    /** 记录当前帧为基线，后续帧减去基线值 */
+    zeroBaseline() {
+      const fs = stateRef.current;
+      const currentData = dataRef.current;
+      if (Array.isArray(currentData) && currentData.length >= 144) {
+        const normalized = normalizeSeatData(currentData);
+        fs.baseline = normalized.slice(0, 144);
+        // 重置平滑缓冲区，避免旧数据残留
+        fs.rawSmoothInited = false;
+        fs.dirty = true;
+        setBaselineActive(true);
+      }
+    },
+    /** 取消清零，恢复原始数据 */
+    clearBaseline() {
+      const fs = stateRef.current;
+      fs.baseline = null;
+      fs.rawSmoothInited = false;
+      fs.dirty = true;
+      setBaselineActive(false);
+    },
+    /** 是否已清零 */
+    isBaselineActive() {
+      return !!stateRef.current.baseline;
+    },
+  }));
 
   // ─── 调节面板状态 ──────────────────────────────────────────────────
   const [panelVisible, setPanelVisible] = useState(false);
@@ -1101,6 +1131,7 @@ export default function CarAirRN({data = [], style}) {
       idleFrames: 0,
       lastSeatUpdate: 0,
       lastDataHash: 0,
+      baseline: null, // 清零基线：144 元素数组，null 表示未清零
     };
 
     const animate = () => {
@@ -1122,6 +1153,13 @@ export default function CarAirRN({data = [], style}) {
         if (hash !== frameState.lastDataHash || !frameState.lastSeatUpdate) {
           frameState.lastDataHash = hash;
           const seatData = normalizeSeatData(currentData);
+
+          // 清零：减去基线预压力
+          if (frameState.baseline) {
+            for (let bi = 0; bi < 144; bi++) {
+              seatData[bi] = Math.max(0, seatData[bi] - frameState.baseline[bi]);
+            }
+          }
 
           // 第一层平滑：原始 144 字节数据帧间混合（在插值放大之前）
           const rawBuf = frameState.rawSmoothBuf;
@@ -1411,6 +1449,36 @@ export default function CarAirRN({data = [], style}) {
               <Text style={styles.actionBtnText}>打印参数</Text>
             </TouchableOpacity>
           </View>
+
+          {/* 清零按钮 */}
+          <Text style={styles.sectionLabel}>数据清零</Text>
+          <View style={styles.btnRow}>
+            <TouchableOpacity
+              style={[styles.actionBtn, baselineActive && {backgroundColor: '#e74c3c'}]}
+              onPress={() => {
+                if (baselineActive) {
+                  const fs = stateRef.current;
+                  fs.baseline = null;
+                  fs.rawSmoothInited = false;
+                  fs.dirty = true;
+                  setBaselineActive(false);
+                } else {
+                  const fs = stateRef.current;
+                  const currentData = dataRef.current;
+                  if (Array.isArray(currentData) && currentData.length >= 144) {
+                    const normalized = normalizeSeatData(currentData);
+                    fs.baseline = normalized.slice(0, 144);
+                    fs.rawSmoothInited = false;
+                    fs.dirty = true;
+                    setBaselineActive(true);
+                  }
+                }
+              }}>
+              <Text style={styles.actionBtnText}>
+                {baselineActive ? '取消清零' : '清零预压力'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </Animated.View>
 
@@ -1572,3 +1640,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 });
+
+
+const CarAirRN = forwardRef(CarAirRNInner);
+export default CarAirRN;
