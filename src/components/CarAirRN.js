@@ -27,7 +27,8 @@ const DEFAULT_SETTINGS = {
   gauss: 1,
   color: 350, // 色阶映射范围：降低使数据能覆盖完整色谱（原2550太大，所有数据都映射到白/蓝色）
   height: 1,
-  coherent: 5, // 平滑系数：越大越平滑，抑制点图抖动（1=无平滑，5=适中平滑）
+  coherent: 12, // 平滑系数：越大越平滑，抑制点图抖动（1=无平滑，12=强平滑）
+  deadZone: 5, // 死区阈值：原始值低于此值的直接归零，消除低值噪声抖动
 };
 // 数据更新频率：15Hz
 const SEAT_UPDATE_INTERVAL = 1000 / 15;
@@ -566,15 +567,18 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
     for (let iy = 0; iy < amountY; iy += 1) {
       const l = dataRow * amountY + iy;
       const rawValue = Number(bigArrg[l]) * 10;
-      const value = Number.isFinite(rawValue) ? rawValue : 0;
-      smoothBig[l] = smoothBig[l] + (value - smoothBig[l]) / coherent;
+      // 死区处理：低于阈值的原始值直接归零，消除低值区域的噪声抖动
+      const deadZone = DEFAULT_SETTINGS.deadZone || 0;
+      const clampedValue = (Number.isFinite(rawValue) && rawValue > deadZone * 10) ? rawValue : 0;
+      smoothBig[l] = smoothBig[l] + (clampedValue - smoothBig[l]) / coherent;
 
       position[k] = iy * SEPARATION - (amountX * SEPARATION) / 2;
       position[k + 1] = heightSign * smoothBig[l] * height;
       position[k + 2] = ix * SEPARATION - (amountY * SEPARATION) / 2;
 
       if (scales) {
-        const isHidden = ENABLE_POINT_HIDE && value <= hideThreshold;
+        // 用平滑后的值判断隐藏，避免阈值附近反复闪烁
+        const isHidden = ENABLE_POINT_HIDE && smoothBig[l] <= hideThreshold;
         scales[j] = isHidden ? 0 : 1;
       }
 
