@@ -487,7 +487,14 @@ function applyPointFitToModel(model, pointMeshes, layoutMap = DEFAULT_POINT_FIT_
       localCenter.z + layout.position[2],
     );
     mesh.rotation.set(...layout.rotation);
-    console.log('[PointFit]', name, 'pos:', JSON.stringify({x: mesh.position.x.toFixed(2), y: mesh.position.y.toFixed(2), z: mesh.position.z.toFixed(2)}), 'scale:', mesh.scale.x.toFixed(6));
+
+    // 每个区域独立缩放
+    const scaleFactor = layout.scale != null ? layout.scale : POINT_MAP_SCALE_DEFAULT;
+    const safeFactor = Number.isFinite(scaleFactor) ? scaleFactor : 1;
+    const meshScale = POINT_SCALE * safeFactor;
+    mesh.scale.set(meshScale, meshScale, meshScale);
+
+    console.log('[PointFit]', name, 'pos:', JSON.stringify({x: mesh.position.x.toFixed(2), y: mesh.position.y.toFixed(2), z: mesh.position.z.toFixed(2)}), 'scale:', scaleFactor.toFixed(2));
   });
 }
 
@@ -986,7 +993,7 @@ export default function CarAirRN({data = [], style}) {
     const pointGroup = new THREE.Group();
     rootGroup.add(pointGroup);
     const pointMeshes = initPoints(pointGroup);
-    applyPointScaleToMeshes(pointMeshes, POINT_MAP_SCALE_DEFAULT);
+    // applyPointFitToModel 中已处理每个区域的独立 scale，无需全局 applyPointScaleToMeshes
     applyPointRotateToGroup(pointGroup, DEFAULT_POINT_MAP_ROTATE);
     const smoothBig = createSmoothBig();
     const workBuffers = createWorkBuffers();
