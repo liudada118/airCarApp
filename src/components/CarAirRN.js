@@ -40,10 +40,10 @@ const IDLE_RENDER_FRAMES = 3;
 
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
 const DEFAULT_POINT_FIT_LAYOUT = {
-  center: {position: [2, -60, 36], rotation: [3.09, 0, 0], scale: 3.0},
-  centersit: {position: [0, 5, -52], rotation: [-0.1, 0, 0], scale: 1.8},
-  leftsit: {position: [42, 8, -48], rotation: [-0.1, 0.6, 0], scale: 1.8},
-  rightsit: {position: [-42, 8, -48], rotation: [-0.1, -0.6, 0], scale: 1.8},
+  center: {position: [12, -61, 46], rotation: [3.09, 0, 0], scale: 3.8},
+  centersit: {position: [42, 38, -42], rotation: [1.32, 0, 0], scale: 3.2},
+  leftsit: {position: [54, -20, -19], rotation: [1.35, 0, 0], scale: 3.1},
+  rightsit: {position: [-29, -20, -19], rotation: [1.35, 0, 0], scale: 3.1},
 };
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
