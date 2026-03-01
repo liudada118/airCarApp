@@ -315,6 +315,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   });
 
   const [sensorData, setSensorData] = useState<number[]>(INITIAL_SENSOR_FRAME);
+  const [showMatrix, setShowMatrix] = useState(false);
 
   // ─── 处理算法结果 ──────────────────────────────────────
   const handleAlgoResult = useCallback((resultJson: string) => {
@@ -840,9 +841,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               data={sensorData as unknown as never[]}
               style={styles.carAir3D}
             />
+            {/* 原始矩阵切换按钮 - 悬浮在 3D 视图右上角 */}
+            <TouchableOpacity
+              style={styles.matrixToggleBtn}
+              onPress={() => setShowMatrix(v => !v)}
+              activeOpacity={0.7}>
+              <Text style={styles.matrixToggleBtnText}>
+                {showMatrix ? '隐藏矩阵' : '矩阵'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* 原始传感器矩阵热力图 */}
+          {showMatrix && (
           <View style={styles.matrixContainer}>
             <Text style={styles.matrixTitle}>原始矩阵</Text>
             <View style={styles.matrixRow}>
@@ -980,6 +991,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               </View>
             </View>
           </View>
+          )}
         </View>
       </View>
 
@@ -1274,6 +1286,22 @@ const styles = StyleSheet.create({
   },
   carAir3D: {
     flex: 1,
+  },
+  // ─── 矩阵切换按钮 ───
+  matrixToggleBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 10,
+  },
+  matrixToggleBtnText: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '500',
   },
   // ─── 矩阵热力图 ───
   matrixContainer: {
