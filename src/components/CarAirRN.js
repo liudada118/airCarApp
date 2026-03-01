@@ -40,10 +40,10 @@ const IDLE_RENDER_FRAMES = 3;
 
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
 const DEFAULT_POINT_FIT_LAYOUT = {
-  center: {position: [0, -82, 42], rotation: [-Math.PI / 2 + 0.15, 0, 0]},
-  centersit: {position: [0, 5, -52], rotation: [-0.1, 0, 0]},
-  leftsit: {position: [42, 8, -48], rotation: [-0.1, 0.6, 0]},
-  rightsit: {position: [-42, 8, -48], rotation: [-0.1, -0.6, 0]},
+  center: {position: [2, -60, 36], rotation: [3.09, 0, 0], scale: 3.0},
+  centersit: {position: [0, 5, -52], rotation: [-0.1, 0, 0], scale: 1.8},
+  leftsit: {position: [42, 8, -48], rotation: [-0.1, 0.6, 0], scale: 1.8},
+  rightsit: {position: [-42, 8, -48], rotation: [-0.1, -0.6, 0], scale: 1.8},
 };
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
@@ -716,7 +716,7 @@ export default function CarAirRN({data = [], style}) {
   const [panelVisible, setPanelVisible] = useState(false);
   const panelAnim = useRef(new Animated.Value(-PANEL_WIDTH)).current;
 
-  // 点图布局参数（可调）
+  // 点图布局参数（可调，每个区域独立 scale）
   const [layout, setLayout] = useState(() => {
     const init = {};
     ZONE_NAMES.forEach(name => {
@@ -728,15 +728,15 @@ export default function CarAirRN({data = [], style}) {
         rx: def.rotation[0],
         ry: def.rotation[1],
         rz: def.rotation[2],
+        s: def.scale != null ? def.scale : POINT_MAP_SCALE_DEFAULT,
       };
     });
     return init;
   });
-  const [globalScale, setGlobalScale] = useState(POINT_MAP_SCALE_DEFAULT);
   const [activeZone, setActiveZone] = useState('center');
 
   // 将布局变化应用到 3D 场景
-  const applyLayout = useCallback((newLayout, newScale) => {
+  const applyLayout = useCallback((newLayout) => {
     const s = stateRef.current;
     if (!s.pointMeshes) return;
     const localCenter = new THREE.Vector3(0, -0.6, 0);
@@ -751,13 +751,10 @@ export default function CarAirRN({data = [], style}) {
         localCenter.z + l.pz,
       );
       mesh.rotation.set(l.rx, l.ry, l.rz);
-    });
 
-    // 整体缩放
-    const safeFactor = Number.isFinite(newScale) ? newScale : 1;
-    const meshScale = POINT_SCALE * safeFactor;
-    Object.values(s.pointMeshes).forEach(mesh => {
-      if (!mesh?.scale) return;
+      // 每个区域独立缩放
+      const safeFactor = Number.isFinite(l.s) ? l.s : POINT_MAP_SCALE_DEFAULT;
+      const meshScale = POINT_SCALE * safeFactor;
       mesh.scale.set(meshScale, meshScale, meshScale);
     });
 
@@ -779,16 +776,10 @@ export default function CarAirRN({data = [], style}) {
   const updateZoneParam = useCallback((zone, param, value) => {
     setLayout(prev => {
       const next = {...prev, [zone]: {...prev[zone], [param]: value}};
-      applyLayout(next, globalScale);
+      applyLayout(next);
       return next;
     });
-  }, [globalScale, applyLayout]);
-
-  // 更新全局缩放
-  const updateScale = useCallback((value) => {
-    setGlobalScale(value);
-    applyLayout(layout, value);
-  }, [layout, applyLayout]);
+  }, [applyLayout]);
 
   // 重置当前区域
   const resetZone = useCallback(() => {
@@ -801,13 +792,14 @@ export default function CarAirRN({data = [], style}) {
       rx: def.rotation[0],
       ry: def.rotation[1],
       rz: def.rotation[2],
+      s: def.scale != null ? def.scale : POINT_MAP_SCALE_DEFAULT,
     };
     setLayout(prev => {
       const next = {...prev, [activeZone]: resetVal};
-      applyLayout(next, globalScale);
+      applyLayout(next);
       return next;
     });
-  }, [activeZone, globalScale, applyLayout]);
+  }, [activeZone, applyLayout]);
 
   // 重置全部
   const resetAll = useCallback(() => {
@@ -821,11 +813,11 @@ export default function CarAirRN({data = [], style}) {
         rx: def.rotation[0],
         ry: def.rotation[1],
         rz: def.rotation[2],
+        s: def.scale != null ? def.scale : POINT_MAP_SCALE_DEFAULT,
       };
     });
     setLayout(init);
-    setGlobalScale(POINT_MAP_SCALE_DEFAULT);
-    applyLayout(init, POINT_MAP_SCALE_DEFAULT);
+    applyLayout(init);
   }, [applyLayout]);
 
   // 打印当前参数到控制台
@@ -836,11 +828,11 @@ export default function CarAirRN({data = [], style}) {
       output[name] = {
         position: [parseFloat(l.px.toFixed(2)), parseFloat(l.py.toFixed(2)), parseFloat(l.pz.toFixed(2))],
         rotation: [parseFloat(l.rx.toFixed(4)), parseFloat(l.ry.toFixed(4)), parseFloat(l.rz.toFixed(4))],
+        scale: parseFloat(l.s.toFixed(2)),
       };
     });
     console.log('[PointFit] layout:', JSON.stringify(output, null, 2));
-    console.log('[PointFit] scale:', globalScale.toFixed(2));
-  }, [layout, globalScale]);
+  }, [layout]);
 
   // 手势响应器：单指旋转 + 双指缩放
   const panResponder = useRef(
@@ -1217,16 +1209,16 @@ export default function CarAirRN({data = [], style}) {
             onValueChange={v => updateZoneParam(activeZone, 'rz', v)}
           />
 
-          {/* 整体缩放 */}
-          <Text style={styles.sectionLabel}>整体缩放 Scale</Text>
+          {/* 当前区域缩放 */}
+          <Text style={styles.sectionLabel}>缩放 Scale</Text>
           <StepControl
             label="S"
-            value={globalScale}
+            value={layout[activeZone].s}
             min={0.5}
-            max={5}
+            max={10}
             step={0.1}
             decimals={1}
-            onValueChange={updateScale}
+            onValueChange={v => updateZoneParam(activeZone, 's', v)}
           />
 
           {/* 操作按钮 */}
