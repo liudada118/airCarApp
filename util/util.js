@@ -270,42 +270,63 @@ export function lineInterpnew(smallMat, width, height, interp1, interp2) {
 
 
 export const rainbowTextColorsxy = [
-    [255,0,0],
-    [255,69,0],
-    [255,136,0],
-    [255,170,0],
-    [255,204,0],
+    // 高压力: 红色系
+    [220, 20, 20],
+    [240, 50, 10],
+    [255, 80, 0],
+    [255, 110, 0],
+    [255, 140, 0],
+    // 中高压力: 橙色→黄色
+    [255, 170, 0],
+    [255, 200, 0],
+    [255, 230, 0],
     [255, 255, 0],
-    [204, 255, 0],
-    [153, 255, 0],
-    [102, 255, 0],
-    [51, 255, 0],
-    [0, 255, 0],
-    [0, 255, 51],
-    [0, 255, 102],
-    [0, 255, 153],
-    [0, 255, 204],
-    [0, 255, 255],
-    [0, 204, 255],
-    [0, 153, 255],
-    // ...new Array(1).fill([0, 102, 255]),
-    // ...new Array(1).fill([0, 255, 255]),
-    // ...new Array(1).fill([0, 204, 255]),
-    // ...new Array(1).fill([0, 153, 255]),
-    ...new Array(5).fill([0, 102, 255]),
+    [230, 255, 0],
+    // 中压力: 黄绿→绿色
+    [200, 255, 0],
+    [150, 255, 0],
+    [100, 255, 0],
+    [50, 255, 30],
+    [0, 255, 80],
+    // 中低压力: 绿色→青色
+    [0, 255, 140],
+    [0, 255, 200],
+    [0, 240, 255],
+    [0, 200, 255],
+    [0, 160, 255],
+    // 低压力: 蓝色系
+    [0, 120, 255],
+    [0, 90, 255],
+    [10, 60, 220],
+    [20, 40, 180],
+    // 无压力: 深蓝→白色
+    [30, 30, 140],
+    [60, 60, 120],
+    [100, 100, 140],
+    [160, 160, 180],
+    [200, 200, 210],
+    [230, 230, 240],
     [255, 255, 255],
-    [255, 255, 255],
-    [255, 255, 255],
-    // ...new Array(5).fill([255, 255, 255]),
   ];
 
 export function jetWhite3(min, max, x) {
   if (!x) {
-    return rainbowTextColorsxy[rainbowTextColorsxy.length - 1]
+    return rainbowTextColorsxy[rainbowTextColorsxy.length - 1];
   }
   const length = rainbowTextColorsxy.length;
-  const count = (max - min) * 2 / length;
-  const num = Math.floor(x / count) >= length - 1 ? length - 1 : Math.floor(x / count) < 0 ? 0 : Math.floor(x / count);
-
-  return rainbowTextColorsxy[length - 1 - num];
+  // 连续插值：将 x 映射到色表索引，并在相邻颜色之间线性插值
+  const range = (max - min) * 2;
+  const t = range > 0 ? Math.max(0, Math.min(x / range, 1)) : 0;
+  const idx = t * (length - 1);
+  const idxFloor = Math.floor(idx);
+  const idxCeil = Math.min(idxFloor + 1, length - 1);
+  const frac = idx - idxFloor;
+  // 从末尾（白色/低压）到开头（红色/高压）
+  const c0 = rainbowTextColorsxy[length - 1 - idxFloor];
+  const c1 = rainbowTextColorsxy[length - 1 - idxCeil];
+  return [
+    c0[0] + (c1[0] - c0[0]) * frac,
+    c0[1] + (c1[1] - c0[1]) * frac,
+    c0[2] + (c1[2] - c0[2]) * frac,
+  ];
 }

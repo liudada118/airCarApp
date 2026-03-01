@@ -25,7 +25,7 @@ const ENABLE_POINT_HIDE = false;
 const MODEL_ASSET = require('../../image/chair3.glb');
 const DEFAULT_SETTINGS = {
   gauss: 1,
-  color: 2550,
+  color: 350, // 色阶映射范围：降低使数据能覆盖完整色谱（原2550太大，所有数据都映射到白/蓝色）
   height: 1,
   coherent: 5, // 平滑系数：越大越平滑，抑制点图抖动（1=无平滑，5=适中平滑）
 };
