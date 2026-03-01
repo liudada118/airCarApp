@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useState, useRef} from 'react';
 import {
   Dimensions,
+  Modal,
   NativeEventEmitter,
   NativeModules,
   Platform,
@@ -636,125 +637,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
             </View>
           </View>
 
-          {/* 体型分析 */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <IconFont name="bianji" size={14} color={Colors.textGray} />
-              <Text style={styles.sectionTitle}>体型分析</Text>
-            </View>
-            <View style={styles.bodyShapeCard}>
-              {/* 分类状态 */}
-              <View style={styles.bodyShapeHeader}>
-                <View style={styles.bodyShapeStateRow}>
-                  <View
-                    style={[
-                      styles.bodyShapeStateBadge,
-                      bodyShapeInfo.body_shape_state === 'COMPLETED' && {
-                        backgroundColor: 'rgba(52, 199, 89, 0.15)',
-                      },
-                      bodyShapeInfo.body_shape_state === 'COLLECTING' && {
-                        backgroundColor: 'rgba(0, 122, 255, 0.15)',
-                      },
-                      bodyShapeInfo.body_shape_state === 'CLASSIFYING' && {
-                        backgroundColor: 'rgba(255, 149, 0, 0.15)',
-                      },
-                    ]}>
-                    <Text
-                      style={[
-                        styles.bodyShapeStateText,
-                        bodyShapeInfo.body_shape_state === 'COMPLETED' && {
-                          color: Colors.success,
-                        },
-                        bodyShapeInfo.body_shape_state === 'COLLECTING' && {
-                          color: Colors.primary,
-                        },
-                        bodyShapeInfo.body_shape_state === 'CLASSIFYING' && {
-                          color: Colors.warning,
-                        },
-                      ]}>
-                      {getBodyShapeStateLabel(bodyShapeInfo.body_shape_state)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* 体型结果 */}
-                <View style={styles.bodyShapeResult}>
-                  <Text
-                    style={[
-                      styles.bodyShapeValue,
-                      {
-                        color: getBodyShapeColor(bodyShapeInfo.body_shape),
-                      },
-                    ]}>
-                    {getBodyShapeLabel(bodyShapeInfo.body_shape)}
-                  </Text>
-                  {bodyShapeInfo.confidence > 0 && (
-                    <Text style={styles.bodyShapeConfidence}>
-                      置信度 {Math.round(bodyShapeInfo.confidence * 100)}%
-                    </Text>
-                  )}
-                </View>
-              </View>
-
-              {/* 概率分布条 */}
-              {Object.keys(bodyShapeInfo.probabilities).length > 0 && (
-                <View style={styles.probContainer}>
-                  {renderProbabilityBar(
-                    '瘦小',
-                    bodyShapeInfo.probabilities['瘦小'] ?? 0,
-                    '#5AC8FA',
-                    bodyShapeInfo.body_shape === '瘦小',
-                  )}
-                  {renderProbabilityBar(
-                    '中等',
-                    bodyShapeInfo.probabilities['中等'] ?? 0,
-                    Colors.success,
-                    bodyShapeInfo.body_shape === '中等',
-                  )}
-                  {renderProbabilityBar(
-                    '高大',
-                    bodyShapeInfo.probabilities['高大'] ?? 0,
-                    Colors.warning,
-                    bodyShapeInfo.body_shape === '高大',
-                  )}
-                </View>
-              )}
-
-              {/* 品味记忆状态 */}
-              {bodyShapeInfo.preference.using_preference && (
-                <View style={styles.preferenceRow}>
-                  <IconFont
-                    name="bianji"
-                    size={12}
-                    color={Colors.primary}
-                  />
-                  <Text style={styles.preferenceText}>
-                    已应用「{bodyShapeInfo.preference.active_body_shape}」品味记忆
-                  </Text>
-                </View>
-              )}
-              {bodyShapeInfo.preference.is_recording &&
-                bodyShapeInfo.preference.recording_progress && (
-                  <View style={styles.recordingRow}>
-                    <Text style={styles.recordingText}>
-                      品味记录中...{' '}
-                      {bodyShapeInfo.preference.recording_progress.progress_pct}%
-                    </Text>
-                    <View style={styles.recordingBarBg}>
-                      <View
-                        style={[
-                          styles.recordingBarFill,
-                          {
-                            width: `${bodyShapeInfo.preference.recording_progress.progress_pct}%`,
-                          },
-                        ]}
-                      />
-                    </View>
-                  </View>
-                )}
-            </View>
-          </View>
-
           {/* 气囊状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -841,22 +723,35 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
             {/* 原始矩阵切换按钮 - 悬浮在 3D 视图右上角 */}
             <TouchableOpacity
               style={styles.matrixToggleBtn}
-              onPress={() => setShowMatrix(v => !v)}
+              onPress={() => setShowMatrix(true)}
               activeOpacity={0.7}>
-              <Text style={styles.matrixToggleBtnText}>
-                {showMatrix ? '隐藏矩阵' : '矩阵'}
-              </Text>
+              <Text style={styles.matrixToggleBtnText}>矩阵</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </View>
 
-          {/* 原始传感器矩阵热力图 */}
-          {showMatrix && (
-          <View style={styles.matrixContainer}>
-            <Text style={styles.matrixTitle}>原始矩阵</Text>
+      {/* 原始传感器矩阵弹窗 */}
+      <Modal
+        visible={showMatrix}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMatrix(false)}>
+        <View style={styles.matrixModalOverlay}>
+          <View style={styles.matrixModalContent}>
+            <View style={styles.matrixModalHeader}>
+              <Text style={styles.matrixModalTitle}>原始传感器矩阵</Text>
+              <TouchableOpacity
+                onPress={() => setShowMatrix(false)}
+                activeOpacity={0.7}
+                style={styles.matrixModalClose}>
+                <Text style={styles.matrixModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.matrixRow}>
-              {/* 靠背区域：左侧翼(3×2) + 靠背(10×6) + 右侧翼(3×2) */}
+              {/* 靠背区域 */}
               <View style={styles.matrixBlock}>
-                <Text style={styles.matrixLabel}>靠背</Text>
+                <Text style={styles.matrixLabel}>靠背 (10×6)</Text>
                 <View style={styles.matrixGrid}>
                   {Array.from({length: 10}, (_, row) => (
                     <View key={`back-r${row}`} style={styles.matrixGridRow}>
@@ -880,11 +775,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               </View>
               {/* 侧翼 */}
               <View style={styles.matrixBlock}>
-                <Text style={styles.matrixLabel}>左/右翼</Text>
+                <Text style={styles.matrixLabel}>左/右翼 (3×2)</Text>
                 <View style={styles.matrixGrid}>
                   {Array.from({length: 3}, (_, row) => (
                     <View key={`wing-r${row}`} style={styles.matrixGridRow}>
-                      {/* 左侧翼 */}
                       {Array.from({length: 2}, (_, col) => {
                         const idx = 0 + row * 2 + col;
                         const val = sensorData[idx] || 0;
@@ -900,7 +794,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                         );
                       })}
                       <View style={styles.matrixCellSpacer} />
-                      {/* 右侧翼 */}
                       {Array.from({length: 2}, (_, col) => {
                         const idx = 6 + row * 2 + col;
                         const val = sensorData[idx] || 0;
@@ -920,10 +813,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                 </View>
               </View>
             </View>
-            <View style={[styles.matrixRow, {marginTop: 4}]}>
-              {/* 坐垫区域：左坐垫(3×2) + 坐垫(10×6) + 右坐垫(3×2) */}
+            <View style={[styles.matrixRow, {marginTop: 8}]}>
+              {/* 坐垫区域 */}
               <View style={styles.matrixBlock}>
-                <Text style={styles.matrixLabel}>坐垫</Text>
+                <Text style={styles.matrixLabel}>坐垫 (10×6)</Text>
                 <View style={styles.matrixGrid}>
                   {Array.from({length: 10}, (_, row) => (
                     <View key={`sit-r${row}`} style={styles.matrixGridRow}>
@@ -947,11 +840,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               </View>
               {/* 坐垫侧翼 */}
               <View style={styles.matrixBlock}>
-                <Text style={styles.matrixLabel}>左/右垫翼</Text>
+                <Text style={styles.matrixLabel}>左/右垫翼 (3×2)</Text>
                 <View style={styles.matrixGrid}>
                   {Array.from({length: 3}, (_, row) => (
                     <View key={`swing-r${row}`} style={styles.matrixGridRow}>
-                      {/* 左坐垫侧翼 */}
                       {Array.from({length: 2}, (_, col) => {
                         const idx = 72 + row * 2 + col;
                         const val = sensorData[idx] || 0;
@@ -967,7 +859,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                         );
                       })}
                       <View style={styles.matrixCellSpacer} />
-                      {/* 右坐垫侧翼 */}
                       {Array.from({length: 2}, (_, col) => {
                         const idx = 78 + row * 2 + col;
                         const val = sensorData[idx] || 0;
@@ -988,9 +879,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               </View>
             </View>
           </View>
-          )}
         </View>
-      </View>
+      </Modal>
 
       {/* 连接异常弹窗 */}
       <ConnectionErrorModal
@@ -1300,19 +1190,43 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '500',
   },
-  // ─── 矩阵热力图 ───
-  matrixContainer: {
-    backgroundColor: Colors.cardBackground,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.sm,
-    marginTop: Spacing.sm,
+  // ─── 矩阵弹窗 ───
+  matrixModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  matrixTitle: {
-    fontSize: FontSize.sm,
+  matrixModalContent: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    minWidth: 340,
+    maxWidth: '80%',
+  },
+  matrixModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  matrixModalTitle: {
+    fontSize: FontSize.md,
+    color: Colors.textWhite,
+    fontWeight: '600',
+  },
+  matrixModalClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  matrixModalCloseText: {
+    fontSize: 14,
     color: Colors.textGray,
     fontWeight: '600',
-    marginBottom: 4,
-    textAlign: 'center',
   },
   matrixRow: {
     flexDirection: 'row',
