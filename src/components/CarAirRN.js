@@ -407,7 +407,7 @@ function initPoint(config, pointConfig, name, group) {
     transparent: true,
     side: THREE.DoubleSide,
     depthWrite: false,
-    depthTest: false,
+    depthTest: true,
     blending: THREE.NormalBlending,
     opacity: 0.6,
     size: name === 'center' || name === 'centersit' ? 2 : 2.5,
