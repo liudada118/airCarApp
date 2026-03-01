@@ -231,7 +231,11 @@ class SerialModule(
     @ReactMethod
     fun close() {
         stopAutoWrite()
-        manager.close()
+        try {
+            manager.close()
+        } catch (e: Exception) {
+            Log.w("SerialModule", "close: ${e.message}")
+        }
     }
 
     @ReactMethod
@@ -247,6 +251,11 @@ class SerialModule(
         stopAutoWrite()
         autoWriteScheduler.shutdownNow()
         pythonExecutor.shutdownNow()
+        try {
+            manager.close()
+        } catch (_: Exception) {
+            // ignore
+        }
         try {
             reactContext.unregisterReceiver(permissionReceiver)
         } catch (_: Exception) {

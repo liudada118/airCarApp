@@ -133,7 +133,11 @@ class SerialManager(private val context: Context) {
             // ignore
         }
         readThread = null
-        port?.close()
+        try {
+            port?.close()
+        } catch (_: Exception) {
+            // ignore: port may already be closed or disconnected
+        }
         port = null
     }
 }
