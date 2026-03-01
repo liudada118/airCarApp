@@ -55,9 +55,9 @@ class SerialManager(private val context: Context) {
         port = driver.ports[0]
 
         var lastError: Exception? = null
-        val delays = longArrayOf(100L, 300L, 500L, 800L)
+        val delays = longArrayOf(0L, 100L, 200L)
         for (attempt in delays.indices) {
-            if (attempt > 0) {
+            if (delays[attempt] > 0) {
                 try {
                     Thread.sleep(delays[attempt])
                 } catch (_: InterruptedException) {
@@ -131,31 +131,24 @@ class SerialManager(private val context: Context) {
         readThread = null
         port = null
 
-        // 1. 先标记线程停止
+        if (t == null && p == null) return
+
+        // 1. 标记线程停止
         t?.shutdown()
 
         // 2. 关闭端口，使阻塞的 port.read() 立即抛异常退出
         try {
             p?.close()
-        } catch (_: Exception) {
-            // port may already be closed or disconnected
-        }
+        } catch (_: Exception) {}
 
-        // 3. 等待线程退出（端口关闭后 read 会立即失败，所以 500ms 足够）
+        // 3. 等待线程退出（端口已关闭，read 会立即失败，150ms 足够）
         try {
-            t?.join(500)
-        } catch (_: Exception) {
-            // ignore
-        }
+            t?.join(150)
+        } catch (_: Exception) {}
 
-        // 4. 如果线程仍然存活，强制中断
+        // 4. 如果线程仍存活，强制中断（不再等待）
         if (t?.isAlive == true) {
             t.interrupt()
-            try {
-                t.join(200)
-            } catch (_: Exception) {
-                // ignore
-            }
         }
     }
 }
