@@ -27,12 +27,12 @@ const DEFAULT_SETTINGS = {
   gauss: 1,
   color: 350, // 色阶映射范围
   height: 1,
-  coherent: 1.5, // 第二层平滑（插值后）：1.5 几乎无延迟
-  rawSmooth: 1.5, // 第一层平滑（插值前）：1.5 几乎无延迟
+  coherent: 1.3, // 第二层平滑（插值后）：轻度平滑，新值占 77%
+  rawSmooth: 1.3, // 第一层平滑（插值前）：轻度平滑，新值占 77%
   deadZone: 0, // 死区阈值：0=不启用死区
 };
-// 数据更新频率：30Hz
-const SEAT_UPDATE_INTERVAL = 1000 / 30;
+// 数据更新频率：15Hz（匹配串口数据源）
+const SEAT_UPDATE_INTERVAL = 1000 / 15;
 const MODEL_TARGET_SIZE = 220;
 const CAMERA_MIN_DISTANCE = 80;
 const CAMERA_MAX_DISTANCE = 600;
