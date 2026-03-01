@@ -756,6 +756,16 @@ export default function CarAirRN({data = [], style}) {
   });
   const [activeZone, setActiveZone] = useState('center');
 
+  // 整体视角参数
+  const [viewParams, setViewParams] = useState({
+    camDist: 300,   // 相机距离
+    rootRx: -Math.PI / 3, // rootGroup X 旋转
+    rootRy: 0,      // rootGroup Y 旋转
+    rootPx: 0,      // rootGroup X 位移
+    rootPy: 0,      // rootGroup Y 位移
+    rootPz: 0,      // rootGroup Z 位移
+  });
+
   // 将布局变化应用到 3D 场景
   const applyLayout = useCallback((newLayout) => {
     const s = stateRef.current;
@@ -792,6 +802,33 @@ export default function CarAirRN({data = [], style}) {
       useNativeDriver: true,
     }).start();
   }, [panelVisible, panelAnim]);
+
+  // 更新整体视角参数
+  const updateViewParam = useCallback((param, value) => {
+    setViewParams(prev => {
+      const next = {...prev, [param]: value};
+      const s = stateRef.current;
+      if (!s.camera || !s.rootGroup || !s.controls) return next;
+      if (param === 'camDist') {
+        s.camera.position.z = value;
+        s.controls.distance = value;
+      } else if (param === 'rootRx') {
+        s.rootGroup.rotation.x = value;
+        s.controls.rotationX = value;
+      } else if (param === 'rootRy') {
+        s.rootGroup.rotation.y = value;
+        s.controls.rotationY = value;
+      } else if (param === 'rootPx') {
+        s.rootGroup.position.x = value;
+      } else if (param === 'rootPy') {
+        s.rootGroup.position.y = value;
+      } else if (param === 'rootPz') {
+        s.rootGroup.position.z = value;
+      }
+      s.dirty = true;
+      return next;
+    });
+  }, []);
 
   // 更新某个区域的某个参数
   const updateZoneParam = useCallback((zone, param, value) => {
@@ -853,7 +890,12 @@ export default function CarAirRN({data = [], style}) {
       };
     });
     console.log('[PointFit] layout:', JSON.stringify(output, null, 2));
-  }, [layout]);
+    console.log('[PointFit] view:', JSON.stringify({
+      camDist: viewParams.camDist,
+      rootRotation: [parseFloat(viewParams.rootRx.toFixed(4)), parseFloat(viewParams.rootRy.toFixed(4))],
+      rootPosition: [parseFloat(viewParams.rootPx.toFixed(2)), parseFloat(viewParams.rootPy.toFixed(2)), parseFloat(viewParams.rootPz.toFixed(2))],
+    }, null, 2));
+  }, [layout, viewParams]);
 
   // 手势响应器：单指旋转 + 双指缩放
   const panResponder = useRef(
@@ -1247,6 +1289,63 @@ export default function CarAirRN({data = [], style}) {
             step={0.1}
             decimals={1}
             onValueChange={v => updateZoneParam(activeZone, 's', v)}
+          />
+
+          {/* 整体视角调节 */}
+          <Text style={[styles.sectionLabel, {marginTop: 12, borderTopWidth: 1, borderTopColor: '#334', paddingTop: 8}]}>整体视角 View</Text>
+          <StepControl
+            label="距离"
+            value={viewParams.camDist}
+            min={50}
+            max={800}
+            step={5}
+            decimals={0}
+            onValueChange={v => updateViewParam('camDist', v)}
+          />
+          <StepControl
+            label="Rx"
+            value={viewParams.rootRx}
+            min={-Math.PI}
+            max={Math.PI}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('rootRx', v)}
+          />
+          <StepControl
+            label="Ry"
+            value={viewParams.rootRy}
+            min={-Math.PI}
+            max={Math.PI}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('rootRy', v)}
+          />
+          <StepControl
+            label="Px"
+            value={viewParams.rootPx}
+            min={-200}
+            max={200}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateViewParam('rootPx', v)}
+          />
+          <StepControl
+            label="Py"
+            value={viewParams.rootPy}
+            min={-200}
+            max={200}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateViewParam('rootPy', v)}
+          />
+          <StepControl
+            label="Pz"
+            value={viewParams.rootPz}
+            min={-200}
+            max={200}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateViewParam('rootPz', v)}
           />
 
           {/* 操作按钮 */}
