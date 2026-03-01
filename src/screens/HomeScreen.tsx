@@ -762,36 +762,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
             </View>
           </View>
 
-          {/* 气囊指令打印（紧凑版） */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <IconFont name="bianji" size={14} color={Colors.textGray} />
-              <Text style={styles.sectionTitle}>气囊指令</Text>
-            </View>
-            <View style={styles.commandDebugCard}>
-              {/* 原始字节数据（单行紧凑） */}
-              <View style={styles.commandRawContainer}>
-                <Text style={styles.commandRawText} selectable numberOfLines={2}>
-                  {rawCommand
-                    ? rawCommand.map(v => v.toString(16).toUpperCase().padStart(2, '0')).join(' ')
-                    : '无数据'}
-                </Text>
-              </View>
-              {/* 解析结果（两列紧凑排列） */}
-              <View style={styles.commandParsedGrid}>
-                {ALL_AIRBAG_ZONES.map((zone, idx) => {
-                  const cmd = commandStates[zone];
-                  const cmdLabel = cmd === 3 ? '充↑' : cmd === 4 ? '放↓' : '--';
-                  const cmdColor = cmd === 3 ? '#5AC8FA' : cmd === 4 ? '#FF9500' : Colors.textGray;
-                  return (
-                    <View key={zone} style={styles.commandParsedCell}>
-                      <Text style={styles.commandCellName}>{zone}</Text>
-                      <Text style={[styles.commandCellState, {color: cmdColor}]}>{cmdLabel}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
+          {/* 气囊指令（单行摘要） */}
+          <View style={styles.commandMiniBar}>
+            <Text style={styles.commandMiniLabel}>指令</Text>
+            <Text style={styles.commandMiniText} numberOfLines={1}>
+              {ALL_AIRBAG_ZONES.map(zone => {
+                const cmd = commandStates[zone];
+                const s = cmd === 3 ? '↑' : cmd === 4 ? '↓' : '-';
+                return `${zone.replace('cushion','c').replace('shoulder','s').replace('sideWing','w').replace('lumbar','l')}${s}`;
+              }).join(' ')}
+            </Text>
           </View>
         </ScrollView>
 
@@ -1088,48 +1068,27 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '500',
   },
-  // ─── 气囊指令打印 ───
-  commandDebugCard: {
-    backgroundColor: Colors.cardBackground,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
-  },
-  commandRawContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    marginBottom: 4,
-  },
-  commandRawText: {
-    fontSize: 8,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#00FF88',
-    lineHeight: 12,
-  },
-  commandParsedGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 2,
-  },
-  commandParsedCell: {
+  // ─── 气囊指令摘要 ───
+  commandMiniBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '48%' as any,
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: Colors.cardBackground,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    marginTop: Spacing.sm,
   },
-  commandCellName: {
+  commandMiniLabel: {
+    fontSize: 10,
+    color: Colors.textGray,
+    fontWeight: '600',
+    marginRight: 6,
+  },
+  commandMiniText: {
     flex: 1,
     fontSize: 9,
-    color: Colors.textLightGray,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  commandCellState: {
-    fontSize: 9,
-    fontWeight: '700',
+    color: '#8ab4d0',
   },
   // ─── 右侧面板 ───
   rightPanel: {
