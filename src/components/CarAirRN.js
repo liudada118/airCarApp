@@ -241,7 +241,20 @@ async function loadSeatModel(group) {
         model.position.y -= 0.6;
 
         group.add(model);
-        console.log('glb: added to scene');
+
+        // 调试：打印模型加载后的实际位置和尺寸
+        const box2 = new THREE.Box3().setFromObject(model);
+        const center2 = new THREE.Vector3();
+        const size2 = new THREE.Vector3();
+        box2.getCenter(center2);
+        box2.getSize(size2);
+        console.log('[Model] position:', JSON.stringify({x: model.position.x.toFixed(2), y: model.position.y.toFixed(2), z: model.position.z.toFixed(2)}));
+        console.log('[Model] scale:', model.scale.x.toFixed(4));
+        console.log('[Model] bbox center:', JSON.stringify({x: center2.x.toFixed(2), y: center2.y.toFixed(2), z: center2.z.toFixed(2)}));
+        console.log('[Model] bbox size:', JSON.stringify({x: size2.x.toFixed(2), y: size2.y.toFixed(2), z: size2.z.toFixed(2)}));
+        console.log('[Model] bbox min:', JSON.stringify({x: box2.min.x.toFixed(2), y: box2.min.y.toFixed(2), z: box2.min.z.toFixed(2)}));
+        console.log('[Model] bbox max:', JSON.stringify({x: box2.max.x.toFixed(2), y: box2.max.y.toFixed(2), z: box2.max.z.toFixed(2)}));
+
         resolve(model);
       },
       err => {
@@ -465,6 +478,7 @@ function applyPointFitToModel(model, pointMeshes, layoutMap = DEFAULT_POINT_FIT_
       localCenter.z + layout.position[2],
     );
     mesh.rotation.set(...layout.rotation);
+    console.log('[PointFit]', name, 'pos:', JSON.stringify({x: mesh.position.x.toFixed(2), y: mesh.position.y.toFixed(2), z: mesh.position.z.toFixed(2)}), 'scale:', mesh.scale.x.toFixed(6));
   });
 }
 
