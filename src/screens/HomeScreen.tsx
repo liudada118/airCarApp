@@ -517,7 +517,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
 
       <View style={styles.content}>
         {/* ─── 左侧面板 ─── */}
-        <ScrollView style={styles.leftPanel} showsVerticalScrollIndicator={false}>
+        <View style={styles.leftPanel}>
+        <ScrollView showsVerticalScrollIndicator={false}>
           {/* 座椅状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -767,6 +768,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
             </View>
           </View>
         </ScrollView>
+        </View>
 
         {/* ─── 右侧面板 ─── */}
         <View style={styles.rightPanel}>
@@ -854,7 +856,11 @@ const styles = StyleSheet.create({
   // ─── 左侧面板 ───
   leftPanel: {
     width: SCREEN_WIDTH * 0.35,
-    paddingRight: Spacing.xl,
+    maxWidth: SCREEN_WIDTH * 0.35,
+    flexShrink: 0,
+    flexGrow: 0,
+    paddingRight: Spacing.md,
+    overflow: 'hidden' as const,
   },
   section: {
     marginBottom: Spacing.lg,
@@ -876,8 +882,8 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   seatStatusCard: {
-    width: 120,
-    height: 100,
+    flex: 1,
+    height: 80,
     backgroundColor: Colors.cardBackground,
     borderRadius: BorderRadius.lg,
     justifyContent: 'center',
