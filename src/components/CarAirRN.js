@@ -1,9 +1,12 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Animated,
   PanResponder,
+  ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import {Asset} from 'expo-asset';
@@ -31,7 +34,7 @@ const MODEL_TARGET_SIZE = 220;
 const CAMERA_MIN_DISTANCE = 80;
 const CAMERA_MAX_DISTANCE = 600;
 
-// 按需渲染：手势结束后继续渲染的帧数（用于惯性/过渡）
+// 按需渲染：手势结束后继续渲染的帧数
 const IDLE_RENDER_FRAMES = 3;
 
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
@@ -44,6 +47,16 @@ const DEFAULT_POINT_FIT_LAYOUT = {
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
 const POINT_MAP_SCALE_DEFAULT = 1.8;
+
+// ─── 调节面板配置 ────────────────────────────────────────────────────────────
+const PANEL_WIDTH = 300;
+const ZONE_NAMES = ['center', 'centersit', 'leftsit', 'rightsit'];
+const ZONE_LABELS = {
+  center: '坐垫',
+  centersit: '靠背',
+  leftsit: '右侧翼',
+  rightsit: '左侧翼',
+};
 
 // ─── 插值配置（保持原有点数不变） ────────────────────────────────────────────
 const sitleftConfig = {sitnum1: 3, sitnum2: 2, sitInterp: 5, sitInterp1: 1, sitOrder: 3};
@@ -112,10 +125,7 @@ function getTouchDistance(a, b) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-// ─── 预计算高斯卷积核（避免每帧调用 Math.exp） ─────────────────────────────
-// 原始 gaussBlur_return 对每个像素的每个卷积核元素都调用 Math.exp()，
-// 但权重只取决于 (ix-j, iy-i) 的偏移量，与像素位置无关。
-// 预计算一次即可，每次数据更新节省约 24 万次 Math.exp 调用。
+// ─── 预计算高斯卷积核 ──────────────────────────────────────────────────────
 
 function buildGaussKernel(r) {
   const rs = Math.ceil(r * 2.57);
@@ -131,22 +141,16 @@ function buildGaussKernel(r) {
       wsum += w;
     }
   }
-  // 归一化，使权重和为 1（消除边界截断误差）
   for (let i = 0; i < kernel.length; i++) {
     kernel[i] /= wsum;
   }
   return {kernel, rs, size};
 }
 
-// 预计算 r=1 的高斯核（全局只算一次）
 const GAUSS_KERNEL = buildGaussKernel(DEFAULT_SETTINGS.gauss);
 
-/**
- * 优化版高斯模糊：使用预计算的归一化权重表
- * 相比原版 gaussBlur_return，消除了每像素 49 次 Math.exp 调用
- */
 function gaussBlurFast(scl, w, h, resultBuf) {
-  const {kernel, rs, size} = GAUSS_KERNEL;
+  const {kernel, rs} = GAUSS_KERNEL;
   const result = resultBuf || new Array(scl.length).fill(0);
 
   for (let i = 0; i < h; i++) {
@@ -155,7 +159,6 @@ function gaussBlurFast(scl, w, h, resultBuf) {
       let kidx = 0;
       for (let dy = -rs; dy <= rs; dy++) {
         const y = i + dy;
-        // 边界钳制
         const cy = y < 0 ? 0 : y >= h ? h - 1 : y;
         const rowOff = cy * w;
         for (let dx = -rs; dx <= rs; dx++) {
@@ -171,14 +174,13 @@ function gaussBlurFast(scl, w, h, resultBuf) {
   return result;
 }
 
-// ─── 预分配临时数组（避免每帧 GC） ───────────────────────────────────────────
-// 为每个区域预分配 lineInterp → addSide → gaussBlur 的中间缓冲区
+// ─── 预分配临时数组 ─────────────────────────────────────────────────────────
 
 function createWorkBuffers() {
   const buffers = {};
   Object.keys(allConfig).forEach(key => {
     const config = allConfig[key].dataConfig;
-    const {sitnum1, sitnum2, sitInterp, sitInterp1, sitOrder} = config;
+    const {sitnum2, sitnum1, sitInterp, sitInterp1, sitOrder} = config;
     const interpW = 1 + (sitnum2 - 1) * sitInterp1;
     const interpH = 1 + (sitnum1 - 1) * sitInterp;
     const sideW = interpW + sitOrder * 2;
@@ -233,7 +235,6 @@ async function loadSeatModel(group) {
         box.getCenter(center);
         const maxDim = Math.max(size.x, size.y, size.z);
         const scale = maxDim > 0 ? MODEL_TARGET_SIZE / maxDim : 1;
-        console.log('glb: size', size.toArray(), 'center', center.toArray(), 'scale', scale);
 
         model.scale.setScalar(scale);
         model.position.sub(center.multiplyScalar(scale));
@@ -251,8 +252,7 @@ async function loadSeatModel(group) {
   });
 }
 
-// ─── 圆形纹理（程序生成，全局共享单例） ─────────────────────────────────────
-// 优化：所有点图材质共享同一个纹理实例，减少 GPU 纹理切换
+// ─── 圆形纹理（共享单例） ───────────────────────────────────────────────────
 
 let _sharedCircleTexture = null;
 
@@ -288,7 +288,7 @@ function getSharedCircleTexture(size = 32) {
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.magFilter = THREE.LinearFilter;
-  texture.minFilter = THREE.LinearFilter; // 不用 mipmap，减少内存
+  texture.minFilter = THREE.LinearFilter;
   texture.generateMipmaps = false;
   texture.needsUpdate = true;
   _sharedCircleTexture = texture;
@@ -387,7 +387,6 @@ function initPoint(config, pointConfig, name, group) {
   geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-  // 共享圆形纹理（所有点图材质共用一个）
   const circleTexture = getSharedCircleTexture();
 
   const material = new THREE.PointsMaterial({
@@ -493,7 +492,6 @@ function applyPointRotateToGroup(pointGroup, rotateMap = DEFAULT_POINT_MAP_ROTAT
   pointGroup.rotation.set(x, y, z);
 }
 
-// 使用优化版高斯模糊 + 复用 buffer
 function sitRenew(config, name, ndata1, smoothBig, particles, workBuf) {
   if (!particles || !particles.geometry) {
     return;
@@ -520,7 +518,6 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf) {
     sitOrder,
   );
 
-  // 使用预计算权重的快速高斯模糊，复用 buffer
   const gaussBuf = workBuf?.gaussBuf;
   const bigArrg = gaussBlurFast(
     bigArrs,
@@ -566,6 +563,108 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf) {
   }
 }
 
+// ─── 简易滑块组件（纯 RN 实现，无需额外依赖） ──────────────────────────────
+
+function MiniSlider({label, value, min, max, step, onValueChange}) {
+  const trackRef = useRef(null);
+  const trackWidth = useRef(0);
+  const ratio = (value - min) / (max - min);
+
+  const onLayout = e => {
+    trackWidth.current = e.nativeEvent.layout.width;
+  };
+
+  const handleTouch = (evt) => {
+    if (trackWidth.current <= 0) return;
+    const x = evt.nativeEvent.locationX;
+    const r = clamp(x / trackWidth.current, 0, 1);
+    let newVal = min + r * (max - min);
+    if (step > 0) {
+      newVal = Math.round(newVal / step) * step;
+    }
+    newVal = clamp(newVal, min, max);
+    onValueChange(parseFloat(newVal.toFixed(4)));
+  };
+
+  const sliderPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: handleTouch,
+      onPanResponderMove: handleTouch,
+    }),
+  ).current;
+
+  return (
+    <View style={sliderStyles.row}>
+      <Text style={sliderStyles.label}>{label}</Text>
+      <View
+        ref={trackRef}
+        style={sliderStyles.track}
+        onLayout={onLayout}
+        {...sliderPan.panHandlers}>
+        <View style={[sliderStyles.fill, {width: `${ratio * 100}%`}]} />
+        <View
+          style={[
+            sliderStyles.thumb,
+            {left: `${ratio * 100}%`},
+          ]}
+        />
+      </View>
+      <Text style={sliderStyles.valueText}>{value.toFixed(2)}</Text>
+    </View>
+  );
+}
+
+const sliderStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    height: 28,
+  },
+  label: {
+    color: '#aac',
+    fontSize: 11,
+    width: 28,
+    textAlign: 'right',
+    marginRight: 6,
+  },
+  track: {
+    flex: 1,
+    height: 16,
+    backgroundColor: '#1a2030',
+    borderRadius: 8,
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  fill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#2a5a8a',
+    borderRadius: 8,
+  },
+  thumb: {
+    position: 'absolute',
+    top: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#5af',
+    marginLeft: -6,
+  },
+  valueText: {
+    color: '#8aa',
+    fontSize: 10,
+    width: 42,
+    textAlign: 'right',
+    fontFamily: 'monospace',
+  },
+});
+
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
 export default function CarAirRN({data = [], style}) {
@@ -575,6 +674,136 @@ export default function CarAirRN({data = [], style}) {
   const mountedRef = useRef(true);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+
+  // ─── 调节面板状态 ──────────────────────────────────────────────────
+  const [panelVisible, setPanelVisible] = useState(false);
+  const panelAnim = useRef(new Animated.Value(-PANEL_WIDTH)).current;
+
+  // 点图布局参数（可调）
+  const [layout, setLayout] = useState(() => {
+    const init = {};
+    ZONE_NAMES.forEach(name => {
+      const def = DEFAULT_POINT_FIT_LAYOUT[name];
+      init[name] = {
+        px: def.position[0],
+        py: def.position[1],
+        pz: def.position[2],
+        rx: def.rotation[0],
+        ry: def.rotation[1],
+        rz: def.rotation[2],
+      };
+    });
+    return init;
+  });
+  const [globalScale, setGlobalScale] = useState(POINT_MAP_SCALE_DEFAULT);
+  const [activeZone, setActiveZone] = useState('center');
+
+  // 将布局变化应用到 3D 场景
+  const applyLayout = useCallback((newLayout, newScale) => {
+    const s = stateRef.current;
+    if (!s.pointMeshes) return;
+    const localCenter = new THREE.Vector3(0, -0.6, 0);
+
+    ZONE_NAMES.forEach(name => {
+      const mesh = s.pointMeshes[name];
+      const l = newLayout[name];
+      if (!mesh || !l) return;
+      mesh.position.set(
+        localCenter.x + l.px,
+        localCenter.y + l.py,
+        localCenter.z + l.pz,
+      );
+      mesh.rotation.set(l.rx, l.ry, l.rz);
+    });
+
+    // 整体缩放
+    const safeFactor = Number.isFinite(newScale) ? newScale : 1;
+    const meshScale = POINT_SCALE * safeFactor;
+    Object.values(s.pointMeshes).forEach(mesh => {
+      if (!mesh?.scale) return;
+      mesh.scale.set(meshScale, meshScale, meshScale);
+    });
+
+    s.dirty = true;
+  }, []);
+
+  // 切换面板
+  const togglePanel = useCallback(() => {
+    const toVisible = !panelVisible;
+    setPanelVisible(toVisible);
+    Animated.timing(panelAnim, {
+      toValue: toVisible ? 0 : -PANEL_WIDTH,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [panelVisible, panelAnim]);
+
+  // 更新某个区域的某个参数
+  const updateZoneParam = useCallback((zone, param, value) => {
+    setLayout(prev => {
+      const next = {...prev, [zone]: {...prev[zone], [param]: value}};
+      applyLayout(next, globalScale);
+      return next;
+    });
+  }, [globalScale, applyLayout]);
+
+  // 更新全局缩放
+  const updateScale = useCallback((value) => {
+    setGlobalScale(value);
+    applyLayout(layout, value);
+  }, [layout, applyLayout]);
+
+  // 重置当前区域
+  const resetZone = useCallback(() => {
+    const def = DEFAULT_POINT_FIT_LAYOUT[activeZone];
+    if (!def) return;
+    const resetVal = {
+      px: def.position[0],
+      py: def.position[1],
+      pz: def.position[2],
+      rx: def.rotation[0],
+      ry: def.rotation[1],
+      rz: def.rotation[2],
+    };
+    setLayout(prev => {
+      const next = {...prev, [activeZone]: resetVal};
+      applyLayout(next, globalScale);
+      return next;
+    });
+  }, [activeZone, globalScale, applyLayout]);
+
+  // 重置全部
+  const resetAll = useCallback(() => {
+    const init = {};
+    ZONE_NAMES.forEach(name => {
+      const def = DEFAULT_POINT_FIT_LAYOUT[name];
+      init[name] = {
+        px: def.position[0],
+        py: def.position[1],
+        pz: def.position[2],
+        rx: def.rotation[0],
+        ry: def.rotation[1],
+        rz: def.rotation[2],
+      };
+    });
+    setLayout(init);
+    setGlobalScale(POINT_MAP_SCALE_DEFAULT);
+    applyLayout(init, POINT_MAP_SCALE_DEFAULT);
+  }, [applyLayout]);
+
+  // 打印当前参数到控制台
+  const logParams = useCallback(() => {
+    const output = {};
+    ZONE_NAMES.forEach(name => {
+      const l = layout[name];
+      output[name] = {
+        position: [parseFloat(l.px.toFixed(2)), parseFloat(l.py.toFixed(2)), parseFloat(l.pz.toFixed(2))],
+        rotation: [parseFloat(l.rx.toFixed(4)), parseFloat(l.ry.toFixed(4)), parseFloat(l.rz.toFixed(4))],
+      };
+    });
+    console.log('[PointFit] layout:', JSON.stringify(output, null, 2));
+    console.log('[PointFit] scale:', globalScale.toFixed(2));
+  }, [layout, globalScale]);
 
   // 手势响应器：单指旋转 + 双指缩放
   const panResponder = useRef(
@@ -587,9 +816,7 @@ export default function CarAirRN({data = [], style}) {
       onPanResponderGrant: evt => {
         const state = stateRef.current;
         const controls = state.controls;
-        if (!controls) {
-          return;
-        }
+        if (!controls) return;
         const touches = evt.nativeEvent.touches || [];
 
         if (touches.length === 2) {
@@ -601,19 +828,15 @@ export default function CarAirRN({data = [], style}) {
           controls.lastY = touches[0].pageY;
         }
         controls.isInteracting = true;
-        // 标记需要渲染
         state.dirty = true;
       },
 
       onPanResponderMove: evt => {
         const state = stateRef.current;
         const controls = state.controls;
-        if (!controls || !state.camera || !state.rootGroup) {
-          return;
-        }
+        if (!controls || !state.camera || !state.rootGroup) return;
         const touches = evt.nativeEvent.touches || [];
 
-        // ── 双指缩放 ──
         if (touches.length === 2) {
           if (!controls.isPinching) {
             controls.isPinching = true;
@@ -637,7 +860,6 @@ export default function CarAirRN({data = [], style}) {
           return;
         }
 
-        // ── 单指旋转 ──
         if (touches.length === 1 && !controls.isPinching) {
           const dx = touches[0].pageX - (controls.lastX ?? touches[0].pageX);
           const dy = touches[0].pageY - (controls.lastY ?? touches[0].pageY);
@@ -661,9 +883,7 @@ export default function CarAirRN({data = [], style}) {
       onPanResponderRelease: evt => {
         const state = stateRef.current;
         const controls = state.controls;
-        if (!controls) {
-          return;
-        }
+        if (!controls) return;
         const touches = evt.nativeEvent.touches || [];
         if (touches.length === 1) {
           controls.isPinching = false;
@@ -673,7 +893,6 @@ export default function CarAirRN({data = [], style}) {
           controls.isPinching = false;
           controls.lastPinchDistance = 0;
           controls.isInteracting = false;
-          // 手势结束后再渲染几帧确保画面更新
           state.idleFrames = IDLE_RENDER_FRAMES;
         }
       },
@@ -681,9 +900,7 @@ export default function CarAirRN({data = [], style}) {
       onPanResponderTerminate: () => {
         const state = stateRef.current;
         const controls = state.controls;
-        if (!controls) {
-          return;
-        }
+        if (!controls) return;
         controls.isPinching = false;
         controls.lastPinchDistance = 0;
         controls.isInteracting = false;
@@ -716,30 +933,25 @@ export default function CarAirRN({data = [], style}) {
     const renderer = new THREE.WebGLRenderer({
       canvas,
       context: gl,
-      antialias: false, // 关闭抗锯齿，显著降低 GPU 负载
+      antialias: false,
     });
     renderer.setSize(width, height);
     renderer.setPixelRatio(1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    // 灯光
     const light = new THREE.DirectionalLight(0xffffff, 1.2);
     light.position.set(3, 4, 5);
     scene.add(light);
     scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-    // 点图组
     const pointGroup = new THREE.Group();
     rootGroup.add(pointGroup);
     const pointMeshes = initPoints(pointGroup);
     applyPointScaleToMeshes(pointMeshes, POINT_MAP_SCALE_DEFAULT);
     applyPointRotateToGroup(pointGroup, DEFAULT_POINT_MAP_ROTATE);
     const smoothBig = createSmoothBig();
-
-    // 预分配工作缓冲区
     const workBuffers = createWorkBuffers();
 
-    // 控制器状态
     const controls = {
       rotationX: -Math.PI / 3,
       rotationY: 0,
@@ -752,17 +964,13 @@ export default function CarAirRN({data = [], style}) {
     };
     rootGroup.rotation.x = controls.rotationX;
 
-    // 加载模型
     setLoading(true);
     setLoadError(null);
     loadSeatModel(rootGroup)
       .then(model => {
-        if (!mountedRef.current) {
-          return;
-        }
+        if (!mountedRef.current) return;
         stateRef.current.model = model;
         applyPointFitToModel(model, pointMeshes, DEFAULT_POINT_FIT_LAYOUT);
-        // 模型加载完成，标记需要渲染
         stateRef.current.dirty = true;
         setLoading(false);
         if (!model) {
@@ -771,14 +979,11 @@ export default function CarAirRN({data = [], style}) {
       })
       .catch(err => {
         console.warn('glb: load failed', err);
-        if (!mountedRef.current) {
-          return;
-        }
+        if (!mountedRef.current) return;
         setLoading(false);
         setLoadError(err?.message || String(err));
       });
 
-    // 保存状态
     stateRef.current = {
       scene,
       camera,
@@ -791,32 +996,23 @@ export default function CarAirRN({data = [], style}) {
       model: null,
       gl,
       controls,
-      dirty: true,          // 是否需要渲染
-      idleFrames: 0,        // 手势结束后的剩余渲染帧数
+      dirty: true,
+      idleFrames: 0,
       lastSeatUpdate: 0,
-      lastDataHash: 0,      // 用于检测数据是否变化
+      lastDataHash: 0,
     };
 
-    // ─── 按需渲染循环 ─────────────────────────────────────────────────
-    // 核心优化：只在以下情况渲染：
-    //   1. dirty 标志为 true（手势交互、数据更新、模型加载完成）
-    //   2. idleFrames > 0（手势结束后的过渡帧）
-    // 空闲时跳过 renderer.render() 和 gl.endFrameEXP()，大幅降低 GPU 负载
     const animate = () => {
       const now = Date.now();
       const frameState = stateRef.current;
 
-      // 检查是否需要更新数据
-      let dataUpdated = false;
       if (
         !frameState.lastSeatUpdate ||
         now - frameState.lastSeatUpdate >= SEAT_UPDATE_INTERVAL
       ) {
-        // 快速检测数据是否变化（避免无变化时重复计算）
         const currentData = dataRef.current;
         let hash = 0;
         if (Array.isArray(currentData)) {
-          // 简单 hash：取几个采样点求和
           for (let si = 0; si < currentData.length; si += 12) {
             hash += (currentData[si] || 0);
           }
@@ -831,26 +1027,20 @@ export default function CarAirRN({data = [], style}) {
             const name = config.name;
             const mesh = frameState.pointMeshes?.[name];
             const smooth = frameState.smoothBig?.[name];
-            if (!mesh || !smooth) {
-              return;
-            }
+            if (!mesh || !smooth) return;
             const workBuf = frameState.workBuffers?.[name];
             sitRenew(config.dataConfig, name, split[name], smooth, mesh, workBuf);
           });
-          dataUpdated = true;
           frameState.dirty = true;
         }
         frameState.lastSeatUpdate = now;
       }
 
-      // 按需渲染：只在有变化时才调用 render
       const shouldRender = frameState.dirty || frameState.idleFrames > 0;
 
       if (shouldRender) {
         renderer.render(scene, camera);
         gl.endFrameEXP();
-
-        // 重置 dirty 标志
         frameState.dirty = false;
         if (frameState.idleFrames > 0) {
           frameState.idleFrames--;
@@ -875,13 +1065,142 @@ export default function CarAirRN({data = [], style}) {
     };
   }, []);
 
+  // ─── 当前区域的参数 ────────────────────────────────────────────────
+  const zoneLayout = layout[activeZone] || {};
+
   return (
     <View style={[styles.container, style]}>
+      {/* 3D 视图 */}
       <GLView
         style={styles.view}
         onContextCreate={onContextCreate}
         {...panResponder.panHandlers}
       />
+
+      {/* 左侧开关按钮 */}
+      <TouchableOpacity
+        style={[styles.toggleBtn, panelVisible && styles.toggleBtnOpen]}
+        onPress={togglePanel}
+        activeOpacity={0.7}>
+        <Text style={styles.toggleBtnText}>{panelVisible ? '<' : '>'}</Text>
+      </TouchableOpacity>
+
+      {/* 左侧调节面板 */}
+      <Animated.View
+        style={[
+          styles.panel,
+          {transform: [{translateX: panelAnim}]},
+        ]}
+        pointerEvents={panelVisible ? 'auto' : 'none'}>
+        <ScrollView
+          style={styles.panelScroll}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled={true}>
+          {/* 标题 */}
+          <Text style={styles.panelTitle}>点图参数调节</Text>
+
+          {/* 区域选择 */}
+          <View style={styles.zoneTabs}>
+            {ZONE_NAMES.map(name => (
+              <TouchableOpacity
+                key={name}
+                style={[
+                  styles.zoneTab,
+                  activeZone === name && styles.zoneTabActive,
+                ]}
+                onPress={() => setActiveZone(name)}>
+                <Text
+                  style={[
+                    styles.zoneTabText,
+                    activeZone === name && styles.zoneTabTextActive,
+                  ]}>
+                  {ZONE_LABELS[name]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* 位置调节 */}
+          <Text style={styles.sectionLabel}>位置 Position</Text>
+          <MiniSlider
+            label="X"
+            value={zoneLayout.px ?? 0}
+            min={-120}
+            max={120}
+            step={1}
+            onValueChange={v => updateZoneParam(activeZone, 'px', v)}
+          />
+          <MiniSlider
+            label="Y"
+            value={zoneLayout.py ?? 0}
+            min={-150}
+            max={50}
+            step={1}
+            onValueChange={v => updateZoneParam(activeZone, 'py', v)}
+          />
+          <MiniSlider
+            label="Z"
+            value={zoneLayout.pz ?? 0}
+            min={-120}
+            max={120}
+            step={1}
+            onValueChange={v => updateZoneParam(activeZone, 'pz', v)}
+          />
+
+          {/* 旋转调节 */}
+          <Text style={styles.sectionLabel}>旋转 Rotation</Text>
+          <MiniSlider
+            label="Rx"
+            value={zoneLayout.rx ?? 0}
+            min={-Math.PI}
+            max={Math.PI}
+            step={0.01}
+            onValueChange={v => updateZoneParam(activeZone, 'rx', v)}
+          />
+          <MiniSlider
+            label="Ry"
+            value={zoneLayout.ry ?? 0}
+            min={-Math.PI}
+            max={Math.PI}
+            step={0.01}
+            onValueChange={v => updateZoneParam(activeZone, 'ry', v)}
+          />
+          <MiniSlider
+            label="Rz"
+            value={zoneLayout.rz ?? 0}
+            min={-Math.PI}
+            max={Math.PI}
+            step={0.01}
+            onValueChange={v => updateZoneParam(activeZone, 'rz', v)}
+          />
+
+          {/* 整体缩放 */}
+          <Text style={styles.sectionLabel}>整体缩放 Scale</Text>
+          <MiniSlider
+            label="S"
+            value={globalScale}
+            min={0.5}
+            max={5}
+            step={0.1}
+            onValueChange={updateScale}
+          />
+
+          {/* 操作按钮 */}
+          <View style={styles.btnRow}>
+            <TouchableOpacity style={styles.actionBtn} onPress={resetZone}>
+              <Text style={styles.actionBtnText}>重置当前</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={resetAll}>
+              <Text style={styles.actionBtnText}>重置全部</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.logBtn]} onPress={logParams}>
+              <Text style={styles.actionBtnText}>打印参数</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </Animated.View>
+
+      {/* Loading */}
       {loading ? (
         <View pointerEvents="none" style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#7cc4ff" />
@@ -905,6 +1224,115 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0b0f16',
   },
+
+  // ─── 开关按钮 ──────────────────────────────────────────────────────
+  toggleBtn: {
+    position: 'absolute',
+    left: 4,
+    top: '45%',
+    width: 24,
+    height: 48,
+    borderRadius: 4,
+    backgroundColor: 'rgba(30, 50, 80, 0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  toggleBtnOpen: {
+    left: PANEL_WIDTH + 4,
+  },
+  toggleBtnText: {
+    color: '#7af',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
+  // ─── 调节面板 ──────────────────────────────────────────────────────
+  panel: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: PANEL_WIDTH,
+    backgroundColor: 'rgba(10, 16, 28, 0.92)',
+    borderRightWidth: 1,
+    borderRightColor: '#1a3050',
+    zIndex: 10,
+  },
+  panelScroll: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+  },
+  panelTitle: {
+    color: '#d6e6ff',
+    fontSize: 15,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+
+  // ─── 区域选择 Tab ──────────────────────────────────────────────────
+  zoneTabs: {
+    flexDirection: 'row',
+    marginBottom: 10,
+    borderRadius: 6,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#1a3050',
+  },
+  zoneTab: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    backgroundColor: '#0d1520',
+  },
+  zoneTabActive: {
+    backgroundColor: '#1a3a60',
+  },
+  zoneTabText: {
+    color: '#556',
+    fontSize: 11,
+  },
+  zoneTabTextActive: {
+    color: '#7cf',
+    fontWeight: 'bold',
+  },
+
+  // ─── Section 标签 ──────────────────────────────────────────────────
+  sectionLabel: {
+    color: '#6a8aaa',
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginTop: 8,
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+
+  // ─── 操作按钮 ──────────────────────────────────────────────────────
+  btnRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+    marginBottom: 20,
+    gap: 8,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 5,
+    backgroundColor: '#1a3050',
+    alignItems: 'center',
+  },
+  logBtn: {
+    backgroundColor: '#2a4a30',
+  },
+  actionBtnText: {
+    color: '#8cf',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+
+  // ─── Loading / Error ──────────────────────────────────────────────
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
