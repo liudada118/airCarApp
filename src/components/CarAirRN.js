@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS = {
   gauss: 1,
   color: 2550,
   height: 1,
-  coherent: 1,
+  coherent: 5, // 平滑系数：越大越平滑，抑制点图抖动（1=无平滑，5=适中平滑）
 };
 // 数据更新频率：15Hz
 const SEAT_UPDATE_INTERVAL = 1000 / 15;
