@@ -254,8 +254,21 @@ function getSeatStateLabel(state: AlgoSeatStatus): string {
   return '未知';
 }
 
-// ─── 矩阵热力图颜色映射 ────────────────────────────────────────────
+// ─── 气囊 zone 中文标签 ─────────────────────────────────────────────
+const ZONE_CN_LABELS: Record<string, string> = {
+  shoulderL: '肩部左',
+  shoulderR: '肩部右',
+  sideWingL: '腰侧左',
+  sideWingR: '腰侧右',
+  lumbarUp: '腰中上',
+  lumbarDown: '腰中下',
+  cushionFL: '坐垫前左',
+  cushionFR: '坐垫前右',
+  cushionRL: '坐垫后左',
+  cushionRR: '坐垫后右',
+};
 
+// ─── 矩阵热力图颜色映射 ─────────────────────────────────────────────
 /** 将传感器值(0-255)映射为热力图颜色 */
 function matrixCellColor(val: number): string {
   if (val <= 0) return '#1a1a2e';
@@ -594,47 +607,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                 </Text>
               </View>
             </View>
-
-            {/* 详细状态标签 */}
-            <View style={styles.detailStatusRow}>
-              <View style={styles.detailStatusItem}>
-                <View
-                  style={[
-                    styles.statusDot,
-                    {
-                      backgroundColor: algoSeatStatus.is_seated
-                        ? Colors.success
-                        : Colors.textGray,
-                    },
-                  ]}
-                />
-                <Text style={styles.detailStatusText}>
-                  {getSeatStateLabel(algoSeatStatus)}
-                </Text>
-              </View>
-              <View style={styles.detailStatusItem}>
-                <Text style={styles.detailStatusLabel}>活体：</Text>
-                <Text
-                  style={[
-                    styles.detailStatusText,
-                    livingStatus === '活体' && {color: Colors.success},
-                    livingStatus === '静物' && {color: Colors.error},
-                  ]}>
-                  {livingStatus}
-                </Text>
-              </View>
-              <View style={styles.detailStatusItem}>
-                <Text style={styles.detailStatusLabel}>体型：</Text>
-                <Text
-                  style={[
-                    styles.detailStatusText,
-                    bodyType === '大人' && {color: Colors.success},
-                    bodyType === '小孩' && {color: '#5AC8FA'},
-                  ]}>
-                  {bodyType}
-                </Text>
-              </View>
-            </View>
           </View>
 
           {/* 气囊状态 */}
@@ -667,6 +639,35 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                   <Text style={styles.customizeLink}>自定义气囊调节</Text>
                 </View>
               </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* 气囊控制指令 */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <IconFont name="bianji" size={14} color={Colors.textGray} />
+              <Text style={styles.sectionTitle}>控制指令</Text>
+            </View>
+            <View style={styles.cmdCard}>
+              {ALL_AIRBAG_ZONES.map((zone, i) => {
+                const cmd = commandStates[zone];
+                const label = ZONE_CN_LABELS[zone] || zone;
+                const cmdLabel = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
+                const cmdColor = cmd === 3 ? Colors.primary : cmd === 4 ? Colors.warning : Colors.textGray;
+                return (
+                  <View key={zone} style={styles.cmdRow}>
+                    <Text style={styles.cmdZoneText}>{i + 1}. {label}</Text>
+                    <Text style={[styles.cmdValueText, {color: cmdColor}]}>{cmdLabel}</Text>
+                  </View>
+                );
+              })}
+              {rawCommand && rawCommand.length > 0 && (
+                <View style={styles.cmdHexRow}>
+                  <Text style={styles.cmdHexText}>
+                    {rawCommand.map(v => v.toString(16).padStart(2, '0').toUpperCase()).join(' ')}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </ScrollView>
@@ -1262,6 +1263,38 @@ const styles = StyleSheet.create({
   },
   matrixCellSpacer: {
     width: 4,
+  },
+  // ─── 控制指令 ───
+  cmdCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+  },
+  cmdRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  cmdZoneText: {
+    fontSize: FontSize.xs,
+    color: Colors.textGray,
+  },
+  cmdValueText: {
+    fontSize: FontSize.xs,
+    fontWeight: '600',
+  },
+  cmdHexRow: {
+    marginTop: Spacing.xs,
+    paddingTop: Spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  cmdHexText: {
+    fontSize: 8,
+    color: Colors.textGray,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 12,
   },
   // ─── 错误提示 ───
   errorHint: {
