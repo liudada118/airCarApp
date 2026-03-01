@@ -160,8 +160,8 @@ function buildGaussKernel(r) {
 
 const GAUSS_KERNEL = buildGaussKernel(DEFAULT_SETTINGS.gauss);
 
-function gaussBlurFast(scl, w, h, resultBuf) {
-  const {kernel, rs} = GAUSS_KERNEL;
+function gaussBlurFast(scl, w, h, resultBuf, gaussKernel) {
+  const {kernel, rs} = gaussKernel || GAUSS_KERNEL;
   const result = resultBuf || new Array(scl.length).fill(0);
 
   for (let i = 0; i < h; i++) {
@@ -519,7 +519,7 @@ function applyPointRotateToGroup(pointGroup, rotateMap = DEFAULT_POINT_MAP_ROTAT
   pointGroup.rotation.set(x, y, z);
 }
 
-function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow = false, flipHeight = false) {
+function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow = false, flipHeight = false, dynSettings = null) {
   if (!particles || !particles.geometry) {
     return;
   }
@@ -534,7 +534,7 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
   const colors = colorAttr.array;
   const scales = scalesAttr?.array instanceof Float32Array ? scalesAttr.array : null;
 
-  const {color, height, coherent} = DEFAULT_SETTINGS;
+  const {color, height, coherent} = dynSettings || DEFAULT_SETTINGS;
 
   const bigArr = lineInterpnew(ndata1, sitnum2, sitnum1, sitInterp1, sitInterp);
   const bigArrs = addSide(
@@ -546,11 +546,13 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
   );
 
   const gaussBuf = workBuf?.gaussBuf;
+  const gaussKernel = dynSettings?._gaussKernel || GAUSS_KERNEL;
   const bigArrg = gaussBlurFast(
     bigArrs,
     1 + (sitnum2 - 1) * sitInterp1 + sitOrder * 2,
     1 + (sitnum1 - 1) * sitInterp + sitOrder * 2,
     gaussBuf,
+    gaussKernel,
   );
 
   const heightSign = flipHeight ? 1 : -1;
@@ -564,7 +566,7 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
       const l = dataRow * amountY + iy;
       const rawValue = Number(bigArrg[l]) * 10;
       // 死区处理：低于阈值的原始值直接归零，消除低值区域的噪声抖动
-      const deadZone = DEFAULT_SETTINGS.deadZone || 0;
+      const deadZone = (dynSettings || DEFAULT_SETTINGS).deadZone || 0;
       const clampedValue = (Number.isFinite(rawValue) && rawValue > deadZone * 10) ? rawValue : 0;
       smoothBig[l] = smoothBig[l] + (clampedValue - smoothBig[l]) / coherent;
 
@@ -729,6 +731,30 @@ function CarAirRNInner({data = [], style}, ref) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [baselineActive, setBaselineActive] = useState(false);
+
+  // 点图参数（可动态调节）
+  const [pointSettings, setPointSettings] = useState({...DEFAULT_SETTINGS});
+  const pointSettingsRef = useRef({...DEFAULT_SETTINGS});
+
+  const updatePointSetting = useCallback((key, value) => {
+    setPointSettings(prev => {
+      const next = {...prev, [key]: value};
+      pointSettingsRef.current = next;
+      // 对于平滑参数变更，重置平滑缓冲区
+      if (key === 'rawSmooth' || key === 'coherent') {
+        const fs = stateRef.current;
+        fs.rawSmoothInited = false;
+        fs.dirty = true;
+      }
+      if (key === 'gauss') {
+        // 重建高斯核
+        stateRef.current._gaussKernel = buildGaussKernel(value);
+        stateRef.current.dirty = true;
+      }
+      stateRef.current.dirty = true;
+      return next;
+    });
+  }, []);
 
   // 暴露清零/取消清零方法给父组件
   useImperativeHandle(ref, () => ({
@@ -1132,6 +1158,7 @@ function CarAirRNInner({data = [], style}, ref) {
       lastSeatUpdate: 0,
       lastDataHash: 0,
       baseline: null, // 清零基线：144 元素数组，null 表示未清零
+      _gaussKernel: GAUSS_KERNEL, // 动态高斯核
     };
 
     const animate = () => {
@@ -1163,7 +1190,8 @@ function CarAirRNInner({data = [], style}, ref) {
 
           // 第一层平滑：原始 144 字节数据帧间混合（在插值放大之前）
           const rawBuf = frameState.rawSmoothBuf;
-          const rawAlpha = DEFAULT_SETTINGS.rawSmooth || 1;
+          const _dynSettings = pointSettingsRef.current;
+          const rawAlpha = _dynSettings.rawSmooth || 1;
           if (!frameState.rawSmoothInited) {
             // 第一帧直接拷贝
             for (let ri = 0; ri < 144; ri++) {
@@ -1187,7 +1215,8 @@ function CarAirRNInner({data = [], style}, ref) {
             const smooth = frameState.smoothBig?.[name];
             if (!mesh || !smooth) return;
             const workBuf = frameState.workBuffers?.[name];
-            sitRenew(config.dataConfig, name, split[name], smooth, mesh, workBuf, config.flipRow, config.flipHeight);
+            const dynS = {..._dynSettings, _gaussKernel: frameState._gaussKernel};
+            sitRenew(config.dataConfig, name, split[name], smooth, mesh, workBuf, config.flipRow, config.flipHeight, dynS);
           });
           frameState.dirty = true;
         }
@@ -1286,191 +1315,67 @@ function CarAirRNInner({data = [], style}, ref) {
             </TouchableOpacity>
           </View>
 
-          {/* 区域选择 */}
-          <View style={styles.zoneTabs}>
-            {ZONE_NAMES.map(name => (
-              <TouchableOpacity
-                key={name}
-                style={[
-                  styles.zoneTab,
-                  activeZone === name && styles.zoneTabActive,
-                ]}
-                onPress={() => setActiveZone(name)}>
-                <Text
-                  style={[
-                    styles.zoneTabText,
-                    activeZone === name && styles.zoneTabTextActive,
-                  ]}>
-                  {ZONE_LABELS[name]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* 位置调节 */}
-          <Text style={styles.sectionLabel}>位置 Position</Text>
+          {/* 点图参数调节 */}
+          <Text style={styles.sectionLabel}>颜色 / 显示</Text>
           <StepControl
-            label="X"
-            value={zoneLayout.px ?? 0}
-            min={-200}
-            max={200}
-            step={1}
+            label="色阶"
+            value={pointSettings.color}
+            min={50}
+            max={2000}
+            step={25}
             decimals={0}
-            onValueChange={v => updateZoneParam(activeZone, 'px', v)}
+            onValueChange={v => updatePointSetting('color', v)}
           />
           <StepControl
-            label="Y"
-            value={zoneLayout.py ?? 0}
-            min={-200}
-            max={200}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateZoneParam(activeZone, 'py', v)}
+            label="高度"
+            value={pointSettings.height}
+            min={0.1}
+            max={5}
+            step={0.1}
+            decimals={1}
+            onValueChange={v => updatePointSetting('height', v)}
           />
           <StepControl
-            label="Z"
-            value={zoneLayout.pz ?? 0}
-            min={-200}
-            max={200}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateZoneParam(activeZone, 'pz', v)}
+            label="高斯"
+            value={pointSettings.gauss}
+            min={0}
+            max={5}
+            step={0.5}
+            decimals={1}
+            onValueChange={v => updatePointSetting('gauss', v)}
           />
 
-          {/* 旋转调节 */}
-          <Text style={styles.sectionLabel}>旋转 Rotation</Text>
+          <Text style={styles.sectionLabel}>平滑 / 滤波</Text>
           <StepControl
-            label="Rx"
-            value={zoneLayout.rx ?? 0}
-            min={-Math.PI}
-            max={Math.PI}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateZoneParam(activeZone, 'rx', v)}
-          />
-          <StepControl
-            label="Ry"
-            value={zoneLayout.ry ?? 0}
-            min={-Math.PI}
-            max={Math.PI}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateZoneParam(activeZone, 'ry', v)}
-          />
-          <StepControl
-            label="Rz"
-            value={zoneLayout.rz ?? 0}
-            min={-Math.PI}
-            max={Math.PI}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateZoneParam(activeZone, 'rz', v)}
-          />
-
-          {/* 当前区域缩放 */}
-          <Text style={styles.sectionLabel}>缩放 Scale</Text>
-          <StepControl
-            label="S"
-            value={layout[activeZone].s}
-            min={0.5}
+            label="帧平滑"
+            value={pointSettings.rawSmooth}
+            min={1}
             max={10}
             step={0.1}
             decimals={1}
-            onValueChange={v => updateZoneParam(activeZone, 's', v)}
-          />
-
-          {/* 整体视角调节 */}
-          <Text style={[styles.sectionLabel, {marginTop: 12, borderTopWidth: 1, borderTopColor: '#334', paddingTop: 8}]}>整体视角 View</Text>
-          <StepControl
-            label="距离"
-            value={viewParams.camDist}
-            min={50}
-            max={800}
-            step={5}
-            decimals={0}
-            onValueChange={v => updateViewParam('camDist', v)}
+            onValueChange={v => updatePointSetting('rawSmooth', v)}
           />
           <StepControl
-            label="Rx"
-            value={viewParams.rootRx}
-            min={-Math.PI}
-            max={Math.PI}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('rootRx', v)}
+            label="插值平滑"
+            value={pointSettings.coherent}
+            min={1}
+            max={10}
+            step={0.1}
+            decimals={1}
+            onValueChange={v => updatePointSetting('coherent', v)}
           />
           <StepControl
-            label="Ry"
-            value={viewParams.rootRy}
-            min={-Math.PI}
-            max={Math.PI}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('rootRy', v)}
-          />
-          <StepControl
-            label="Px"
-            value={viewParams.rootPx}
-            min={-200}
-            max={200}
+            label="死区"
+            value={pointSettings.deadZone}
+            min={0}
+            max={50}
             step={1}
             decimals={0}
-            onValueChange={v => updateViewParam('rootPx', v)}
-          />
-          <StepControl
-            label="Py"
-            value={viewParams.rootPy}
-            min={-200}
-            max={200}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateViewParam('rootPy', v)}
-          />
-          <StepControl
-            label="Pz"
-            value={viewParams.rootPz}
-            min={-200}
-            max={200}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateViewParam('rootPz', v)}
-          />
-
-          {/* 点图 Group 整体旋转 */}
-          <Text style={[styles.sectionLabel, {marginTop: 12, borderTopWidth: 1, borderTopColor: '#334', paddingTop: 8}]}>点图 Group 旋转</Text>
-          <StepControl
-            label="Gx"
-            value={viewParams.grpRx}
-            min={-Math.PI}
-            max={Math.PI}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('grpRx', v)}
-          />
-          <StepControl
-            label="Gy"
-            value={viewParams.grpRy}
-            min={-Math.PI}
-            max={Math.PI}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('grpRy', v)}
-          />
-          <StepControl
-            label="Gz"
-            value={viewParams.grpRz}
-            min={-Math.PI}
-            max={Math.PI}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('grpRz', v)}
+            onValueChange={v => updatePointSetting('deadZone', v)}
           />
 
           {/* 操作按钮 */}
           <View style={styles.btnRow}>
-            <TouchableOpacity style={styles.actionBtn} onPress={resetZone}>
-              <Text style={styles.actionBtnText}>重置当前</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} onPress={resetAll}>
               <Text style={styles.actionBtnText}>重置全部</Text>
             </TouchableOpacity>
