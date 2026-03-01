@@ -78,14 +78,14 @@ const allConfig = {
     name: 'leftsit',
     pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
     flipRow: false,
-    flipHeight: false,
+    flipHeight: true,  // 侧翼高度方向翻转（同靠背）
   },
   backsit: {
     dataConfig: backConfig,
     name: 'rightsit',
     pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
     flipRow: false,
-    flipHeight: false,
+    flipHeight: true,  // 侧翼高度方向翻转（同靠背）
   },
   sitsit: {
     dataConfig: sitConfigBack,
@@ -1068,6 +1068,13 @@ export default function CarAirRN({data = [], style}) {
           frameState.lastDataHash = hash;
           const seatData = normalizeSeatData(currentData);
           const split = splitSeatData(seatData);
+
+          // 打印每个区域的原始数据
+          console.log('[PointData] raw(' + (currentData?.length || 0) + '):', JSON.stringify(currentData?.slice(0, 20)) + '...');
+          Object.keys(split).forEach(sn => {
+            console.log('[PointData]', sn, '(' + split[sn].length + '):', JSON.stringify(split[sn]));
+          });
+
           Object.keys(allConfig).forEach(key => {
             const config = allConfig[key];
             const name = config.name;
