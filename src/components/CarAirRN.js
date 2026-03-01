@@ -1340,7 +1340,7 @@ function CarAirRNInner({data = [], style}, ref) {
             value={pointSettings.gauss}
             min={0}
             max={5}
-            step={0.5}
+            step={0.1}
             decimals={1}
             onValueChange={v => updatePointSetting('gauss', v)}
           />
