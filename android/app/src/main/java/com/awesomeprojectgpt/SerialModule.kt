@@ -264,55 +264,41 @@ class SerialModule(
 
     @ReactMethod
     fun getConfig(promise: Promise) {
-        Log.i(logTag, "[Config] getConfig called from JS")
-        Thread {
+        pythonExecutor.execute {
             try {
-                Log.i(logTag, "[Config] Thread started, getting Python instance...")
-                val py = Python.getInstance()
-                Log.i(logTag, "[Config] Python instance OK, getting server module...")
-                val module = py.getModule("server")
-                Log.i(logTag, "[Config] server module OK, calling get_config()...")
-                val result = module.callAttr("get_config")
-                val resultJson = result.toString()
-                Log.i(logTag, "[Config] get_config returned, length=${resultJson.length}, preview=${resultJson.take(100)}")
+                val module = Python.getInstance().getModule("server")
+                val resultJson = module.callAttr("get_config").toString()
                 promise.resolve(resultJson)
-            } catch (e: Throwable) {
-                Log.e(logTag, "[Config] getConfig FAILED: ${e.javaClass.name}: ${e.message}", e)
-                promise.reject("PY_ERROR", "${e.javaClass.simpleName}: ${e.message}")
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "get_config failed")
             }
-        }.start()
+        }
     }
 
     @ReactMethod
     fun setConfig(keyPath: String, valueJson: String, promise: Promise) {
-        Log.i(logTag, "[Config] setConfig: $keyPath = $valueJson")
-        Thread {
+        pythonExecutor.execute {
             try {
                 val module = Python.getInstance().getModule("server")
                 val resultJson = module.callAttr("set_config", keyPath, valueJson).toString()
-                Log.i(logTag, "[Config] setConfig result: $resultJson")
                 promise.resolve(resultJson)
-            } catch (e: Throwable) {
-                Log.e(logTag, "[Config] setConfig FAILED: ${e.javaClass.name}: ${e.message}", e)
-                promise.reject("PY_ERROR", "${e.javaClass.simpleName}: ${e.message}")
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "set_config failed")
             }
-        }.start()
+        }
     }
 
     @ReactMethod
     fun resetConfig(promise: Promise) {
-        Log.i(logTag, "[Config] resetConfig called")
-        Thread {
+        pythonExecutor.execute {
             try {
                 val module = Python.getInstance().getModule("server")
                 val resultJson = module.callAttr("reset_config").toString()
-                Log.i(logTag, "[Config] resetConfig result: $resultJson")
                 promise.resolve(resultJson)
-            } catch (e: Throwable) {
-                Log.e(logTag, "[Config] resetConfig FAILED: ${e.javaClass.name}: ${e.message}", e)
-                promise.reject("PY_ERROR", "${e.javaClass.simpleName}: ${e.message}")
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "reset_config failed")
             }
-        }.start()
+        }
     }
 
     // ─── 3D 点图配置持久化（SharedPreferences） ───────────────────────
