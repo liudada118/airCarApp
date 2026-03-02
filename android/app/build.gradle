@@ -115,22 +115,7 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
-    sourceSets {
-        main {
-            java {
-                srcDir("$buildDir/$generatedFilesSrcDir")
-            }
-        }
-    }
 }
-
-def generateExpoModulesPackageListTask = tasks.register("generateExpoModulesPackageList") {
-    doLast {
-        generateExpoModulesPackageList()
-    }
-}
-
-preBuild.dependsOn(generateExpoModulesPackageListTask)
 
 dependencies {
     addExpoModulesDependencies(dependencies, project)
