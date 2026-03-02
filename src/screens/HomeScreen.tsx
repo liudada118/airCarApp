@@ -230,7 +230,8 @@ function parseAlgoResult(resultJson: string): {
       typeof parsed.body_type === 'string' ? parsed.body_type : '未判断';
 
     // 解析 airbag_command
-    const rawCommand = parsed.airbag_command?.command ?? parsed.control_command ?? null;
+    const _rawCmd = parsed.airbag_command?.command ?? parsed.control_command ?? null;
+    const rawCommand = Array.isArray(_rawCmd) ? _rawCmd : null;
     const commandStates = parseAirbagCommand(rawCommand);
 
     // 提取实时算法数据
@@ -402,7 +403,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   const [sensorData, setSensorData] = useState<number[]>(INITIAL_SENSOR_FRAME);
   const [showMatrix, setShowMatrix] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
-  const [configTab, setConfigTab] = useState<'realtime' | 'config'>('realtime');
   const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -431,11 +431,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
     setRealtimeData(parsed.realtimeData);
 
     // 打印气囊指令数据
-    if (parsed.rawCommand && parsed.rawCommand.length > 0) {
+    if (Array.isArray(parsed.rawCommand) && parsed.rawCommand.length > 0) {
       const hexStr = parsed.rawCommand
-        .map(v => v.toString(16).padStart(2, '0').toUpperCase())
+        .map((v: number) => v.toString(16).padStart(2, '0').toUpperCase())
         .join(' ');
-      const stateStr = ALL_AIRBAG_ZONES.map((zone, i) => {
+      const stateStr = ALL_AIRBAG_ZONES.map((zone) => {
         const cmd = parsed.commandStates[zone];
         const label = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
         return `${zone}:${label}`;
@@ -1076,7 +1076,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
         animationType="fade"
         onRequestClose={() => setShowConfig(false)}>
         <View style={styles.matrixModalOverlay}>
-          <View style={[styles.matrixModalContent, {maxWidth: 800, maxHeight: '90%', width: '92%'}]}>
+          <View style={[styles.matrixModalContent, {maxWidth: 1100, maxHeight: '90%', width: '95%'}]}>
             {/* 头部栏 */}
             <View style={styles.matrixModalHeader}>
               <Text style={[styles.matrixModalTitle, {fontSize: 16}]}>算法配置与实时数据</Text>
@@ -1101,25 +1101,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               </View>
             </View>
 
-            {/* Tab 切换 */}
-            <View style={{flexDirection: 'row', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)'}}>
-              <TouchableOpacity
-                onPress={() => setConfigTab('realtime')}
-                activeOpacity={0.7}
-                style={{flex: 1, paddingVertical: 8, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: configTab === 'realtime' ? '#4FC3F7' : 'transparent'}}>
-                <Text style={{color: configTab === 'realtime' ? '#4FC3F7' : '#999', fontSize: 13, fontWeight: '600'}}>实时数据</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setConfigTab('config')}
-                activeOpacity={0.7}
-                style={{flex: 1, paddingVertical: 8, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: configTab === 'config' ? '#4FC3F7' : 'transparent'}}>
-                <Text style={{color: configTab === 'config' ? '#4FC3F7' : '#999', fontSize: 13, fontWeight: '600'}}>配置参数</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={{flex: 1}}>
-              {configTab === 'realtime' ? (
-                /* ========== 实时数据面板 ========== */
+            <View style={{flex: 1, flexDirection: 'row'}}>
+              {/* ========== 左侧：实时数据面板 ========== */}
+              <View style={styles.rtPanel}>
                 <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
                   {/* 基础状态 */}
                   <Text style={styles.rtGroupTitle}>基础状态</Text>
@@ -1379,9 +1363,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
 
                   <View style={{height: 20}} />
                 </ScrollView>
-              ) : (
-                /* ========== 配置参数面板 ========== */
-                <View style={{flex: 1}}>
+              </View>
+
+              {/* ========== 右侧：配置参数面板 ========== */}
+              <View style={{flex: 1}}>
                   {configLoading ? (
                     <View style={{padding: 40, alignItems: 'center'}}>
                       <Text style={{color: '#ccc', fontSize: 14}}>加载中...</Text>
@@ -1470,8 +1455,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                       </TouchableOpacity>
                     </View>
                   )}
-                </View>
-              )}
+              </View>
             </View>
           </View>
         </View>
