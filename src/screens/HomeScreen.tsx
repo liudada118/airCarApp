@@ -1043,10 +1043,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
         animationType="fade"
         onRequestClose={() => setShowConfig(false)}>
         <View style={styles.matrixModalOverlay}>
-          <View style={[styles.matrixModalContent, {maxWidth: 1100, maxHeight: '90%', width: '95%'}]}>
-            {/* 头部栏 */}
+          <View style={[styles.matrixModalContent, {maxWidth: 600, maxHeight: '85%'}]}>
             <View style={styles.matrixModalHeader}>
-              <Text style={[styles.matrixModalTitle, {fontSize: 16}]}>算法配置与实时数据</Text>
+              <Text style={styles.matrixModalTitle}>算法配置</Text>
               <View style={{flexDirection: 'row', alignItems: 'center'}}>
                 <TouchableOpacity
                   onPress={() => {
@@ -1056,8 +1055,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                     ]);
                   }}
                   activeOpacity={0.7}
-                  style={{marginRight: 12, paddingHorizontal: 12, paddingVertical: 5, backgroundColor: Colors.warning, borderRadius: 4}}>
-                  <Text style={{color: '#fff', fontSize: 13, fontWeight: '600'}}>重置默认</Text>
+                  style={{marginRight: 12, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: Colors.warning, borderRadius: 4}}>
+                  <Text style={{color: '#fff', fontSize: 12}}>重置默认</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setShowConfig(false)}
@@ -1067,363 +1066,89 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                 </TouchableOpacity>
               </View>
             </View>
-
-            <View style={{flex: 1, flexDirection: 'row'}}>
-              {/* ========== 左侧：实时数据面板 ========== */}
-              <View style={styles.rtPanel}>
-                <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
-                  {/* 基础状态 */}
-                  <Text style={styles.rtGroupTitle}>基础状态</Text>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>座椅状态</Text>
-                    <Text style={[styles.rtValue, {color: realtimeData.seat_state === 'ADAPTIVE_LOCKED' ? '#4CAF50' : realtimeData.seat_state === 'OFF_SEAT' ? '#FF5722' : '#FFC107'}]}>{realtimeData.seat_state}</Text>
-                  </View>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>帧计数</Text>
-                    <Text style={styles.rtNum}>{realtimeData.frame_count}</Text>
-                  </View>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>坐垫压力和</Text>
-                    <Text style={styles.rtNum}>{safeFixed(realtimeData.cushion_sum, 1)}</Text>
-                  </View>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>靠背压力和</Text>
-                    <Text style={styles.rtNum}>{safeFixed(realtimeData.backrest_sum, 1)}</Text>
-                  </View>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>活体状态</Text>
-                    <Text style={styles.rtValue}>{realtimeData.living_status}</Text>
-                  </View>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>体型判断</Text>
-                    <Text style={styles.rtValue}>{realtimeData.body_type}</Text>
-                  </View>
-
-                  {/* 控制决策 */}
-                  {realtimeData.control_decision_data && (
-                    <>
-                      <Text style={styles.rtGroupTitle}>控制决策</Text>
-                      {/* 腰托 */}
-                      {realtimeData.control_decision_data.lumbar && (
-                        <>
-                          <View style={styles.rtSubTitle}><Text style={styles.rtSubTitleText}>腰托</Text></View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>上背压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.control_decision_data.lumbar.upper_pressure, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>下背压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.control_decision_data.lumbar.lower_pressure, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>上下比</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.control_decision_data.lumbar.ratio, 3)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>阈值通过</Text>
-                            <Text style={[styles.rtValue, {color: realtimeData.control_decision_data.lumbar.threshold_passed ? '#4CAF50' : '#FF5722'}]}>
-                              {realtimeData.control_decision_data.lumbar.threshold_passed ? '是' : '否'}
-                            </Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>动作</Text>
-                            <Text style={[styles.rtValue, {color: realtimeData.control_decision_data.lumbar.action === 'INFLATE' ? '#4CAF50' : realtimeData.control_decision_data.lumbar.action === 'DEFLATE' ? '#FF5722' : '#FFC107'}]}>
-                              {realtimeData.control_decision_data.lumbar.action === 'INFLATE' ? '↑充气' : realtimeData.control_decision_data.lumbar.action === 'DEFLATE' ? '↓放气' : '保持'}
-                            </Text>
-                          </View>
-                        </>
-                      )}
-                      {/* 侧翼 */}
-                      {realtimeData.control_decision_data.side_wings && (
-                        <>
-                          <View style={styles.rtSubTitle}><Text style={styles.rtSubTitleText}>侧翼</Text></View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>左侧压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.control_decision_data.side_wings.left_pressure, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>右侧压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.control_decision_data.side_wings.right_pressure, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>左右比</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.control_decision_data.side_wings.ratio, 3)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>左侧动作</Text>
-                            <Text style={[styles.rtValue, {color: realtimeData.control_decision_data.side_wings.left_action === 'INFLATE' ? '#4CAF50' : realtimeData.control_decision_data.side_wings.left_action === 'DEFLATE' ? '#FF5722' : '#FFC107'}]}>
-                              {realtimeData.control_decision_data.side_wings.left_action === 'INFLATE' ? '↑充' : realtimeData.control_decision_data.side_wings.left_action === 'DEFLATE' ? '↓放' : '保持'}
-                            </Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>右侧动作</Text>
-                            <Text style={[styles.rtValue, {color: realtimeData.control_decision_data.side_wings.right_action === 'INFLATE' ? '#4CAF50' : realtimeData.control_decision_data.side_wings.right_action === 'DEFLATE' ? '#FF5722' : '#FFC107'}]}>
-                              {realtimeData.control_decision_data.side_wings.right_action === 'INFLATE' ? '↑充' : realtimeData.control_decision_data.side_wings.right_action === 'DEFLATE' ? '↓放' : '保持'}
-                            </Text>
-                          </View>
-                        </>
-                      )}
-                      {/* 腿托 */}
-                      {realtimeData.control_decision_data.leg_support && (
-                        <>
-                          <View style={styles.rtSubTitle}><Text style={styles.rtSubTitleText}>腿托</Text></View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>臀部压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.control_decision_data.leg_support.butt_pressure, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>腿部压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.control_decision_data.leg_support.leg_pressure, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>腿臀比</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.control_decision_data.leg_support.ratio, 3)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>动作</Text>
-                            <Text style={[styles.rtValue, {color: realtimeData.control_decision_data.leg_support.action === 'INFLATE' ? '#4CAF50' : realtimeData.control_decision_data.leg_support.action === 'DEFLATE' ? '#FF5722' : '#FFC107'}]}>
-                              {realtimeData.control_decision_data.leg_support.action === 'INFLATE' ? '↑充气' : realtimeData.control_decision_data.leg_support.action === 'DEFLATE' ? '↓放气' : '保持'}
-                            </Text>
-                          </View>
-                          {realtimeData.control_decision_data.leg_support.left_action && (
-                            <>
-                              <View style={styles.rtRow}>
-                                <Text style={styles.rtLabel}>左腿托</Text>
-                                <Text style={[styles.rtValue, {color: realtimeData.control_decision_data.leg_support.left_action === 'INFLATE' ? '#4CAF50' : realtimeData.control_decision_data.leg_support.left_action === 'DEFLATE' ? '#FF5722' : '#FFC107'}]}>
-                                  {safeFixed(realtimeData.control_decision_data.leg_support.left_ratio, 2)} {realtimeData.control_decision_data.leg_support.left_action === 'INFLATE' ? '↑充' : realtimeData.control_decision_data.leg_support.left_action === 'DEFLATE' ? '↓放' : '保持'}
-                                </Text>
-                              </View>
-                              <View style={styles.rtRow}>
-                                <Text style={styles.rtLabel}>右腿托</Text>
-                                <Text style={[styles.rtValue, {color: realtimeData.control_decision_data.leg_support.right_action === 'INFLATE' ? '#4CAF50' : realtimeData.control_decision_data.leg_support.right_action === 'DEFLATE' ? '#FF5722' : '#FFC107'}]}>
-                                  {safeFixed(realtimeData.control_decision_data.leg_support.right_ratio, 2)} {realtimeData.control_decision_data.leg_support.right_action === 'INFLATE' ? '↑充' : realtimeData.control_decision_data.leg_support.right_action === 'DEFLATE' ? '↓放' : '保持'}
-                                </Text>
-                              </View>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )}
-
-                  {/* 身体特征 */}
-                  {realtimeData.body_features && (
-                    <>
-                      <Text style={styles.rtGroupTitle}>身体特征</Text>
-                      {realtimeData.body_features.cushion && (
-                        <>
-                          <View style={styles.rtSubTitle}><Text style={styles.rtSubTitleText}>坐垫</Text></View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>原始压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.body_features.cushion.original_sum, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>滤波压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.body_features.cushion.filtered_sum, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>最大值</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.body_features.cushion.max_value, 1)}</Text>
-                          </View>
-                        </>
-                      )}
-                      {realtimeData.body_features.backrest && (
-                        <>
-                          <View style={styles.rtSubTitle}><Text style={styles.rtSubTitleText}>靠背</Text></View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>原始压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.body_features.backrest.original_sum, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>滤波压力</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.body_features.backrest.filtered_sum, 1)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>最大值</Text>
-                            <Text style={styles.rtNum}>{safeFixed(realtimeData.body_features.backrest.max_value, 1)}</Text>
-                          </View>
-                        </>
-                      )}
-                      {realtimeData.body_features.body_size_type && (
-                        <View style={styles.rtRow}>
-                          <Text style={styles.rtLabel}>体型</Text>
-                          <Text style={styles.rtValue}>{realtimeData.body_features.body_size_type} ({safeFixed(realtimeData.body_features.body_size_raw, 1)})</Text>
-                        </View>
-                      )}
-                    </>
-                  )}
-
-                  {/* 活体检测 */}
-                  {realtimeData.living_detection_data && realtimeData.living_detection_data.enabled && (
-                    <>
-                      <Text style={styles.rtGroupTitle}>活体检测</Text>
-                      <View style={styles.rtRow}>
-                        <Text style={styles.rtLabel}>置信度</Text>
-                        <Text style={styles.rtNum}>{safeFixed(realtimeData.living_confidence, 3)}</Text>
-                      </View>
-                      <View style={styles.rtRow}>
-                        <Text style={styles.rtLabel}>状态</Text>
-                        <Text style={styles.rtValue}>{realtimeData.living_detection_data.status ?? '--'}</Text>
-                      </View>
-                      {realtimeData.living_detection_data.queue && (
-                        <View style={styles.rtRow}>
-                          <Text style={styles.rtLabel}>队列</Text>
-                          <Text style={styles.rtNum}>{realtimeData.living_detection_data.queue.current_length}/{realtimeData.living_detection_data.queue.size}</Text>
-                        </View>
-                      )}
-                      {realtimeData.living_detection_data.control_lock && (
-                        <View style={styles.rtRow}>
-                          <Text style={styles.rtLabel}>控制锁</Text>
-                          <Text style={[styles.rtValue, {color: realtimeData.living_detection_data.control_lock.adaptive_control_unlocked ? '#4CAF50' : '#FF5722'}]}>
-                            {realtimeData.living_detection_data.control_lock.message}
-                          </Text>
-                        </View>
-                      )}
-                      {realtimeData.living_detection_data.current_detection?.sad_score != null && (
-                        <View style={styles.rtRow}>
-                          <Text style={styles.rtLabel}>SAD分数</Text>
-                          <Text style={styles.rtNum}>{safeFixed(realtimeData.living_detection_data.current_detection.sad_score, 3)}</Text>
-                        </View>
-                      )}
-                    </>
-                  )}
-
-                  {/* 体型检测 */}
-                  {realtimeData.body_type_detection_data && realtimeData.body_type_detection_data.enabled && (
-                    <>
-                      <Text style={styles.rtGroupTitle}>体型检测</Text>
-                      <View style={styles.rtRow}>
-                        <Text style={styles.rtLabel}>体型</Text>
-                        <Text style={styles.rtValue}>{realtimeData.body_type_detection_data.body_type ?? '--'}</Text>
-                      </View>
-                      {realtimeData.body_type_detection_data.queue && (
-                        <View style={styles.rtRow}>
-                          <Text style={styles.rtLabel}>队列</Text>
-                          <Text style={styles.rtNum}>{realtimeData.body_type_detection_data.queue.current_length}/{realtimeData.body_type_detection_data.queue.size}</Text>
-                        </View>
-                      )}
-                      {realtimeData.body_type_detection_data.lock && (
-                        <View style={styles.rtRow}>
-                          <Text style={styles.rtLabel}>锁定</Text>
-                          <Text style={[styles.rtValue, {color: realtimeData.body_type_detection_data.lock.locked ? '#4CAF50' : '#FFC107'}]}>
-                            {realtimeData.body_type_detection_data.lock.message}
-                          </Text>
-                        </View>
-                      )}
-                    </>
-                  )}
-
-                  {/* 放气冷却 */}
-                  {realtimeData.deflate_cooldown && realtimeData.deflate_cooldown.groups && (
-                    <>
-                      <Text style={styles.rtGroupTitle}>放气冷却</Text>
-                      {Object.entries(realtimeData.deflate_cooldown.groups).map(([group, state]) => (
-                        <View key={group} style={styles.rtRow}>
-                          <Text style={styles.rtLabel}>{group}</Text>
-                          <Text style={[styles.rtValue, {color: state.locked ? '#FF5722' : '#4CAF50'}]}>
-                            {state.locked ? `锁定(${state.counter})` : `正常(${state.counter})`}
-                          </Text>
-                        </View>
-                      ))}
-                    </>
-                  )}
-
-                  <View style={{height: 20}} />
-                </ScrollView>
+            {configLoading ? (
+              <View style={{padding: 40, alignItems: 'center'}}>
+                <Text style={{color: Colors.textGray}}>加载中...</Text>
               </View>
-
-              {/* ========== 右侧：配置参数面板 ========== */}
-              <View style={{flex: 1}}>
-                  {configLoading ? (
-                    <View style={{padding: 40, alignItems: 'center'}}>
-                      <Text style={{color: '#ccc', fontSize: 14}}>加载中...</Text>
-                    </View>
-                  ) : configData ? (
-                    <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
-                      {(() => {
-                        const groups: Record<string, {key: string; value: any; comment: string | null}[]> = {};
-                        Object.entries(configData).forEach(([key, info]) => {
-                          const group = key.split('.')[0];
-                          if (!groups[group]) groups[group] = [];
-                          groups[group].push({key, value: info.value, comment: info.comment});
-                        });
-                        const GROUP_LABELS: Record<string, string> = {
-                          system: '系统',
-                          control: '控制',
-                          lumbar: '腰托',
-                          side_wings: '侧翼',
-                          leg_support: '腿托',
-                          matrix: '传感器矩阵',
-                          protocol: '通信协议',
-                          airbag_mapping: '气囊映射',
-                          living_detection: '活体检测',
-                          body_type_detection: '体型检测',
-                          integrated_system: '集成座椅系统',
-                          body_shape_classification: '体型三分类',
-                          tap_massage: '拍打按摩',
-                        };
-                        return Object.entries(groups).map(([group, items]) => (
-                          <View key={group} style={{marginBottom: 14}}>
-                            <Text style={styles.cfgGroupTitle}>
-                              {GROUP_LABELS[group] || group}
-                            </Text>
-                            {items.map(item => {
-                              const isArray = Array.isArray(item.value);
-                              const isBool = typeof item.value === 'boolean';
-                              const shortKey = item.key.split('.').slice(1).join('.');
-                              return (
-                                <View key={item.key} style={styles.cfgRow}>
-                                  <View style={{flex: 1, marginRight: 8}}>
-                                    <Text style={styles.cfgKey} numberOfLines={1}>{shortKey}</Text>
-                                    {item.comment ? <Text style={styles.cfgComment} numberOfLines={1}>{item.comment}</Text> : null}
-                                  </View>
-                                  {isBool ? (
-                                    <TouchableOpacity
-                                      onPress={() => handleSetConfig(item.key, !item.value)}
-                                      activeOpacity={0.7}
-                                      style={[styles.cfgBoolBtn, {backgroundColor: item.value ? '#4CAF50' : '#666'}]}>
-                                      <Text style={{color: '#fff', fontSize: 12, fontWeight: '600'}}>{item.value ? 'true' : 'false'}</Text>
-                                    </TouchableOpacity>
-                                  ) : isArray ? (
-                                    <Text style={styles.cfgValueText} numberOfLines={1}>[{item.value.join(', ')}]</Text>
-                                  ) : (
-                                    <TextInput
-                                      style={styles.cfgInput}
-                                      defaultValue={String(item.value)}
-                                      keyboardType="numeric"
-                                      returnKeyType="done"
-                                      onEndEditing={(e) => {
-                                        const text = e.nativeEvent.text.trim();
-                                        if (text === '' || text === String(item.value)) return;
-                                        const num = Number(text);
-                                        if (!isNaN(num)) {
-                                          handleSetConfig(item.key, num);
-                                        } else {
-                                          handleSetConfig(item.key, text);
-                                        }
-                                      }}
-                                    />
-                                  )}
-                                </View>
-                              );
-                            })}
+            ) : configData ? (
+              <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
+                {(() => {
+                  // 按一级 key 分组
+                  const groups: Record<string, {key: string; value: any; comment: string | null}[]> = {};
+                  Object.entries(configData).forEach(([key, info]) => {
+                    const group = key.split('.')[0];
+                    if (!groups[group]) groups[group] = [];
+                    groups[group].push({key, value: info.value, comment: info.comment});
+                  });
+                  const GROUP_LABELS: Record<string, string> = {
+                    system: '系统',
+                    control: '控制',
+                    lumbar: '腰托',
+                    side_wings: '侧翼',
+                    leg_support: '腿托',
+                    matrix: '传感器矩阵',
+                    protocol: '通信协议',
+                    airbag_mapping: '气囊映射',
+                    living_detection: '活体检测',
+                    body_type_detection: '体型检测',
+                    integrated_system: '集成座椅系统',
+                    body_shape_classification: '体型三分类',
+                    tap_massage: '拍打按摩',
+                  };
+                  return Object.entries(groups).map(([group, items]) => (
+                    <View key={group} style={{marginBottom: 12}}>
+                      <Text style={{color: Colors.primary, fontSize: 13, fontWeight: '700', marginBottom: 6, paddingHorizontal: 12}}>
+                        {GROUP_LABELS[group] || group}
+                      </Text>
+                      {items.map(item => {
+                        const isArray = Array.isArray(item.value);
+                        const isBool = typeof item.value === 'boolean';
+                        const shortKey = item.key.split('.').slice(1).join('.');
+                        return (
+                          <View key={item.key} style={styles.cfgRow}>
+                            <View style={{flex: 1, marginRight: 8}}>
+                              <Text style={styles.cfgKey} numberOfLines={1}>{shortKey}</Text>
+                              {item.comment ? <Text style={styles.cfgComment} numberOfLines={1}>{item.comment}</Text> : null}
+                            </View>
+                            {isBool ? (
+                              <TouchableOpacity
+                                onPress={() => handleSetConfig(item.key, !item.value)}
+                                activeOpacity={0.7}
+                                style={[styles.cfgBoolBtn, {backgroundColor: item.value ? Colors.primary : Colors.textGray}]}>
+                                <Text style={{color: '#fff', fontSize: 11}}>{item.value ? 'true' : 'false'}</Text>
+                              </TouchableOpacity>
+                            ) : isArray ? (
+                              <Text style={styles.cfgValueText} numberOfLines={1}>[{item.value.join(', ')}]</Text>
+                            ) : (
+                              <TextInput
+                                style={styles.cfgInput}
+                                defaultValue={String(item.value)}
+                                keyboardType="numeric"
+                                returnKeyType="done"
+                                onEndEditing={(e) => {
+                                  const text = e.nativeEvent.text.trim();
+                                  if (text === '' || text === String(item.value)) return;
+                                  const num = Number(text);
+                                  if (!isNaN(num)) {
+                                    handleSetConfig(item.key, num);
+                                  } else {
+                                    handleSetConfig(item.key, text);
+                                  }
+                                }}
+                              />
+                            )}
                           </View>
-                        ));
-                      })()}
-                    </ScrollView>
-                  ) : (
-                    <View style={{padding: 40, alignItems: 'center'}}>
-                      <Text style={{color: '#ccc', fontSize: 14}}>无配置数据</Text>
-                      <TouchableOpacity
-                        onPress={loadConfig}
-                        activeOpacity={0.7}
-                        style={{marginTop: 16, paddingHorizontal: 20, paddingVertical: 8, backgroundColor: '#4CAF50', borderRadius: 6}}>
-                        <Text style={{color: '#fff', fontSize: 13, fontWeight: '600'}}>重新加载</Text>
-                      </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                  )}
+                  ));
+                })()}
+              </ScrollView>
+            ) : (
+              <View style={{padding: 40, alignItems: 'center'}}>
+                <Text style={{color: Colors.textGray}}>无配置数据</Text>
               </View>
-            </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -1738,63 +1463,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#fff',
     fontWeight: '500',
-  },
-  // ─── 实时数据面板 ───
-  rtPanel: {
-    width: 220,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(255,255,255,0.12)',
-    paddingRight: 8,
-    marginRight: 8,
-  },
-  rtGroupTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#4FC3F7',
-    marginTop: 10,
-    marginBottom: 4,
-    paddingHorizontal: 6,
-  },
-  rtSubTitle: {
-    marginTop: 4,
-    marginBottom: 2,
-    paddingHorizontal: 6,
-  },
-  rtSubTitleText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#90CAF9',
-  },
-  rtRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  rtLabel: {
-    fontSize: 12,
-    color: '#B0BEC5',
-  },
-  rtValue: {
-    fontSize: 13,
-    color: '#ECEFF1',
-    fontWeight: '600',
-  },
-  rtNum: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#E0E0E0',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  // ─── 配置弹窗 ───
-  cfgGroupTitle: {
-    color: '#4FC3F7',
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 6,
-    paddingHorizontal: 12,
-    marginTop: 4,
   },
   cfgRow: {
     flexDirection: 'row',
