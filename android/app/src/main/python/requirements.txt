@@ -3,6 +3,7 @@
 # Core dependencies
 numpy>=1.20.0
 PyYAML>=5.4.0
+ruamel.yaml>=0.17.0
 
 # Optional dependencies for development and testing
 # Uncomment if needed for your development environment
