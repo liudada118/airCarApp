@@ -412,29 +412,39 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   // ─── Python 配置管理 ──────────────────────────────────────
   const loadConfig = useCallback(() => {
     setConfigLoading(true);
-    NativeModules.SerialModule?.getConfig?.()
+    const sm = NativeModules.SerialModule;
+    console.log('[Config] loadConfig, sm exists:', !!sm, 'getConfig exists:', !!(sm && sm.getConfig));
+    if (!sm || !sm.getConfig) {
+      console.warn('[Config] SerialModule or getConfig not available');
+      setConfigLoading(false);
+      return;
+    }
+    sm.getConfig()
       .then((json: string) => {
+        console.log('[Config] got response, len:', json?.length);
         try {
           const parsed = JSON.parse(json);
           if (parsed.error) {
-            console.warn('getConfig error:', parsed.error);
+            console.warn('[Config] error:', parsed.error);
           } else {
             setConfigData(parsed);
           }
         } catch (e) {
-          console.warn('getConfig parse error:', e);
+          console.warn('[Config] parse error:', e);
         }
         setConfigLoading(false);
       })
       .catch((e: any) => {
-        console.warn('getConfig failed:', e);
+        console.warn('[Config] getConfig failed:', e);
         setConfigLoading(false);
       });
   }, []);
 
   const handleSetConfig = useCallback((key: string, value: any) => {
     const valueJson = JSON.stringify(value);
-    NativeModules.SerialModule?.setConfig?.(key, valueJson)
+    const sm = NativeModules.SerialModule;
+    if (!sm || !sm.setConfig) return;
+    sm.setConfig(key, valueJson)
       .then((json: string) => {
         try {
           const result = JSON.parse(json);
