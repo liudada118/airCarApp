@@ -681,6 +681,28 @@ class IntegratedSeatSystem:
         """重置自动触发标志（离座时调用，下次入座可重新触发）"""
         self._body_shape_auto_triggered = False
 
+    def _reset_body_shape_on_leave(self):
+        """
+        离座/复位时重置体型三分类结果和品味激活状态
+
+        解决的问题：
+            离座后体型三分类结果不清除，导致下次入座其他人员时
+            仍使用上一个人的体型结果和品味区间。
+
+        重置内容：
+            1. body_shape_classifier → reset() 到 IDLE，清除分类结果
+            2. preference_manager → 取消品味激活，取消进行中的记录
+        """
+        # 重置体型三分类器（清除结果，回到IDLE状态）
+        if self.body_shape_classifier is not None:
+            self.body_shape_classifier.reset()
+
+        # 重置品味管理器（取消激活体型，取消进行中的记录）
+        if self.preference_manager.is_recording:
+            self.preference_manager.cancel_recording()
+            print(f"[集成系统] 离座时取消了进行中的品味记录")
+        self.preference_manager.set_active_body_shape(None)
+
     def _split_matrices(self, sensor_data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """拆分传感器数据为靠背和坐垫"""
         data = sensor_data.flatten()
@@ -881,7 +903,8 @@ class IntegratedSeatSystem:
                         self.tap_massage_detector.cushion_massage_active = False
                     self._reset_step_drop_detection()  # 重置阶跃检测
                     self._reset_body_shape_auto_trigger()  # 重置自动触发标志
-                    print(f"[集成系统] 状态转换: CUSHION_ONLY → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空")
+                    self._reset_body_shape_on_leave()  # 重置体型三分类结果和品味激活状态
+                    print(f"[集成系统] 状态转换: CUSHION_ONLY → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空，体型已重置")
             else:
                 # 坐垫满足但靠背不满足，保持CUSHION_ONLY
                 self.off_counter = 0
@@ -921,7 +944,8 @@ class IntegratedSeatSystem:
                         self.tap_massage_detector.cushion_massage_active = False
                     self._reset_step_drop_detection()  # 重置阶跃检测
                     self._reset_body_shape_auto_trigger()  # 重置自动触发标志
-                    print(f"[集成系统] 状态转换: ADAPTIVE_LOCKED → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空")
+                    self._reset_body_shape_on_leave()  # 重置体型三分类结果和品味激活状态
+                    print(f"[集成系统] 状态转换: ADAPTIVE_LOCKED → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空，体型已重置")
             else:
                 self.off_counter = 0
 

@@ -412,43 +412,33 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   // ─── Python 配置管理 ──────────────────────────────────────
   const loadConfig = useCallback(() => {
     setConfigLoading(true);
-    console.log('[Config] loadConfig called, SerialModule:', !!NativeModules.SerialModule);
-    try {
-      NativeModules.SerialModule?.getConfig()
-        .then((json: string) => {
-          console.log('[Config] raw response length:', json?.length);
-          try {
-            const parsed = JSON.parse(json);
-            if (parsed.error) {
-              console.warn('[Config] error:', parsed.error);
-            } else {
-              console.log('[Config] loaded', Object.keys(parsed).length, 'keys');
-              setConfigData(parsed);
-            }
-          } catch (e) {
-            console.warn('[Config] parse error:', e);
+    NativeModules.SerialModule?.getConfig?.()
+      .then((json: string) => {
+        try {
+          const parsed = JSON.parse(json);
+          if (parsed.error) {
+            console.warn('getConfig error:', parsed.error);
+          } else {
+            setConfigData(parsed);
           }
-          setConfigLoading(false);
-        })
-        .catch((e: any) => {
-          console.warn('[Config] getConfig failed:', e?.message || e);
-          setConfigLoading(false);
-        });
-    } catch (e: any) {
-      console.warn('[Config] getConfig call error:', e?.message || e);
-      setConfigLoading(false);
-    }
+        } catch (e) {
+          console.warn('getConfig parse error:', e);
+        }
+        setConfigLoading(false);
+      })
+      .catch((e: any) => {
+        console.warn('getConfig failed:', e);
+        setConfigLoading(false);
+      });
   }, []);
 
   const handleSetConfig = useCallback((key: string, value: any) => {
     const valueJson = JSON.stringify(value);
-    console.log('[Config] set', key, '=', valueJson);
-    NativeModules.SerialModule?.setConfig(key, valueJson)
+    NativeModules.SerialModule?.setConfig?.(key, valueJson)
       .then((json: string) => {
         try {
           const result = JSON.parse(json);
           if (result.ok) {
-            console.log('[Config] set ok:', key);
             setConfigData(prev => {
               if (!prev) return prev;
               return {
@@ -456,16 +446,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                 [key]: {...prev[key], value},
               };
             });
-          } else {
-            console.warn('[Config] set failed:', json);
           }
-        } catch (e) {
-          console.warn('[Config] set parse error:', e);
-        }
+        } catch (_) {}
       })
-      .catch((e: any) => {
-        console.warn('[Config] setConfig failed:', e?.message || e);
-      });
+      .catch(() => {});
   }, []);
 
   const handleResetConfig = useCallback(() => {
@@ -1025,7 +1009,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
         animationType="fade"
         onRequestClose={() => setShowConfig(false)}>
         <View style={styles.matrixModalOverlay}>
-          <View style={[styles.matrixModalContent, {maxWidth: '92%', maxHeight: '90%', width: '92%'}]}>
+          <View style={[styles.matrixModalContent, {maxWidth: 600, maxHeight: '85%'}]}>
             <View style={styles.matrixModalHeader}>
               <Text style={[styles.matrixModalTitle, {fontSize: 16}]}>算法配置</Text>
               <View style={{flexDirection: 'row', alignItems: 'center'}}>

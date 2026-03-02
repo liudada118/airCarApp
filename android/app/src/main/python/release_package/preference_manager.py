@@ -97,14 +97,20 @@ class PreferenceManager:
             }
         }
 
-    def set_active_body_shape(self, body_shape: str):
+    def set_active_body_shape(self, body_shape):
         """
         设置当前激活的体型（由体型三分类器结果触发）
 
         Args:
-            body_shape: 体型名称（'瘦小'/'中等'/'高大'）
+            body_shape: 体型名称（'瘦小'/'中等'/'高大'），传入None清除激活状态
         """
-        if body_shape in self.BODY_SHAPES:
+        if body_shape is None:
+            # 清除激活状态（离座/复位时调用）
+            old_shape = self.active_body_shape
+            self.active_body_shape = None
+            if old_shape is not None:
+                print(f"[品味管理] 体型已清除: {old_shape} → None")
+        elif body_shape in self.BODY_SHAPES:
             old_shape = self.active_body_shape
             self.active_body_shape = body_shape
             if old_shape != body_shape:
