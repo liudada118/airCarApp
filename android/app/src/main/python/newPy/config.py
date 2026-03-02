@@ -4,16 +4,8 @@
 """
 import copy
 from typing import Any, Dict, Optional
-
-try:
-    from ruamel.yaml import YAML
-    from ruamel.yaml.comments import CommentedMap
-    _USE_RUAMEL = True
-except ImportError:
-    YAML = None
-    CommentedMap = dict
-    _USE_RUAMEL = False
-    import yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
 
 
 class Config:
@@ -27,12 +19,9 @@ class Config:
             config_path: 配置文件路径
         """
         self.config_path = config_path
-        if _USE_RUAMEL:
-            self.yaml = YAML()
-            self.yaml.preserve_quotes = True
-            self.yaml.default_flow_style = False
-        else:
-            self.yaml = None
+        self.yaml = YAML()
+        self.yaml.preserve_quotes = True
+        self.yaml.default_flow_style = False
         self._config = self._load_config()
         self._original_config = copy.deepcopy(self._config)
 
@@ -45,11 +34,8 @@ class Config:
         """
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
-                if _USE_RUAMEL:
-                    config = self.yaml.load(f)
-                else:
-                    config = yaml.safe_load(f)
-            return config or {}
+                config = self.yaml.load(f)
+            return config
         except FileNotFoundError:
             raise FileNotFoundError(f"配置文件未找到: {self.config_path}")
         except Exception as e:
@@ -125,15 +111,7 @@ class Config:
         """
         try:
             with open(self.config_path, 'w', encoding='utf-8') as f:
-                if _USE_RUAMEL:
-                    self.yaml.dump(self._config, f)
-                else:
-                    yaml.safe_dump(
-                        self._config,
-                        f,
-                        allow_unicode=True,
-                        sort_keys=False,
-                    )
+                self.yaml.dump(self._config, f)
         except Exception as e:
             raise IOError(f"保存配置文件失败: {e}")
 

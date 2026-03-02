@@ -154,7 +154,7 @@ integrated_system:
   enabled: true  # 是否启用集成系统
   # 压力判定阈值
   cushion_sum_threshold: 1700.0 # 坐垫压力总和阈值，判定为有人坐下（推荐400-600）
-  backrest_sum_threshold: 1500.0  # 靠背压力总和阈值，判定为靠背有压力（推荐200-400）
+  backrest_sum_threshold: 1000.0  # 靠背压力总和阈值，判定为靠背有压力（推荐200-400）
   # 时间窗口参数（帧数）
   cushion_frames_threshold: 65  # [已废弃] 原用于坐垫持续帧数判定，现已改为立即判定
   full_seat_frames_threshold: 130  # [已废弃] 原用于全座持续帧数判定，现已改为立即判定

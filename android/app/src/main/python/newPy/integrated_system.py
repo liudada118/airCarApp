@@ -17,7 +17,8 @@ from typing import Optional, Dict, Any, Tuple, List
 from collections import deque
 from config import Config
 from control import LivingDetector, BodyTypeDetector, ControlAction
-from body_shape_classifier import BodyShapeClassifier
+from body_shape_classifier import BodyShapeClassifier, ClassifierState
+from preference_manager import PreferenceManager
 
 
 class IntegratedState(Enum):
@@ -76,6 +77,18 @@ class IntegratedSeatSystem:
             self.body_shape_classifier = BodyShapeClassifier(self.config, model_path)
         else:
             self.body_shape_classifier = None
+
+        # 体型三分类自动触发配置（方案C：自动触发+外部触发双模式）
+        self.auto_trigger_body_shape = self.config.get(
+            'body_shape_classification.auto_trigger', True
+        )
+        self._body_shape_auto_triggered = False  # 本次入座是否已自动触发
+
+        # 初始化品味管理器
+        preference_file = self.config.get('preference.storage_file', 'preferences.json')
+        if not os.path.isabs(preference_file):
+            preference_file = os.path.join(os.path.dirname(os.path.abspath(config_path)), preference_file)
+        self.preference_manager = PreferenceManager(self.config, preference_file)
 
         # 初始化拍打按摩检测器
         if self.config.get('tap_massage.enabled', False):
@@ -220,6 +233,8 @@ class IntegratedSeatSystem:
             print(f"  - 初始化充气: 启用 | 周期数={self.init_inflate_cycles} | 气囊={self.init_inflate_airbags}")
         if self.deflate_cooldown_enabled:
             print(f"  - 放气冷却锁: 启用（按组独立） | 最大连续指令数={self.deflate_cooldown_max_commands} | 组=[lumbar, left_side_wing, right_side_wing, left_leg, right_leg]")
+        if self.body_shape_classifier:
+            print(f"  - 体型三分类: 启用 | 自动触发={'开启' if self.auto_trigger_body_shape else '关闭'}")
         if self.step_drop_enabled:
             print(f"  - 阶跃下降检测: 启用 | 窗口={self.step_drop_window_frames}帧 | 间隔={self.step_drop_history_gap_frames}帧 | 阈值={self.step_drop_pressure_threshold} | 比例={self.step_drop_ratio} | 确认={self.step_drop_confirm_cycles}周期 | 放气={self.step_drop_deflate_cycles}周期")
 
@@ -541,28 +556,86 @@ class IntegratedSeatSystem:
         body_shape_result = None
         if self.body_shape_classifier is not None:
             body_shape_result = self.body_shape_classifier.update(sensor_data)
+            # 体型三分类完成后，自动设置品味管理器的激活体型
+            if body_shape_result is not None and body_shape_result.get('status') == 'COMPLETED':
+                classified_shape = body_shape_result.get('body_shape')
+                if classified_shape:
+                    self.preference_manager.set_active_body_shape(classified_shape)
+                    # 检查该体型是否有品味数据，有则自动应用
+                    if self.preference_manager.has_preference(classified_shape):
+                        print(f"[集成系统] 体型 '{classified_shape}' 已识别，自动应用品味调节区间")
+                    else:
+                        print(f"[集成系统] 体型 '{classified_shape}' 已识别，使用默认调节区间")
+
+        # 品味管理器喂入帧数据（仅在ADAPTIVE_LOCKED状态且正在记录品味时）
+        preference_record_result = None
+        if self.preference_manager.is_recording and self.state == IntegratedState.ADAPTIVE_LOCKED:
+            preference_record_result = self.preference_manager.feed_frame(regions)
 
         # 生成体型三分类状态输出
         body_shape_status = self._get_body_shape_status()
 
-        # 生成统一输出
+        # 获取品味管理器状态
+        preference_status = self.preference_manager.get_status()
+
+        # ==================== 精简输出：三个独立字段 ====================
+
+        # ① 离座状态
+        seat_status = {
+            'state': self.state.name,                                    # OFF_SEAT/CUSHION_ONLY/ADAPTIVE_LOCKED/RESETTING
+            'is_off_seat': self.state == IntegratedState.OFF_SEAT,       # True=无人
+            'is_seated': self.state in [
+                IntegratedState.CUSHION_ONLY,
+                IntegratedState.ADAPTIVE_LOCKED
+            ],                                                           # True=有人坐着
+            'is_resetting': self.state == IntegratedState.RESETTING,     # True=复位中
+        }
+
+        # ② 体型相关信息
+        body_shape_info = {
+            # 体型三分类结果
+            'body_shape': body_shape_status.get('body_shape', ''),       # 瘦小/中等/高大/''(未识别)
+            'body_shape_state': body_shape_status.get('state', 'DISABLED'),  # IDLE/COLLECTING/CLASSIFYING/COMPLETED/DISABLED
+            'confidence': body_shape_status.get('confidence', 0.0),      # 置信度 [0.0, 1.0]
+            'probabilities': body_shape_status.get('probabilities', {}), # {瘦小: x, 中等: y, 高大: z}
+            # 品味状态
+            'preference': {
+                'active_body_shape': preference_status.get('active_body_shape'),  # 当前激活的体型
+                'using_preference': preference_status.get('using_preference', False),  # 是否正在使用品味区间
+                'is_recording': preference_status.get('is_recording', False),  # 是否正在记录品味
+                'recording_progress': preference_status.get('recording_progress'),  # 记录进度（仅记录中非空）
+            },
+        }
+
+        # ③ 气囊指令
+        airbag_command = {
+            'command': control_command,                                  # list[int](55元素) 或 None
+            'is_new_command': self.is_new_command,                       # True=本帧新生成，False=延续上一帧
+        }
+
+        # ==================== 完整输出（包含三字段 + 详细调试数据） ====================
         result = {
+            # === 三个核心独立字段 ===
+            'seat_status': seat_status,
+            'body_shape_info': body_shape_info,
+            'airbag_command': airbag_command,
+
+            # === 兼容字段（保留原有字段，便于GUI和调试） ===
             'control_command': control_command,
-            'is_new_command': self.is_new_command,  # 标记是否为新指令（False表示延续上一帧）
+            'is_new_command': self.is_new_command,
             'control_decision_data': control_decision_data,
             'living_status': living_status,
             'body_type': body_type,
-            'body_shape': body_shape_status,  # 体型三分类结果
+            'body_shape': body_shape_status,
             'seat_state': self.state.name,
-            #  座位状态（如RESETTING、ADAPTIVE_LOCKED等）
             'cushion_sum': cushion_sum,
             'backrest_sum': backrest_sum,
             'living_confidence': living_result['confidence'] if living_result else 0.0,
-            'body_features': self.latest_body_result if self.latest_body_result else {},  # 使用最新保存的结果
-            'living_detection_data': living_detection_data,  # 新增：活体检测决策数据
-            'body_type_detection_data': body_type_detection_data,  # 新增：体型检测决策数据
-            'tap_massage': tap_result,  # 新增：拍打按摩检测结果
-            'deflate_cooldown': {  # 放气冷却锁状态（按组独立）
+            'body_features': self.latest_body_result if self.latest_body_result else {},
+            'living_detection_data': living_detection_data,
+            'body_type_detection_data': body_type_detection_data,
+            'tap_massage': tap_result,
+            'deflate_cooldown': {
                 'enabled': self.deflate_cooldown_enabled,
                 'max_commands': self.deflate_cooldown_max_commands,
                 'groups': {
@@ -573,12 +646,62 @@ class IntegratedSeatSystem:
                     for group, state in self.deflate_cooldown_state.items()
                 }
             },
-            'step_drop_detection': step_drop_data,  # 阶跃下降检测数据（用于可视化）
+            'step_drop_detection': step_drop_data,
+            'preference': preference_status,
+            'preference_record_result': preference_record_result,
             'frame_count': self.frame_count
         }
 
         self.latest_result = result
         return result
+
+    def _try_auto_trigger_body_shape(self, trigger_source: str):
+        """
+        尝试自动触发体型三分类识别（方案C）
+
+        触发条件：
+        1. auto_trigger 配置开启
+        2. 体型三分类器已初始化
+        3. 本次入座尚未自动触发过
+        4. 分类器当前处于 IDLE 状态
+
+        Args:
+            trigger_source: 触发来源描述（用于日志）
+        """
+        if (self.auto_trigger_body_shape
+                and self.body_shape_classifier is not None
+                and not self._body_shape_auto_triggered
+                and self.body_shape_classifier.state == ClassifierState.IDLE):
+            result = self.body_shape_classifier.trigger()
+            if result.get('success'):
+                self._body_shape_auto_triggered = True
+                print(f"[集成系统] 自动触发体型三分类（{trigger_source}，帧{self.frame_count}）")
+
+    def _reset_body_shape_auto_trigger(self):
+        """重置自动触发标志（离座时调用，下次入座可重新触发）"""
+        self._body_shape_auto_triggered = False
+
+    def _reset_body_shape_on_leave(self):
+        """
+        离座/复位时重置体型三分类结果和品味激活状态
+
+        解决的问题：
+            离座后体型三分类结果不清除，导致下次入座其他人员时
+            仍使用上一个人的体型结果和品味区间。
+
+        重置内容：
+            1. body_shape_classifier → reset() 到 IDLE，清除分类结果
+            2. preference_manager → 取消品味激活，取消进行中的记录
+        """
+        # 重置体型三分类器（清除结果，回到IDLE状态）
+        if self.body_shape_classifier is not None:
+            self.body_shape_classifier.reset()
+
+        # 重置品味管理器（取消激活体型，取消进行中的记录）
+        if self.preference_manager.is_recording:
+            self.preference_manager.cancel_recording()
+            print(f"[集成系统] 离座时取消了进行中的品味记录")
+        self.preference_manager.set_active_body_shape(None)
 
     def _split_matrices(self, sensor_data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """拆分传感器数据为靠背和坐垫"""
@@ -739,6 +862,7 @@ class IntegratedSeatSystem:
                     self.locked_body_type = "未判断"  # 重置锁定值
                     self._reset_deflate_cooldown()  # 重置所有气囊组的放气冷却锁
                     print(f"[集成系统] 状态转换: OFF_SEAT → ADAPTIVE_LOCKED (全座有压力，帧{self.frame_count})，活体队列已清空")
+                    self._try_auto_trigger_body_shape('OFF_SEAT→ADAPTIVE_LOCKED')
                 else:
                     # 只有坐垫 → 进入CUSHION_ONLY
                     self.state = IntegratedState.CUSHION_ONLY
@@ -759,6 +883,7 @@ class IntegratedSeatSystem:
                 self.backrest_lost_counter = 0
                 # 不清空队列，保留已有的检测历史
                 print(f"[集成系统] 状态转换: CUSHION_ONLY → ADAPTIVE_LOCKED (靠背压力出现，帧{self.frame_count})，保留活体队列")
+                self._try_auto_trigger_body_shape('CUSHION_ONLY→ADAPTIVE_LOCKED')
             elif cushion_sum < self.cushion_sum_threshold:
                 # 坐垫压力消失 - 准备离座，进入复位状态
                 self.off_counter += 1
@@ -777,7 +902,9 @@ class IntegratedSeatSystem:
                         self.tap_massage_detector.backrest_massage_active = False
                         self.tap_massage_detector.cushion_massage_active = False
                     self._reset_step_drop_detection()  # 重置阶跃检测
-                    print(f"[集成系统] 状态转换: CUSHION_ONLY → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空")
+                    self._reset_body_shape_auto_trigger()  # 重置自动触发标志
+                    self._reset_body_shape_on_leave()  # 重置体型三分类结果和品味激活状态
+                    print(f"[集成系统] 状态转换: CUSHION_ONLY → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空，体型已重置")
             else:
                 # 坐垫满足但靠背不满足，保持CUSHION_ONLY
                 self.off_counter = 0
@@ -816,7 +943,9 @@ class IntegratedSeatSystem:
                         self.tap_massage_detector.backrest_massage_active = False
                         self.tap_massage_detector.cushion_massage_active = False
                     self._reset_step_drop_detection()  # 重置阶跃检测
-                    print(f"[集成系统] 状态转换: ADAPTIVE_LOCKED → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空")
+                    self._reset_body_shape_auto_trigger()  # 重置自动触发标志
+                    self._reset_body_shape_on_leave()  # 重置体型三分类结果和品味激活状态
+                    print(f"[集成系统] 状态转换: ADAPTIVE_LOCKED → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空，体型已重置")
             else:
                 self.off_counter = 0
 
@@ -836,6 +965,7 @@ class IntegratedSeatSystem:
                     self.locked_body_type = "未判断"  # 重置锁定值
                     self._reset_deflate_cooldown()  # 重置所有气囊组的放气冷却锁
                     print(f"[集成系统] 状态转换: RESETTING → ADAPTIVE_LOCKED (复位期间重新入座，全座有压力，帧{self.frame_count})，活体队列已清空")
+                    self._try_auto_trigger_body_shape('RESETTING→ADAPTIVE_LOCKED')
                 else:
                     # 只有坐垫 → 进入CUSHION_ONLY
                     self.state = IntegratedState.CUSHION_ONLY
@@ -851,6 +981,7 @@ class IntegratedSeatSystem:
                 # 复位完成，进入OFF_SEAT
                 self.state = IntegratedState.OFF_SEAT
                 self.reset_counter = 0
+                self._reset_body_shape_auto_trigger()  # 重置自动触发标志
                 print(f"[集成系统] 状态转换: RESETTING → OFF_SEAT (复位完成，帧{self.frame_count})")
             else:
                 # 继续复位
@@ -1171,7 +1302,10 @@ class IntegratedSeatSystem:
         return self._generate_protocol_frame(commands)
 
     def _lumbar_control(self, regions: Dict) -> ControlAction:
-        """腰托控制逻辑（使用平均值而非总和）"""
+        """腰托控制逻辑（使用平均值而非总和）
+
+        支持品味区间覆盖：如果当前体型有品味数据，使用品味区间替代默认阈值
+        """
         upper = regions['backrest_upper']
         lower = regions['backrest_lower']
 
@@ -1193,8 +1327,14 @@ class IntegratedSeatSystem:
             else:
                 ratio = 0
 
-            inflate_threshold = self.config.get('lumbar.upper_lower_ratio_inflate', 1.5)
-            deflate_threshold = self.config.get('lumbar.upper_lower_ratio_deflate', 0.7)
+            # 获取调节阈值：优先使用品味区间，否则使用默认配置
+            thresholds, is_preference = self.preference_manager.get_active_thresholds()
+            if is_preference:
+                inflate_threshold = thresholds['lumbar']['inflate']
+                deflate_threshold = thresholds['lumbar']['deflate']
+            else:
+                inflate_threshold = self.config.get('lumbar.upper_lower_ratio_inflate', 1.5)
+                deflate_threshold = self.config.get('lumbar.upper_lower_ratio_deflate', 0.7)
 
             if ratio > inflate_threshold:
                 return ControlAction.INFLATE
@@ -1211,6 +1351,8 @@ class IntegratedSeatSystem:
         - 左侧压力占比大：左侧充气，右侧放气
         - 右侧压力占比大：右侧充气，左侧放气
         - 在合理区间：左右都放气
+
+        支持品味区间覆盖：如果当前体型有品味数据，使用品味区间替代默认阈值
         """
         left = regions['backrest_left']
         right = regions['backrest_right']
@@ -1223,21 +1365,26 @@ class IntegratedSeatSystem:
         else:
             left_ratio = 0
 
-        # 阈值配置
-        left_inflate_threshold = self.config.get('side_wings.left_right_ratio_inflate_left', 0.7)
-        left_deflate_threshold = self.config.get('side_wings.left_right_ratio_deflate_left', 1.3)
+        # 获取调节阈值：优先使用品味区间，否则使用默认配置
+        thresholds, is_preference = self.preference_manager.get_active_thresholds()
+        if is_preference:
+            left_inflate_threshold = thresholds['side_wings']['inflate_left']
+            left_deflate_threshold = thresholds['side_wings']['deflate_left']
+        else:
+            left_inflate_threshold = self.config.get('side_wings.left_right_ratio_inflate_left', 0.7)
+            left_deflate_threshold = self.config.get('side_wings.left_right_ratio_deflate_left', 1.3)
 
         # 判断动作
         if left_ratio > left_deflate_threshold:
-            # 左侧压力占比大（> 1.3）：左侧充气，右侧放气
+            # 左侧压力占比大：左侧充气，右侧放气
             left_action = ControlAction.INFLATE
             right_action = ControlAction.DEFLATE
         elif left_ratio < left_inflate_threshold:
-            # 右侧压力占比大（< 0.7）：右侧充气，左侧放气
+            # 右侧压力占比大：右侧充气，左侧放气
             left_action = ControlAction.DEFLATE
             right_action = ControlAction.INFLATE
         else:
-            # 在合理区间（0.7 ~ 1.3）：左右都放气
+            # 在合理区间：左右都放气
             left_action = ControlAction.DEFLATE
             right_action = ControlAction.DEFLATE
 
@@ -1249,6 +1396,8 @@ class IntegratedSeatSystem:
 
         使用均值而非总和来计算压力比，更准确地反映压力分布
         左右腿托使用独立的阈值配置
+
+        支持品味区间覆盖：如果当前体型有品味数据，使用品味区间替代默认阈值
         """
         # 左侧腿托逻辑
         left_butt = regions['cushion_butt_left']
@@ -1272,13 +1421,18 @@ class IntegratedSeatSystem:
         else:
             right_ratio = 0
 
-        # 左侧阈值
-        left_inflate_threshold = self.config.get('leg_support.left_leg_butt_ratio_inflate', 0.7)
-        left_deflate_threshold = self.config.get('leg_support.left_leg_butt_ratio_deflate', 1.3)
-
-        # 右侧阈值
-        right_inflate_threshold = self.config.get('leg_support.right_leg_butt_ratio_inflate', 0.7)
-        right_deflate_threshold = self.config.get('leg_support.right_leg_butt_ratio_deflate', 1.3)
+        # 获取调节阈值：优先使用品味区间，否则使用默认配置
+        thresholds, is_preference = self.preference_manager.get_active_thresholds()
+        if is_preference:
+            left_inflate_threshold = thresholds['leg_support']['left_inflate']
+            left_deflate_threshold = thresholds['leg_support']['left_deflate']
+            right_inflate_threshold = thresholds['leg_support']['right_inflate']
+            right_deflate_threshold = thresholds['leg_support']['right_deflate']
+        else:
+            left_inflate_threshold = self.config.get('leg_support.left_leg_butt_ratio_inflate', 0.7)
+            left_deflate_threshold = self.config.get('leg_support.left_leg_butt_ratio_deflate', 1.3)
+            right_inflate_threshold = self.config.get('leg_support.right_leg_butt_ratio_inflate', 0.7)
+            right_deflate_threshold = self.config.get('leg_support.right_leg_butt_ratio_deflate', 1.3)
 
         # 判断左侧动作
         if left_ratio < left_inflate_threshold:
@@ -1849,6 +2003,69 @@ class IntegratedSeatSystem:
 
         return result
 
+    # ==================== 品味管理接口 ====================
+
+    def trigger_preference_recording(self, body_shape: str = None) -> Dict:
+        """
+        触发品味记录（外部调用接口）
+
+        必须先识别到体型才能触发。上层软件在用户手动调节完气囊、坐稳定后调用此接口。
+        系统将采集一段时间的压力数据，记录当前压力比例并生成个性化调节区间。
+
+        Args:
+            body_shape: 指定体型（可选，默认使用体型三分类识别的结果）
+
+        Returns:
+            Dict - 操作结果
+                'success': bool - 是否成功触发
+                'message': str - 描述信息
+                'state': str - 当前状态 ('RECORDING' / 'ERROR')
+                'target_shape': str - 目标体型（仅成功时）
+                'total_frames': int - 需采集的总帧数（仅成功时）
+        """
+        return self.preference_manager.start_recording(body_shape)
+
+    def cancel_preference_recording(self) -> Dict:
+        """
+        取消正在进行的品味记录
+
+        Returns:
+            Dict - 操作结果
+                'success': bool - 是否成功取消
+                'message': str - 描述信息
+        """
+        return self.preference_manager.cancel_recording()
+
+    def get_preference_status(self) -> Dict:
+        """
+        获取品味管理器的完整状态
+
+        Returns:
+            Dict - 品味管理器状态，包含：
+                'active_body_shape': str | None - 当前激活的体型
+                'is_recording': bool - 是否正在记录
+                'recording_progress': Dict | None - 记录进度
+                'active_thresholds': Dict - 当前生效的调节区间
+                'using_preference': bool - 是否使用品味区间
+                'shapes': Dict - 各体型的品味状态
+                'config': Dict - 配置参数
+        """
+        return self.preference_manager.get_status()
+
+    def clear_preference(self, body_shape: str = None) -> Dict:
+        """
+        清除品味数据
+
+        Args:
+            body_shape: 指定体型（可选，None则清除所有体型的品味数据）
+
+        Returns:
+            Dict - 操作结果
+                'success': bool - 是否成功
+                'message': str - 描述信息
+        """
+        return self.preference_manager.clear_preference(body_shape)
+
     def get_pending_commands(self) -> List[Dict]:
         """
         获取队列中所有待处理的指令（非阻塞）
@@ -1908,6 +2125,11 @@ class IntegratedSeatSystem:
             self.tap_massage_detector.reset()
         if self.body_shape_classifier:
             self.body_shape_classifier.reset()
+
+        # 重置品味管理器（取消进行中的记录，但保留已存储的品味数据）
+        if self.preference_manager.is_recording:
+            self.preference_manager.cancel_recording()
+        self.preference_manager.set_active_body_shape(None)
 
         self.latest_result = None
         print("[集成系统] 已重置")
