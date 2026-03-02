@@ -264,18 +264,21 @@ class SerialModule(
 
     @ReactMethod
     fun getConfig(promise: Promise) {
-        Log.i(logTag, "[Config] getConfig called")
-        // 使用独立线程，避免被 pythonExecutor 帧处理队列阻塞
+        Log.i(logTag, "[Config] getConfig called from JS")
         Thread {
             try {
-                Log.i(logTag, "[Config] calling Python get_config...")
-                val module = Python.getInstance().getModule("server")
-                val resultJson = module.callAttr("get_config").toString()
-                Log.i(logTag, "[Config] got response, length=${resultJson.length}")
+                Log.i(logTag, "[Config] Thread started, getting Python instance...")
+                val py = Python.getInstance()
+                Log.i(logTag, "[Config] Python instance OK, getting server module...")
+                val module = py.getModule("server")
+                Log.i(logTag, "[Config] server module OK, calling get_config()...")
+                val result = module.callAttr("get_config")
+                val resultJson = result.toString()
+                Log.i(logTag, "[Config] get_config returned, length=${resultJson.length}, preview=${resultJson.take(100)}")
                 promise.resolve(resultJson)
-            } catch (e: Exception) {
-                Log.e(logTag, "[Config] getConfig failed", e)
-                promise.reject("PY_ERROR", e.message ?: "get_config failed")
+            } catch (e: Throwable) {
+                Log.e(logTag, "[Config] getConfig FAILED: ${e.javaClass.name}: ${e.message}", e)
+                promise.reject("PY_ERROR", "${e.javaClass.simpleName}: ${e.message}")
             }
         }.start()
     }
@@ -289,9 +292,9 @@ class SerialModule(
                 val resultJson = module.callAttr("set_config", keyPath, valueJson).toString()
                 Log.i(logTag, "[Config] setConfig result: $resultJson")
                 promise.resolve(resultJson)
-            } catch (e: Exception) {
-                Log.e(logTag, "[Config] setConfig failed", e)
-                promise.reject("PY_ERROR", e.message ?: "set_config failed")
+            } catch (e: Throwable) {
+                Log.e(logTag, "[Config] setConfig FAILED: ${e.javaClass.name}: ${e.message}", e)
+                promise.reject("PY_ERROR", "${e.javaClass.simpleName}: ${e.message}")
             }
         }.start()
     }
@@ -305,9 +308,9 @@ class SerialModule(
                 val resultJson = module.callAttr("reset_config").toString()
                 Log.i(logTag, "[Config] resetConfig result: $resultJson")
                 promise.resolve(resultJson)
-            } catch (e: Exception) {
-                Log.e(logTag, "[Config] resetConfig failed", e)
-                promise.reject("PY_ERROR", e.message ?: "reset_config failed")
+            } catch (e: Throwable) {
+                Log.e(logTag, "[Config] resetConfig FAILED: ${e.javaClass.name}: ${e.message}", e)
+                promise.reject("PY_ERROR", "${e.javaClass.simpleName}: ${e.message}")
             }
         }.start()
     }

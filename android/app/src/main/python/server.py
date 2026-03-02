@@ -33,15 +33,29 @@ _system = IntegratedSeatSystem(_config_path)
 
 
 def _to_builtin(value):
+    """递归将所有特殊类型转换为 Python 内置类型，确保 json.dumps 兼容"""
     if isinstance(value, np.generic):
         return value.item()
     if isinstance(value, np.ndarray):
         return value.tolist()
     if isinstance(value, dict):
-        return {key: _to_builtin(val) for key, val in value.items()}
+        return {str(key): _to_builtin(val) for key, val in value.items()}
     if isinstance(value, (list, tuple)):
         return [_to_builtin(val) for val in value]
-    return value
+    # ruamel.yaml 特殊标量类型：ScalarFloat -> float, ScalarInt -> int, ScalarString -> str
+    if isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        return float(value)
+    if isinstance(value, str):
+        return str(value)
+    # 兜底：尝试转换
+    try:
+        return str(value)
+    except Exception:
+        return None
 
 
 def _is_sequence(value):
@@ -113,9 +127,13 @@ def get_config():
     """
     try:
         all_cfg = _system.config.get_all_with_comments()
-        return json.dumps(_to_builtin(all_cfg), ensure_ascii=False)
+        builtin = _to_builtin(all_cfg)
+        result_json = json.dumps(builtin, ensure_ascii=False)
+        return result_json
     except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+        import traceback
+        err_detail = traceback.format_exc()
+        return json.dumps({"error": str(e), "traceback": err_detail}, ensure_ascii=False)
 
 
 def set_config(key_path, value_json):

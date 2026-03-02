@@ -374,6 +374,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   const [showConfig, setShowConfig] = useState(false);
   const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
   const [realtimeData, setRealtimeData] = useState<RealtimeAlgoData>({
     cushion_sum: 0, backrest_sum: 0, living_confidence: 0,
     seat_state: 'OFF_SEAT', frame_count: 0,
@@ -412,30 +413,52 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   // ─── Python 配置管理 ──────────────────────────────────────
   const loadConfig = useCallback(() => {
     setConfigLoading(true);
+    setConfigError(null);
     const sm = NativeModules.SerialModule;
-    console.log('[Config] loadConfig, sm exists:', !!sm, 'getConfig exists:', !!(sm && sm.getConfig));
-    if (!sm || !sm.getConfig) {
-      console.warn('[Config] SerialModule or getConfig not available');
+    console.log('[Config] loadConfig called');
+    console.log('[Config] SerialModule exists:', !!sm);
+    console.log('[Config] getConfig exists:', !!(sm && sm.getConfig));
+    if (!sm) {
+      const msg = 'SerialModule 不可用';
+      console.warn('[Config]', msg);
+      setConfigError(msg);
+      setConfigLoading(false);
+      return;
+    }
+    if (!sm.getConfig) {
+      const msg = 'getConfig 方法不存在（需要重新编译 APK）';
+      console.warn('[Config]', msg);
+      setConfigError(msg);
       setConfigLoading(false);
       return;
     }
     sm.getConfig()
       .then((json: string) => {
-        console.log('[Config] got response, len:', json?.length);
+        console.log('[Config] got response, type:', typeof json, 'len:', json?.length);
+        console.log('[Config] response preview:', json?.substring(0, 200));
         try {
           const parsed = JSON.parse(json);
           if (parsed.error) {
-            console.warn('[Config] error:', parsed.error);
+            const errMsg = `Python错误: ${parsed.error}`;
+            console.warn('[Config]', errMsg);
+            if (parsed.traceback) console.warn('[Config] traceback:', parsed.traceback);
+            setConfigError(errMsg);
           } else {
+            const keys = Object.keys(parsed);
+            console.log('[Config] parsed OK, keys count:', keys.length, 'first 5:', keys.slice(0, 5));
             setConfigData(parsed);
           }
-        } catch (e) {
-          console.warn('[Config] parse error:', e);
+        } catch (e: any) {
+          const errMsg = `JSON解析失败: ${e.message}`;
+          console.warn('[Config]', errMsg, 'raw:', json?.substring(0, 100));
+          setConfigError(errMsg);
         }
         setConfigLoading(false);
       })
       .catch((e: any) => {
-        console.warn('[Config] getConfig failed:', e);
+        const errMsg = `getConfig调用失败: ${e.message || e.code || String(e)}`;
+        console.warn('[Config]', errMsg);
+        setConfigError(errMsg);
         setConfigLoading(false);
       });
   }, []);
@@ -1122,7 +1145,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                   </ScrollView>
                 ) : (
                   <View style={{padding: 40, alignItems: 'center'}}>
-                    <Text style={{color: '#ccc', fontSize: 14}}>无配置数据</Text>
+                    <Text style={{color: '#ccc', fontSize: 14}}>{configError ? `错误: ${configError}` : '无配置数据'}</Text>
+                    <TouchableOpacity
+                      onPress={loadConfig}
+                      activeOpacity={0.7}
+                      style={{marginTop: 16, paddingHorizontal: 20, paddingVertical: 8, backgroundColor: '#4CAF50', borderRadius: 6}}>
+                      <Text style={{color: '#fff', fontSize: 13, fontWeight: '600'}}>重新加载</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
             </View>

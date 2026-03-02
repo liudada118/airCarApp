@@ -92,6 +92,7 @@ android {
                 install "numpy"
                 install "PyYAML"
                 install "scipy"
+                install "ruamel.yaml"
             }
         }
     }
