@@ -263,6 +263,70 @@ class SerialModule(
     }
 
     @ReactMethod
+    fun getConfig(promise: Promise) {
+        pythonExecutor.execute {
+            try {
+                val module = Python.getInstance().getModule("server")
+                val resultJson = module.callAttr("get_config").toString()
+                promise.resolve(resultJson)
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "get_config failed")
+            }
+        }
+    }
+
+    @ReactMethod
+    fun setConfig(keyPath: String, valueJson: String, promise: Promise) {
+        pythonExecutor.execute {
+            try {
+                val module = Python.getInstance().getModule("server")
+                val resultJson = module.callAttr("set_config", keyPath, valueJson).toString()
+                promise.resolve(resultJson)
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "set_config failed")
+            }
+        }
+    }
+
+    @ReactMethod
+    fun resetConfig(promise: Promise) {
+        pythonExecutor.execute {
+            try {
+                val module = Python.getInstance().getModule("server")
+                val resultJson = module.callAttr("reset_config").toString()
+                promise.resolve(resultJson)
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "reset_config failed")
+            }
+        }
+    }
+
+    // ─── 3D 点图配置持久化（SharedPreferences） ───────────────────────
+    private val prefs by lazy {
+        reactContext.getSharedPreferences("point_settings", Context.MODE_PRIVATE)
+    }
+
+    @ReactMethod
+    fun savePointSettings(jsonStr: String, promise: Promise) {
+        try {
+            prefs.edit().putString("settings", jsonStr).apply()
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("SAVE_ERROR", e.message ?: "save failed")
+        }
+    }
+
+    @ReactMethod
+    fun loadPointSettings(promise: Promise) {
+        try {
+            val json = prefs.getString("settings", null)
+            promise.resolve(json)
+        } catch (e: Exception) {
+            promise.reject("LOAD_ERROR", e.message ?: "load failed")
+        }
+    }
+
+    @ReactMethod
     fun resetPendingOpen() {
         pendingOpen?.promise?.reject("OPEN_CANCELED", "open canceled by reset")
         pendingOpen = null

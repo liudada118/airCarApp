@@ -2,6 +2,7 @@ import React, {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, 
 import {
   ActivityIndicator,
   Animated,
+  NativeModules,
   PanResponder,
   ScrollView,
   StyleSheet,
@@ -732,9 +733,30 @@ function CarAirRNInner({data = [], style}, ref) {
   const [loadError, setLoadError] = useState(null);
   const [baselineActive, setBaselineActive] = useState(false);
 
-  // 点图参数（可动态调节）
+  // 点图参数（可动态调节，持久化到 SharedPreferences）
   const [pointSettings, setPointSettings] = useState({...DEFAULT_SETTINGS});
   const pointSettingsRef = useRef({...DEFAULT_SETTINGS});
+  const settingsLoadedRef = useRef(false);
+
+  // 启动时加载持久化配置
+  useEffect(() => {
+    NativeModules.SerialModule?.loadPointSettings?.().then(json => {
+      if (json) {
+        try {
+          const saved = JSON.parse(json);
+          const merged = {...DEFAULT_SETTINGS, ...saved};
+          setPointSettings(merged);
+          pointSettingsRef.current = merged;
+          // 同步高斯核
+          if (saved.gauss != null && stateRef.current) {
+            stateRef.current._gaussKernel = buildGaussKernel(merged.gauss);
+          }
+          if (stateRef.current) stateRef.current.dirty = true;
+        } catch (_) {}
+      }
+      settingsLoadedRef.current = true;
+    }).catch(() => { settingsLoadedRef.current = true; });
+  }, []);
 
   const updatePointSetting = useCallback((key, value) => {
     setPointSettings(prev => {
@@ -752,6 +774,8 @@ function CarAirRNInner({data = [], style}, ref) {
         stateRef.current.dirty = true;
       }
       stateRef.current.dirty = true;
+      // 持久化到 SharedPreferences
+      NativeModules.SerialModule?.savePointSettings?.(JSON.stringify(next)).catch(() => {});
       return next;
     });
   }, []);

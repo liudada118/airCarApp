@@ -100,6 +100,71 @@ def server(sensor_data):
     return json.dumps(_to_builtin(result), ensure_ascii=False)
 
 
+# ─── 配置管理接口（供 Chaquopy / Native 桥接调用） ────────────────────
+
+def get_config():
+    """
+    获取所有配置参数及注释（扁平化 JSON）。
+    返回 JSON 字符串，格式：
+    {
+        "key.path": {"value": ..., "comment": "..."},
+        ...
+    }
+    """
+    try:
+        all_cfg = _system.config.get_all_with_comments()
+        return json.dumps(_to_builtin(all_cfg), ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+def set_config(key_path, value_json):
+    """
+    设置单个配置参数并持久化到 yaml 文件。
+    Args:
+        key_path: 配置键路径，如 'lumbar.back_total_threshold'
+        value_json: JSON 字符串形式的新值，如 '600' 或 '"text"' 或 '[1,2,3]'
+    返回 JSON 字符串：{"ok": true} 或 {"error": "..."}
+    """
+    try:
+        value = json.loads(str(value_json))
+        _system.config.set(str(key_path), value)
+        _system.config.save_to_file()
+        # 同步运行时变量（针对常用阈值）
+        _sync_runtime(str(key_path), value)
+        return json.dumps({"ok": True}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+def reset_config():
+    """
+    重置配置到初始状态并持久化。
+    返回 JSON 字符串：{"ok": true} 或 {"error": "..."}
+    """
+    try:
+        _system.config.reset()
+        _system.config.save_to_file()
+        return json.dumps({"ok": True}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+def _sync_runtime(key_path, value):
+    """将配置变更同步到 _system 运行时变量（热更新）"""
+    _map = {
+        'integrated_system.cushion_sum_threshold': 'cushion_sum_threshold',
+        'integrated_system.backrest_sum_threshold': 'backrest_sum_threshold',
+        'integrated_system.off_seat_frames_threshold': 'off_seat_frames_threshold',
+        'integrated_system.reset_frames_threshold': 'reset_frames_threshold',
+        'integrated_system.reset_deflate_frames': 'reset_deflate_frames',
+        'integrated_system.use_filtered_sum': 'use_filtered_sum',
+    }
+    attr = _map.get(key_path)
+    if attr and hasattr(_system, attr):
+        setattr(_system, attr, value)
+
+
 def main():
     return
 

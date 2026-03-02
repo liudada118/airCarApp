@@ -1,5 +1,6 @@
 import React, {useCallback, useEffect, useState, useRef} from 'react';
 import {
+  Alert,
   Dimensions,
   Modal,
   NativeEventEmitter,
@@ -8,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -330,6 +332,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
 
   const [sensorData, setSensorData] = useState<number[]>(INITIAL_SENSOR_FRAME);
   const [showMatrix, setShowMatrix] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
+  const [configLoading, setConfigLoading] = useState(false);
 
   // ─── 处理算法结果 ──────────────────────────────────────
   const handleAlgoResult = useCallback((resultJson: string) => {
@@ -358,6 +363,68 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
       // [AirbagCmd] log disabled
     }
   }, []);
+
+  // ─── Python 配置管理 ──────────────────────────────────────
+  const loadConfig = useCallback(() => {
+    setConfigLoading(true);
+    NativeModules.SerialModule?.getConfig?.()
+      .then((json: string) => {
+        try {
+          const parsed = JSON.parse(json);
+          if (parsed.error) {
+            console.warn('getConfig error:', parsed.error);
+          } else {
+            setConfigData(parsed);
+          }
+        } catch (e) {
+          console.warn('getConfig parse error:', e);
+        }
+        setConfigLoading(false);
+      })
+      .catch((e: any) => {
+        console.warn('getConfig failed:', e);
+        setConfigLoading(false);
+      });
+  }, []);
+
+  const handleSetConfig = useCallback((key: string, value: any) => {
+    const valueJson = JSON.stringify(value);
+    NativeModules.SerialModule?.setConfig?.(key, valueJson)
+      .then((json: string) => {
+        try {
+          const result = JSON.parse(json);
+          if (result.ok) {
+            // 更新本地 state
+            setConfigData(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                [key]: {...prev[key], value},
+              };
+            });
+          }
+        } catch (_) {}
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleResetConfig = useCallback(() => {
+    NativeModules.SerialModule?.resetConfig?.()
+      .then((json: string) => {
+        try {
+          const result = JSON.parse(json);
+          if (result.ok) {
+            loadConfig(); // 重新加载
+          }
+        } catch (_) {}
+      })
+      .catch(() => {});
+  }, [loadConfig]);
+
+  const openConfigModal = useCallback(() => {
+    setShowConfig(true);
+    loadConfig();
+  }, [loadConfig]);
 
   // ─── 模拟串口逻辑 ──────────────────────────────────────
   const mockStartedRef = useRef(false);
@@ -721,13 +788,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               data={sensorData as unknown as never[]}
               style={styles.carAir3D}
             />
-            {/* 原始矩阵切换按钮 - 悬浮在 3D 视图右上角 */}
-            <TouchableOpacity
-              style={styles.matrixToggleBtn}
-              onPress={() => setShowMatrix(true)}
-              activeOpacity={0.7}>
-              <Text style={styles.matrixToggleBtnText}>矩阵</Text>
-            </TouchableOpacity>
+            {/* 悬浮按钮组 - 3D 视图右上角 */}
+            <View style={styles.floatingBtnGroup}>
+              <TouchableOpacity
+                style={styles.matrixToggleBtn}
+                onPress={() => setShowMatrix(true)}
+                activeOpacity={0.7}>
+                <Text style={styles.matrixToggleBtnText}>矩阵</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.matrixToggleBtn, {marginLeft: 6}]}
+                onPress={openConfigModal}
+                activeOpacity={0.7}>
+                <Text style={styles.matrixToggleBtnText}>配置</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -879,6 +954,123 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                 </View>
               </View>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Python 配置弹窗 */}
+      <Modal
+        visible={showConfig}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowConfig(false)}>
+        <View style={styles.matrixModalOverlay}>
+          <View style={[styles.matrixModalContent, {maxWidth: 600, maxHeight: '85%'}]}>
+            <View style={styles.matrixModalHeader}>
+              <Text style={styles.matrixModalTitle}>算法配置</Text>
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert('确认重置', '是否恢复所有配置为默认值？', [
+                      {text: '取消', style: 'cancel'},
+                      {text: '确认', onPress: handleResetConfig},
+                    ]);
+                  }}
+                  activeOpacity={0.7}
+                  style={{marginRight: 12, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: Colors.warning, borderRadius: 4}}>
+                  <Text style={{color: '#fff', fontSize: 12}}>重置默认</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowConfig(false)}
+                  activeOpacity={0.7}
+                  style={styles.matrixModalClose}>
+                  <Text style={styles.matrixModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            {configLoading ? (
+              <View style={{padding: 40, alignItems: 'center'}}>
+                <Text style={{color: Colors.textGray}}>加载中...</Text>
+              </View>
+            ) : configData ? (
+              <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
+                {(() => {
+                  // 按一级 key 分组
+                  const groups: Record<string, {key: string; value: any; comment: string | null}[]> = {};
+                  Object.entries(configData).forEach(([key, info]) => {
+                    const group = key.split('.')[0];
+                    if (!groups[group]) groups[group] = [];
+                    groups[group].push({key, value: info.value, comment: info.comment});
+                  });
+                  const GROUP_LABELS: Record<string, string> = {
+                    system: '系统',
+                    control: '控制',
+                    lumbar: '腰托',
+                    side_wings: '侧翼',
+                    leg_support: '腿托',
+                    matrix: '传感器矩阵',
+                    protocol: '通信协议',
+                    airbag_mapping: '气囊映射',
+                    living_detection: '活体检测',
+                    body_type_detection: '体型检测',
+                    integrated_system: '集成座椅系统',
+                    body_shape_classification: '体型三分类',
+                    tap_massage: '拍打按摩',
+                  };
+                  return Object.entries(groups).map(([group, items]) => (
+                    <View key={group} style={{marginBottom: 12}}>
+                      <Text style={{color: Colors.primary, fontSize: 13, fontWeight: '700', marginBottom: 6, paddingHorizontal: 12}}>
+                        {GROUP_LABELS[group] || group}
+                      </Text>
+                      {items.map(item => {
+                        const isArray = Array.isArray(item.value);
+                        const isBool = typeof item.value === 'boolean';
+                        const shortKey = item.key.split('.').slice(1).join('.');
+                        return (
+                          <View key={item.key} style={styles.cfgRow}>
+                            <View style={{flex: 1, marginRight: 8}}>
+                              <Text style={styles.cfgKey} numberOfLines={1}>{shortKey}</Text>
+                              {item.comment ? <Text style={styles.cfgComment} numberOfLines={1}>{item.comment}</Text> : null}
+                            </View>
+                            {isBool ? (
+                              <TouchableOpacity
+                                onPress={() => handleSetConfig(item.key, !item.value)}
+                                activeOpacity={0.7}
+                                style={[styles.cfgBoolBtn, {backgroundColor: item.value ? Colors.primary : Colors.textGray}]}>
+                                <Text style={{color: '#fff', fontSize: 11}}>{item.value ? 'true' : 'false'}</Text>
+                              </TouchableOpacity>
+                            ) : isArray ? (
+                              <Text style={styles.cfgValueText} numberOfLines={1}>[{item.value.join(', ')}]</Text>
+                            ) : (
+                              <TextInput
+                                style={styles.cfgInput}
+                                defaultValue={String(item.value)}
+                                keyboardType="numeric"
+                                returnKeyType="done"
+                                onEndEditing={(e) => {
+                                  const text = e.nativeEvent.text.trim();
+                                  if (text === '' || text === String(item.value)) return;
+                                  const num = Number(text);
+                                  if (!isNaN(num)) {
+                                    handleSetConfig(item.key, num);
+                                  } else {
+                                    handleSetConfig(item.key, text);
+                                  }
+                                }}
+                              />
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ));
+                })()}
+              </ScrollView>
+            ) : (
+              <View style={{padding: 40, alignItems: 'center'}}>
+                <Text style={{color: Colors.textGray}}>无配置数据</Text>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -1175,21 +1367,69 @@ const styles = StyleSheet.create({
   carAir3D: {
     flex: 1,
   },
-  // ─── 矩阵切换按钮 ───
-  matrixToggleBtn: {
+  // ─── 悬浮按钮组 ───
+  floatingBtnGroup: {
     position: 'absolute',
     top: 8,
     right: 8,
+    flexDirection: 'row',
+    zIndex: 10,
+  },
+  matrixToggleBtn: {
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    zIndex: 10,
   },
   matrixToggleBtnText: {
     fontSize: 11,
     color: '#fff',
     fontWeight: '500',
+  },
+  // ─── 配置弹窗 ───
+  cfgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  cfgKey: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  cfgComment: {
+    fontSize: 10,
+    color: Colors.textGray,
+    marginTop: 1,
+  },
+  cfgInput: {
+    width: 90,
+    height: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 4,
+    color: Colors.textLight,
+    fontSize: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    textAlign: 'right',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  cfgBoolBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    minWidth: 50,
+    alignItems: 'center' as const,
+  },
+  cfgValueText: {
+    fontSize: 11,
+    color: Colors.textGray,
+    maxWidth: 120,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   // ─── 矩阵弹窗 ───
   matrixModalOverlay: {
