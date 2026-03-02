@@ -14,8 +14,8 @@ control:
 # ========================================
 
 lumbar:
-  back_total_threshold: 22.0  # 背部总压力阈值，低于此值不调节腰托
-  upper_lower_ratio_inflate: 1.2  # 上部/下部压力比 > 1.5 时充气腰托
+  back_total_threshold: 15.0  # 背部总压力阈值，低于此值不调节腰托
+  upper_lower_ratio_inflate: 0.9  # 上部/下部压力比 > 1.5 时充气腰托
   upper_lower_ratio_deflate: 0.35  # 上部/下部压力比 < 0.7 时放气腰托
   airbags:  # 腰托气囊编号
   - 5
@@ -125,7 +125,7 @@ living_detection:
   sad:  # SAD算法参数（Sum of Absolute Differences）
     energy_threshold: 30.0  # 能量阈值，低于此值认为无有效压力
     min_changes_ratio: 0.05  # 最小变化率，变化点占比需大于5%才认为是活体
-    normalize_scale: 70  # 归一化缩放因子，用于将SAD值归一化到[0,1]
+    normalize_scale: 5   # 归一化缩放因子，用于将SAD值归一化到[0,1]
   sad_threshold: 0.6  # SAD判定阈值，归一化后的SAD > 0.6 认为是活体
   debug:
     print_every_n_detections: 1  # 每N次检测打印一次日志（0=不打印）
@@ -142,7 +142,7 @@ body_type_detection:
   threshold: 20  # 二值化阈值，压力值 > 20 认为有效
   min_component_size: 6  # 最小连通域大小，过滤噪点
   body_size_adult_threshold: 6500.0  # 成人体型阈值，体型得分 > 2000 为成人
-  body_size_child_threshold: 4000.0 # 儿童体型阈值，体型得分 > 750 为儿童，否则为未判断
+  body_size_child_threshold: 3000.0 # 儿童体型阈值，体型得分 > 750 为儿童，否则为未判断
   debug:
     print_every_n_detections: 0  # 每N次检测打印一次日志（0=不打印）
 

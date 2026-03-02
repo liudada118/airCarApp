@@ -1012,7 +1012,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
         <View style={styles.matrixModalOverlay}>
           <View style={[styles.matrixModalContent, {maxWidth: '92%', maxHeight: '90%', width: '92%'}]}>
             <View style={styles.matrixModalHeader}>
-              <Text style={[styles.matrixModalTitle, {fontSize: 16}]}>算法配置与实时数据</Text>
+              <Text style={[styles.matrixModalTitle, {fontSize: 16}]}>算法配置</Text>
               <View style={{flexDirection: 'row', alignItems: 'center'}}>
                 <TouchableOpacity
                   onPress={() => {
@@ -1033,157 +1033,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                 </TouchableOpacity>
               </View>
             </View>
-            <View style={{flex: 1, flexDirection: 'row'}}>
-              {/* 左侧：实时数据面板 */}
-              <View style={styles.rtPanel}>
-                <ScrollView showsVerticalScrollIndicator={true}>
-                  <Text style={styles.rtGroupTitle}>座椅状态</Text>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>状态</Text>
-                    <Text style={[styles.rtValue, {color: realtimeData.seat_state === 'ADAPTIVE_LOCKED' ? '#4CAF50' : realtimeData.seat_state === 'OFF_SEAT' ? '#FF5252' : '#FFC107'}]}>{realtimeData.seat_state}</Text>
-                  </View>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>帧计数</Text>
-                    <Text style={styles.rtValue}>{realtimeData.frame_count}</Text>
-                  </View>
-
-                  <Text style={styles.rtGroupTitle}>压力统计</Text>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>坐垫 Sum</Text>
-                    <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.cushion_sum, 0)}</Text>
-                  </View>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>靠背 Sum</Text>
-                    <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.backrest_sum, 0)}</Text>
-                  </View>
-                  <View style={styles.rtRow}>
-                    <Text style={styles.rtLabel}>活体置信度</Text>
-                    <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.living_confidence, 3)}</Text>
-                  </View>
-
-                  {realtimeData.body_features ? (
-                    <>
-                      <Text style={styles.rtGroupTitle}>体型特征</Text>
-                      {realtimeData.body_features.cushion ? (
-                        <>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>坐垫原始Sum</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.body_features?.cushion?.original_sum, 0)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>坐垫滤波Sum</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.body_features?.cushion?.filtered_sum, 0)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>坐垫最大值</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{realtimeData.body_features?.cushion?.max_value ?? '--'}</Text>
-                          </View>
-                        </>
-                      ) : null}
-                      {realtimeData.body_features.backrest ? (
-                        <>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>靠背原始Sum</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.body_features?.backrest?.original_sum, 0)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>靠背滤波Sum</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.body_features?.backrest?.filtered_sum, 0)}</Text>
-                          </View>
-                        </>
-                      ) : null}
-                      {realtimeData.body_features.body_size_type ? (
-                        <View style={styles.rtRow}>
-                          <Text style={styles.rtLabel}>体型</Text>
-                          <Text style={[styles.rtValue, {color: '#4CAF50', fontWeight: '700'}]}>{realtimeData.body_features?.body_size_type ?? '--'}</Text>
-                        </View>
-                      ) : null}
-                      {realtimeData.body_features.body_size_raw != null ? (
-                        <View style={styles.rtRow}>
-                          <Text style={styles.rtLabel}>体型评分</Text>
-                          <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.body_features?.body_size_raw, 2)}</Text>
-                        </View>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  {realtimeData.control_decision_data ? (
-                    <>
-                      <Text style={styles.rtGroupTitle}>控制决策</Text>
-                      {realtimeData.control_decision_data.lumbar ? (
-                        <>
-                          <View style={styles.rtSubTitle}><Text style={styles.rtSubTitleText}>腰托</Text></View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>上部压力</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.control_decision_data?.lumbar?.upper_pressure, 0)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>下部压力</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.control_decision_data?.lumbar?.lower_pressure, 0)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>上下比值</Text>
-                            <Text style={[styles.rtValue, styles.rtNum, {color: '#FFD740'}]}>{safeFixed(realtimeData.control_decision_data?.lumbar?.ratio, 3)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>动作</Text>
-                            <Text style={[styles.rtValue, {color: realtimeData.control_decision_data?.lumbar?.action === 'INFLATE' ? '#4FC3F7' : realtimeData.control_decision_data?.lumbar?.action === 'DEFLATE' ? '#FF8A65' : '#aaa', fontWeight: '700'}]}>{realtimeData.control_decision_data?.lumbar?.action ?? '--'}</Text>
-                          </View>
-                        </>
-                      ) : null}
-                      {realtimeData.control_decision_data?.side_wings ? (
-                        <>
-                          <View style={styles.rtSubTitle}><Text style={styles.rtSubTitleText}>侧翼</Text></View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>左压力</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.control_decision_data?.side_wings?.left_pressure, 0)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>右压力</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.control_decision_data?.side_wings?.right_pressure, 0)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>左右比值</Text>
-                            <Text style={[styles.rtValue, styles.rtNum, {color: '#FFD740'}]}>{safeFixed(realtimeData.control_decision_data?.side_wings?.ratio, 3)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>左/右动作</Text>
-                            <Text style={[styles.rtValue, {fontWeight: '700'}]}>
-                              <Text style={{color: realtimeData.control_decision_data?.side_wings?.left_action === 'INFLATE' ? '#4FC3F7' : realtimeData.control_decision_data?.side_wings?.left_action === 'DEFLATE' ? '#FF8A65' : '#aaa'}}>{realtimeData.control_decision_data?.side_wings?.left_action ?? '--'}</Text>
-                              <Text style={{color: '#666'}}> / </Text>
-                              <Text style={{color: realtimeData.control_decision_data?.side_wings?.right_action === 'INFLATE' ? '#4FC3F7' : realtimeData.control_decision_data?.side_wings?.right_action === 'DEFLATE' ? '#FF8A65' : '#aaa'}}>{realtimeData.control_decision_data?.side_wings?.right_action ?? '--'}</Text>
-                            </Text>
-                          </View>
-                        </>
-                      ) : null}
-                      {realtimeData.control_decision_data?.leg_support ? (
-                        <>
-                          <View style={styles.rtSubTitle}><Text style={styles.rtSubTitleText}>腿托</Text></View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>臀部压力</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.control_decision_data?.leg_support?.butt_pressure, 0)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>腿部压力</Text>
-                            <Text style={[styles.rtValue, styles.rtNum]}>{safeFixed(realtimeData.control_decision_data?.leg_support?.leg_pressure, 0)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>腿臀比值</Text>
-                            <Text style={[styles.rtValue, styles.rtNum, {color: '#FFD740'}]}>{safeFixed(realtimeData.control_decision_data?.leg_support?.ratio, 3)}</Text>
-                          </View>
-                          <View style={styles.rtRow}>
-                            <Text style={styles.rtLabel}>动作</Text>
-                            <Text style={[styles.rtValue, {color: realtimeData.control_decision_data?.leg_support?.action === 'INFLATE' ? '#4FC3F7' : realtimeData.control_decision_data?.leg_support?.action === 'DEFLATE' ? '#FF8A65' : '#aaa', fontWeight: '700'}]}>{realtimeData.control_decision_data?.leg_support?.action ?? '--'}</Text>
-                          </View>
-                        </>
-                      ) : null}
-                    </>
-                  ) : null}
-                </ScrollView>
-              </View>
-
-              {/* 右侧：配置参数 */}
-              <View style={{flex: 1}}>
+            <View style={{flex: 1}}>
                 {configLoading ? (
                   <View style={{padding: 40, alignItems: 'center'}}>
                     <Text style={{color: '#ccc', fontSize: 14}}>加载中...</Text>
@@ -1266,7 +1116,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                     <Text style={{color: '#ccc', fontSize: 14}}>无配置数据</Text>
                   </View>
                 )}
-              </View>
             </View>
           </View>
         </View>
