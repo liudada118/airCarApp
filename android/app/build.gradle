@@ -93,6 +93,7 @@ android {
                 install "PyYAML"
                 install "ruamel.yaml"
                 install "scipy"
+                install "ruamel.yaml"
             }
         }
     }

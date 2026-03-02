@@ -4,8 +4,15 @@
 """
 import copy
 from typing import Any, Dict, Optional
-from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
+try:
+    from ruamel.yaml import YAML
+    from ruamel.yaml.comments import CommentedMap
+    _USE_RUAMEL = True
+except ImportError:
+    YAML = None
+    CommentedMap = dict
+    _USE_RUAMEL = False
+    import yaml
 
 
 class Config:
@@ -19,9 +26,12 @@ class Config:
             config_path: 配置文件路径
         """
         self.config_path = config_path
-        self.yaml = YAML()
-        self.yaml.preserve_quotes = True
-        self.yaml.default_flow_style = False
+        if _USE_RUAMEL:
+            self.yaml = YAML()
+            self.yaml.preserve_quotes = True
+            self.yaml.default_flow_style = False
+        else:
+            self.yaml = None
         self._config = self._load_config()
         self._original_config = copy.deepcopy(self._config)
 
@@ -34,7 +44,10 @@ class Config:
         """
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = self.yaml.load(f)
+                if _USE_RUAMEL:
+                    config = self.yaml.load(f)
+                else:
+                    config = yaml.safe_load(f) or {}
             return config
         except FileNotFoundError:
             raise FileNotFoundError(f"配置文件未找到: {self.config_path}")
@@ -111,7 +124,10 @@ class Config:
         """
         try:
             with open(self.config_path, 'w', encoding='utf-8') as f:
-                self.yaml.dump(self._config, f)
+                if _USE_RUAMEL:
+                    self.yaml.dump(self._config, f)
+                else:
+                    yaml.safe_dump(self._config, f, allow_unicode=True, sort_keys=False)
         except Exception as e:
             raise IOError(f"保存配置文件失败: {e}")
 
@@ -138,6 +154,8 @@ class Config:
             >>> config.get_comment('integrated_system.cushion_sum_threshold')
             '坐垫压力总和阈值，判定为有人坐下的压力值'
         """
+        if not _USE_RUAMEL:
+            return None
         keys = key_path.split('.')
         obj = self._config
 
@@ -184,7 +202,10 @@ class Config:
             }
         """
         result = {}
-        self._flatten_with_comments(self._config, '', result)
+        if _USE_RUAMEL:
+            self._flatten_with_comments(self._config, '', result)
+        else:
+            self._flatten_without_comments(self._config, '', result)
         return result
 
     def _flatten_with_comments(self, obj: Any, prefix: str, result: Dict[str, Any]):
@@ -220,6 +241,23 @@ class Config:
                     }
         elif isinstance(obj, list):
             # 列表不处理注释，直接保存
+            result[prefix] = {
+                'value': obj,
+                'comment': None
+            }
+
+    def _flatten_without_comments(self, obj: Any, prefix: str, result: Dict[str, Any]):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                full_key = f"{prefix}.{key}" if prefix else key
+                if isinstance(value, dict):
+                    self._flatten_without_comments(value, full_key, result)
+                else:
+                    result[full_key] = {
+                        'value': value,
+                        'comment': None
+                    }
+        elif isinstance(obj, list):
             result[prefix] = {
                 'value': obj,
                 'comment': None
