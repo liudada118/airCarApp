@@ -242,6 +242,27 @@ class SerialModule(
         autoWriteBytes = null
     }
 
+    /**
+     * JS 端主动控制算法模式（自动写入）
+     * @param enabled true=开启算法自动写入, false=关闭算法自动写入
+     */
+    @ReactMethod
+    fun setAlgoMode(enabled: Boolean) {
+        Log.i(logTag, "[AlgoMode] setAlgoMode($enabled) isAutoMode was $isAutoMode")
+        if (enabled && !isAutoMode) {
+            isAutoMode = true
+            startAutoWrite()
+            Log.i(logTag, "[AlgoMode] Algorithm mode ENABLED, autoWrite started")
+        } else if (!enabled && isAutoMode) {
+            isAutoMode = false
+            stopAutoWrite()
+            // 清空自动写入缓存，确保不会残留指令
+            autoWriteText = null
+            autoWriteBytes = null
+            Log.i(logTag, "[AlgoMode] Algorithm mode DISABLED, autoWrite stopped")
+        }
+    }
+
     @ReactMethod
     fun addListener(eventName: String) {
         // Required by NativeEventEmitter

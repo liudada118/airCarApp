@@ -77,12 +77,14 @@ interface CustomAirbagScreenProps {
   onClose: () => void;
   onSaveSuccess: () => void;
   initialValues?: AirbagValues;
+  adaptiveEnabled?: boolean;
 }
 
 const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   onClose,
   onSaveSuccess,
   initialValues,
+  adaptiveEnabled = true,
 }) => {
   const [connectionStatus] = useState<ConnectionStatus>('connected');
   const [selectedZone, setSelectedZone] = useState<AirbagZone>('lumbarUp');
@@ -150,6 +152,26 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     },
     [],
   );
+
+  // 关闭页面时恢复算法模式
+  const handleClose = useCallback(() => {
+    if (adaptiveEnabled) {
+      sm?.setAlgoMode?.(true);
+      console.log('[AlgoMode] 退出自定义气囊调节，自适应已开启，恢复算法模式');
+    } else {
+      console.log('[AlgoMode] 退出自定义气囊调节，自适应已关闭，保持算法模式关闭');
+    }
+    onClose();
+  }, [adaptiveEnabled, onClose]);
+
+  // 保存成功时也恢复算法模式
+  const handleSaveAndRestore = useCallback(() => {
+    if (adaptiveEnabled) {
+      sm?.setAlgoMode?.(true);
+      console.log('[AlgoMode] 保存成功，自适应已开启，恢复算法模式');
+    }
+    onSaveSuccess();
+  }, [adaptiveEnabled, onSaveSuccess]);
 
   // 监听 Native 端发送的气囊指令事件
   useEffect(() => {
@@ -229,9 +251,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     // 模拟保存过程（5秒）
     savingTimerRef.current = setTimeout(() => {
       setModalType(null);
-      onSaveSuccess();
+      handleSaveAndRestore();
     }, 5000);
-  }, [onSaveSuccess]);
+  }, [handleSaveAndRestore]);
 
   // 取消保存
   const handleCancelSaving = useCallback(() => {
@@ -307,7 +329,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={onClose}
+              onPress={handleClose}
               activeOpacity={0.7}>
               <View style={styles.closeIcon}>
                 <View style={[styles.closeLine, styles.closeLine1]} />

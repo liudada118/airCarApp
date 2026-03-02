@@ -22,6 +22,7 @@ type Screen = 'home' | 'customAirbag';
  */
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+  const [adaptiveEnabled, setAdaptiveEnabled] = useState(true);
   const [homeToast, setHomeToast] = useState({
     visible: false,
     message: '',
@@ -58,7 +59,11 @@ const App: React.FC = () => {
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         {currentScreen === 'home' ? (
           <View style={styles.screenContainer}>
-            <HomeScreen onNavigateToCustomize={navigateToCustomize} />
+            <HomeScreen
+              onNavigateToCustomize={navigateToCustomize}
+              adaptiveEnabled={adaptiveEnabled}
+              onAdaptiveChange={setAdaptiveEnabled}
+            />
             {/* 首页级别的 Toast（保存成功后显示） */}
             <Toast
               visible={homeToast.visible}
@@ -71,6 +76,7 @@ const App: React.FC = () => {
           <CustomAirbagScreen
             onClose={navigateToHome}
             onSaveSuccess={handleSaveSuccess}
+            adaptiveEnabled={adaptiveEnabled}
           />
         )}
       </SafeAreaView>

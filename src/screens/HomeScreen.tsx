@@ -42,6 +42,8 @@ const USE_MOCK = Platform.OS !== 'android';
 
 interface HomeScreenProps {
   onNavigateToCustomize: () => void;
+  adaptiveEnabled: boolean;
+  onAdaptiveChange: (enabled: boolean) => void;
 }
 
 interface SerialDevice {
@@ -60,6 +62,8 @@ interface SerialModuleType {
   ) => Promise<boolean>;
   resetPendingOpen?: () => void;
   close?: () => void;
+  setAlgoMode?: (enabled: boolean) => void;
+  sendAirbagCommand?: (zone: string, action: string) => Promise<string>;
 }
 
 interface SerialResultEvent {
@@ -368,7 +372,7 @@ function matrixCellColor(val: number): string {
 
 // ─── 组件 ────────────────────────────────────────────────────────────
 
-const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange}) => {
   const [seatStatus, setSeatStatus] = useState<SeatStatus>('away');
   const [algoSeatStatus, setAlgoSeatStatus] =
     useState<AlgoSeatStatus>(DEFAULT_SEAT_STATUS);
@@ -383,7 +387,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('disconnected');
   const [connecting, setConnecting] = useState(false);
-  const [adaptiveEnabled, setAdaptiveEnabled] = useState(true);
+  // adaptiveEnabled 和 onAdaptiveChange 从 props 传入，由 App 统一管理
   const [showConnectionError, setShowConnectionError] = useState(false);
   const [connectionErrorMessage, setConnectionErrorMessage] = useState('');
 
@@ -774,7 +778,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
               </View>
               <View style={styles.divider} />
               <TouchableOpacity
-                onPress={onNavigateToCustomize}
+                onPress={() => {
+                  // 进入自定义气囊调节前，关闭算法模式
+                  SerialModule?.setAlgoMode?.(false);
+                  console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
+                  onNavigateToCustomize();
+                }}
                 activeOpacity={0.7}>
                 <View style={styles.customizeLinkRow}>
                   <IconFont
@@ -833,7 +842,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                   styles.toggleButton,
                   adaptiveEnabled && styles.toggleButtonActive,
                 ]}
-                onPress={() => setAdaptiveEnabled(true)}
+                onPress={() => {
+                  onAdaptiveChange(true);
+                  SerialModule?.setAlgoMode?.(true);
+                  console.log('[AlgoMode] 自适应调节开启，算法模式已启动');
+                }}
                 activeOpacity={0.7}>
                 <Text
                   style={[
@@ -848,7 +861,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                   styles.toggleButton,
                   !adaptiveEnabled && styles.toggleButtonInactive,
                 ]}
-                onPress={() => setAdaptiveEnabled(false)}
+                onPress={() => {
+                  onAdaptiveChange(false);
+                  SerialModule?.setAlgoMode?.(false);
+                  console.log('[AlgoMode] 自适应调节关闭，算法模式已停止');
+                }}
                 activeOpacity={0.7}>
                 <Text
                   style={[
