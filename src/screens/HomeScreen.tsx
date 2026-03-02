@@ -405,41 +405,50 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
         const label = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
         return `${zone}:${label}`;
       }).join(' | ');
-      // [AirbagCmd] log disabled
+      console.log('[AirbagCmd] HEX:', hexStr, '|', stateStr);
     }
   }, []);
 
   // ─── Python 配置管理 ──────────────────────────────────────
   const loadConfig = useCallback(() => {
     setConfigLoading(true);
-    NativeModules.SerialModule?.getConfig?.()
-      .then((json: string) => {
-        try {
-          const parsed = JSON.parse(json);
-          if (parsed.error) {
-            console.warn('getConfig error:', parsed.error);
-          } else {
-            setConfigData(parsed);
+    console.log('[Config] loadConfig called, SerialModule:', !!NativeModules.SerialModule);
+    try {
+      NativeModules.SerialModule?.getConfig()
+        .then((json: string) => {
+          console.log('[Config] raw response length:', json?.length);
+          try {
+            const parsed = JSON.parse(json);
+            if (parsed.error) {
+              console.warn('[Config] error:', parsed.error);
+            } else {
+              console.log('[Config] loaded', Object.keys(parsed).length, 'keys');
+              setConfigData(parsed);
+            }
+          } catch (e) {
+            console.warn('[Config] parse error:', e);
           }
-        } catch (e) {
-          console.warn('getConfig parse error:', e);
-        }
-        setConfigLoading(false);
-      })
-      .catch((e: any) => {
-        console.warn('getConfig failed:', e);
-        setConfigLoading(false);
-      });
+          setConfigLoading(false);
+        })
+        .catch((e: any) => {
+          console.warn('[Config] getConfig failed:', e?.message || e);
+          setConfigLoading(false);
+        });
+    } catch (e: any) {
+      console.warn('[Config] getConfig call error:', e?.message || e);
+      setConfigLoading(false);
+    }
   }, []);
 
   const handleSetConfig = useCallback((key: string, value: any) => {
     const valueJson = JSON.stringify(value);
-    NativeModules.SerialModule?.setConfig?.(key, valueJson)
+    console.log('[Config] set', key, '=', valueJson);
+    NativeModules.SerialModule?.setConfig(key, valueJson)
       .then((json: string) => {
         try {
           const result = JSON.parse(json);
           if (result.ok) {
-            // 更新本地 state
+            console.log('[Config] set ok:', key);
             setConfigData(prev => {
               if (!prev) return prev;
               return {
@@ -447,10 +456,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize}) => {
                 [key]: {...prev[key], value},
               };
             });
+          } else {
+            console.warn('[Config] set failed:', json);
           }
-        } catch (_) {}
+        } catch (e) {
+          console.warn('[Config] set parse error:', e);
+        }
       })
-      .catch(() => {});
+      .catch((e: any) => {
+        console.warn('[Config] setConfig failed:', e?.message || e);
+      });
   }, []);
 
   const handleResetConfig = useCallback(() => {

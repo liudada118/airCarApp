@@ -264,41 +264,52 @@ class SerialModule(
 
     @ReactMethod
     fun getConfig(promise: Promise) {
-        pythonExecutor.execute {
+        Log.i(logTag, "[Config] getConfig called")
+        // 使用独立线程，避免被 pythonExecutor 帧处理队列阻塞
+        Thread {
             try {
+                Log.i(logTag, "[Config] calling Python get_config...")
                 val module = Python.getInstance().getModule("server")
                 val resultJson = module.callAttr("get_config").toString()
+                Log.i(logTag, "[Config] got response, length=${resultJson.length}")
                 promise.resolve(resultJson)
             } catch (e: Exception) {
+                Log.e(logTag, "[Config] getConfig failed", e)
                 promise.reject("PY_ERROR", e.message ?: "get_config failed")
             }
-        }
+        }.start()
     }
 
     @ReactMethod
     fun setConfig(keyPath: String, valueJson: String, promise: Promise) {
-        pythonExecutor.execute {
+        Log.i(logTag, "[Config] setConfig: $keyPath = $valueJson")
+        Thread {
             try {
                 val module = Python.getInstance().getModule("server")
                 val resultJson = module.callAttr("set_config", keyPath, valueJson).toString()
+                Log.i(logTag, "[Config] setConfig result: $resultJson")
                 promise.resolve(resultJson)
             } catch (e: Exception) {
+                Log.e(logTag, "[Config] setConfig failed", e)
                 promise.reject("PY_ERROR", e.message ?: "set_config failed")
             }
-        }
+        }.start()
     }
 
     @ReactMethod
     fun resetConfig(promise: Promise) {
-        pythonExecutor.execute {
+        Log.i(logTag, "[Config] resetConfig called")
+        Thread {
             try {
                 val module = Python.getInstance().getModule("server")
                 val resultJson = module.callAttr("reset_config").toString()
+                Log.i(logTag, "[Config] resetConfig result: $resultJson")
                 promise.resolve(resultJson)
             } catch (e: Exception) {
+                Log.e(logTag, "[Config] resetConfig failed", e)
                 promise.reject("PY_ERROR", e.message ?: "reset_config failed")
             }
-        }
+        }.start()
     }
 
     // ─── 3D 点图配置持久化（SharedPreferences） ───────────────────────
@@ -556,12 +567,12 @@ class SerialModule(
                     // 优先使用二进制 ByteArray 发送（等价于 Node.js 的 port.write(Buffer.from(hexStr, 'hex'))）
                     val bytes = autoWriteBytes
                     if (bytes != null && bytes.isNotEmpty()) {
+                        val hex = autoWriteText ?: bytes.joinToString("") { "%02X".format(it) }
+                        Log.i(logTag, "[SerialWrite] HEX: $hex (${bytes.size} bytes)")
                         when (val result = manager.writeBytes(bytes)) {
                             is SerialManager.OpenResult.Fail ->
                                 Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
-                            else -> {
-                                Log.d(logTag, "auto write sent ${bytes.size} bytes")
-                            }
+                            else -> {}
                         }
                         return@scheduleAtFixedRate
                     }
