@@ -301,6 +301,112 @@ class SerialModule(
         }
     }
 
+    // ─── 气囊手动控制 ─────────────────────────────────────────────────
+
+    /** AirbagZone → 协议气囊 ID 列表 */
+    private val zoneToAirbagIds: Map<String, List<Int>> = mapOf(
+        "sideWingL"  to listOf(2, 4),   // 左侧翼上、左侧翼下
+        "sideWingR"  to listOf(1, 3),   // 右侧翼上、右侧翼下
+        "lumbarUp"   to listOf(5),      // 腰托1
+        "lumbarDown"  to listOf(6),     // 腰托2
+        "shoulderL"  to listOf(7),      // 肩部左（预留）
+        "shoulderR"  to listOf(8),      // 肩部右（预留）
+        "cushionFL"  to listOf(11),     // 坐垫前左（预留）
+        "cushionFR"  to listOf(12),     // 坐垫前右（预留）
+        "cushionRL"  to listOf(9),      // 坐垫后左 → 腿托1
+        "cushionRR"  to listOf(10)      // 坐垫后右 → 腿托2
+    )
+
+    private val FRAME_HEADER = 0x1F
+    private val FRAME_TAIL = intArrayOf(0xAA, 0x55, 0x03, 0x99)
+    private val GEAR_STOP = 0x00
+    private val GEAR_INFLATE = 0x03
+    private val GEAR_DEFLATE = 0x04
+    private val MODE_AUTO = 0x00
+    private val DIRECTION_DOWNLOAD = 0x00
+
+    /**
+     * 构建 55 字节协议帧
+     * @param commands  气囊ID → 档位 的映射
+     */
+    private fun buildProtocolFrame(commands: Map<Int, Int>): ByteArray {
+        val frame = mutableListOf<Int>()
+        // 帧头
+        frame.add(FRAME_HEADER)
+        // 24 个气囊 × 2 字节
+        for (airbagId in 1..24) {
+            frame.add(airbagId)
+            frame.add(commands.getOrDefault(airbagId, GEAR_STOP))
+        }
+        // 工作模式
+        frame.add(MODE_AUTO)
+        // 方向标识
+        frame.add(DIRECTION_DOWNLOAD)
+        // 帧尾
+        for (b in FRAME_TAIL) {
+            frame.add(b)
+        }
+        return ByteArray(frame.size) { frame[it].toByte() }
+    }
+
+    @ReactMethod
+    fun sendAirbagCommand(zone: String, action: String, promise: Promise) {
+        try {
+            val airbagIds = zoneToAirbagIds[zone]
+            if (airbagIds == null) {
+                promise.reject("INVALID_ZONE", "Unknown airbag zone: $zone")
+                return
+            }
+
+            val gear = when (action) {
+                "inflate" -> GEAR_INFLATE
+                "deflate" -> GEAR_DEFLATE
+                "stop"    -> GEAR_STOP
+                else -> {
+                    promise.reject("INVALID_ACTION", "Unknown action: $action, expected inflate/deflate/stop")
+                    return
+                }
+            }
+
+            val commands = mutableMapOf<Int, Int>()
+            for (id in airbagIds) {
+                commands[id] = gear
+            }
+
+            val frame = buildProtocolFrame(commands)
+            val hexStr = frame.joinToString("") { "%02X".format(it) }
+
+            // 打印发送指令到控制台
+            Log.i(logTag, "[AirbagCmd] zone=$zone action=$action airbagIds=$airbagIds gear=0x${Integer.toHexString(gear)}")
+            Log.i(logTag, "[AirbagCmd] HEX: $hexStr (${frame.size} bytes)")
+
+            // 同时发送事件到 JS 端，让前端也能看到
+            val params = Arguments.createMap().apply {
+                putString("zone", zone)
+                putString("action", action)
+                putString("hex", hexStr)
+                putInt("bytes", frame.size)
+            }
+            reactContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit("onAirbagCommandSent", params)
+
+            when (val result = manager.writeBytes(frame)) {
+                is SerialManager.OpenResult.Ok -> {
+                    Log.i(logTag, "[AirbagCmd] Sent successfully")
+                    promise.resolve(hexStr)
+                }
+                is SerialManager.OpenResult.Fail -> {
+                    Log.e(logTag, "[AirbagCmd] Send failed: ${result.code} ${result.message}")
+                    promise.reject(result.code, result.message)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(logTag, "[AirbagCmd] Error", e)
+            promise.reject("AIRBAG_CMD_ERROR", e.message ?: "sendAirbagCommand failed")
+        }
+    }
+
     // ─── 3D 点图配置持久化（SharedPreferences） ───────────────────────
     private val prefs by lazy {
         reactContext.getSharedPreferences("point_settings", Context.MODE_PRIVATE)
