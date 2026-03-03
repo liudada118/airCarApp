@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState, useRef} from 'react';
+import React, {useCallback, useEffect, useMemo, useState, useRef} from 'react';
 import {
   Alert,
   Dimensions,
@@ -373,16 +373,24 @@ function matrixCellColor(val: number): string {
 // ─── 组件 ────────────────────────────────────────────────────────────
 
 const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange}) => {
-  const [seatStatus, setSeatStatus] = useState<SeatStatus>('away');
-  const [algoSeatStatus, setAlgoSeatStatus] =
-    useState<AlgoSeatStatus>(DEFAULT_SEAT_STATUS);
-  const [bodyShapeInfo, setBodyShapeInfo] =
-    useState<AlgoBodyShapeInfo>(DEFAULT_BODY_SHAPE_INFO);
-  const [livingStatus, setLivingStatus] = useState<string>('离座');
-  const [bodyType, setBodyType] = useState<string>('未判断');
-  const [commandStates, setCommandStates] =
-    useState<AirbagCommandStates>(DEFAULT_AIRBAG_COMMAND_STATES);
-  const [rawCommand, setRawCommand] = useState<number[] | null>(null);
+  // 合并所有算法结果为单个状态对象，减少 setState 调用（8→1），大幅降低重渲染次数
+  const [algoState, setAlgoState] = useState({
+    seatStatus: 'away' as SeatStatus,
+    algoSeatStatus: DEFAULT_SEAT_STATUS as AlgoSeatStatus,
+    bodyShapeInfo: DEFAULT_BODY_SHAPE_INFO as AlgoBodyShapeInfo,
+    livingStatus: '离座',
+    bodyType: '未判断',
+    commandStates: DEFAULT_AIRBAG_COMMAND_STATES as AirbagCommandStates,
+    rawCommand: null as number[] | null,
+    realtimeData: {
+      cushion_sum: 0, backrest_sum: 0, living_confidence: 0,
+      seat_state: 'OFF_SEAT', frame_count: 0,
+      living_status: '未知', body_type: '未判断',
+      control_decision_data: null, body_features: null,
+      living_detection_data: null, body_type_detection_data: null,
+      deflate_cooldown: null,
+    } as RealtimeAlgoData,
+  });
 
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>('disconnected');
@@ -404,48 +412,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     cushionRR: 3,
   });
 
-  const [sensorData, setSensorData] = useState<number[]>(INITIAL_SENSOR_FRAME);
+  // sensorData 用 useRef 存储，3D 组件通过 data prop 读取，避免每帧 setState 触发重渲染
+  const sensorDataRef = useRef<number[]>(INITIAL_SENSOR_FRAME);
+  const [sensorDataVersion, setSensorDataVersion] = useState(0); // 仅矩阵弹窗需要时触发更新
   const [showMatrix, setShowMatrix] = useState(false);
+  const showMatrixRef = useRef(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showRealtimeData, setShowRealtimeData] = useState(false);
   const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
-  const [realtimeData, setRealtimeData] = useState<RealtimeAlgoData>({
-    cushion_sum: 0, backrest_sum: 0, living_confidence: 0,
-    seat_state: 'OFF_SEAT', frame_count: 0,
-    living_status: '未知', body_type: '未判断',
-    control_decision_data: null, body_features: null,
-    living_detection_data: null, body_type_detection_data: null,
-    deflate_cooldown: null,
-  });
+  // realtimeData 已合并到 algoState 中
 
-  // ─── 处理算法结果 ──────────────────────────────────────
+  // ─── 处理算法结果（单次 setState，减少 87.5% 重渲染）──────────────
   const handleAlgoResult = useCallback((resultJson: string) => {
     const parsed = parseAlgoResult(resultJson);
-    if (!parsed) {
-      return;
-    }
-    setSeatStatus(parsed.seatStatus);
-    setAlgoSeatStatus(parsed.algoSeatStatus);
-    setBodyShapeInfo(parsed.bodyShapeInfo);
-    setCommandStates(parsed.commandStates);
-    setRawCommand(parsed.rawCommand);
-    setLivingStatus(parsed.livingStatus);
-    setBodyType(parsed.bodyType);
-    setRealtimeData(parsed.realtimeData);
-
-    // 打印气囊指令数据
-    if (Array.isArray(parsed.rawCommand) && parsed.rawCommand.length > 0) {
-      const hexStr = parsed.rawCommand
-        .map((v: number) => v.toString(16).padStart(2, '0').toUpperCase())
-        .join(' ');
-      const stateStr = ALL_AIRBAG_ZONES.map((zone) => {
-        const cmd = parsed.commandStates[zone];
-        const label = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
-        return `${zone}:${label}`;
-      }).join(' | ');
-      console.log('[AirbagCmd] HEX:', hexStr, '|', stateStr);
-    }
+    if (!parsed) return;
+    // 单次 setState 合并所有算法结果
+    setAlgoState({
+      seatStatus: parsed.seatStatus,
+      algoSeatStatus: parsed.algoSeatStatus,
+      bodyShapeInfo: parsed.bodyShapeInfo,
+      commandStates: parsed.commandStates,
+      rawCommand: parsed.rawCommand,
+      livingStatus: parsed.livingStatus,
+      bodyType: parsed.bodyType,
+      realtimeData: parsed.realtimeData,
+    });
   }, []);
 
   // ─── Python 配置管理 ──────────────────────────────────────
@@ -530,7 +522,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       if (event.data) {
         const parsed = parseSerialFrame(event.data);
         if (parsed) {
-          setSensorData(parsed);
+          sensorDataRef.current = parsed;
         }
       }
     });
@@ -640,13 +632,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     const dataSub = emitter.addListener('onSerialData', event => {
       const payload =
         event && typeof event.data === 'string' ? event.data : '';
-      if (!payload) {
-        return;
-      }
-
+      if (!payload) return;
       const parsed = parseSerialFrame(payload);
       if (parsed) {
-        setSensorData(parsed);
+        sensorDataRef.current = parsed;
+        // 仅当矩阵弹窗打开时触发渲染更新
+        if (showMatrixRef.current) {
+          setSensorDataVersion(v => v + 1);
+        }
       }
     });
 
@@ -670,6 +663,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       resultSub.remove();
     };
   }, [handleAlgoResult]);
+
+  // ─── 解构 algoState，避免大量代码修改 ────────────────────────
+  const {seatStatus, algoSeatStatus, bodyShapeInfo, commandStates, rawCommand, livingStatus, bodyType, realtimeData} = algoState;
+  const sensorData = sensorDataRef.current;
 
   // ─── 渲染辅助 ──────────────────────────────────────────
 
@@ -888,7 +885,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             <View style={styles.floatingBtnGroup}>
               <TouchableOpacity
                 style={styles.matrixToggleBtn}
-                onPress={() => setShowMatrix(true)}
+                onPress={() => { setShowMatrix(true); showMatrixRef.current = true; }}
                 activeOpacity={0.7}>
                 <Text style={styles.matrixToggleBtnText}>矩阵</Text>
               </TouchableOpacity>
@@ -914,13 +911,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         visible={showMatrix}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowMatrix(false)}>
+        onRequestClose={() => { setShowMatrix(false); showMatrixRef.current = false; }}>
         <View style={styles.matrixModalOverlay}>
           <View style={styles.matrixModalContent}>
             <View style={styles.matrixModalHeader}>
               <Text style={styles.matrixModalTitle}>原始传感器矩阵</Text>
               <TouchableOpacity
-                onPress={() => setShowMatrix(false)}
+                onPress={() => { setShowMatrix(false); showMatrixRef.current = false; }}
                 activeOpacity={0.7}
                 style={styles.matrixModalClose}>
                 <Text style={styles.matrixModalCloseText}>✕</Text>
@@ -1061,6 +1058,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       </Modal>
 
       {/* Python 配置弹窗 */}
+      {showConfig && (
       <Modal
         visible={showConfig}
         transparent
@@ -1176,8 +1174,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           </View>
         </View>
       </Modal>
+      )}
 
       {/* 实时算法数据弹窗 */}
+      {showRealtimeData && (
       <Modal
         visible={showRealtimeData}
         transparent
@@ -1452,6 +1452,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           </View>
         </View>
       </Modal>
+      )}
 
       {/* 连接异常弹窗 */}
       <ConnectionErrorModal
