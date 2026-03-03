@@ -1463,6 +1463,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             setConnectionStatus('disconnected');
           }
         }}
+        onRetry={() => {
+          hasTriedAutoConnect = false;
+          setShowConnectionError(false);
+          setConnectionErrorMessage('');
+          setConnectionStatus('disconnected');
+          setTimeout(() => {
+            autoConnectSensor().catch(() => undefined);
+          }, 100);
+        }}
+        retrying={connecting}
       />
 
       {showConnectionError && connectionErrorMessage ? (
