@@ -27,6 +27,8 @@ interface AirbagLabelProps {
   onPress: (zone: AirbagZone) => void;
   /** 连接线方向 */
   lineDirection: 'left' | 'right';
+  /** 累计操作次数（正数=充气次数，负数=放气次数，0=无操作） */
+  cmdCount?: number;
 }
 
 const AirbagLabel: React.FC<AirbagLabelProps> = ({
@@ -35,9 +37,16 @@ const AirbagLabel: React.FC<AirbagLabelProps> = ({
   isActive,
   onPress,
   lineDirection,
+  cmdCount = 0,
 }) => {
   const iconName = ZONE_ICON_MAP[zone];
   const iconColor = isActive ? Colors.textWhite : Colors.textGray;
+
+  // 格式化操作次数文本
+  const countText =
+    cmdCount > 0 ? `+${cmdCount}` : cmdCount < 0 ? `${cmdCount}` : '';
+  const countColor =
+    cmdCount > 0 ? '#58A6FF' : cmdCount < 0 ? '#F0883E' : Colors.textGray;
 
   return (
     <View
@@ -61,6 +70,12 @@ const AirbagLabel: React.FC<AirbagLabelProps> = ({
           {label}
         </Text>
       </TouchableOpacity>
+      {/* 操作次数标记 */}
+      {countText !== '' && (
+        <Text style={[styles.countBadge, {color: countColor}]}>
+          {countText}
+        </Text>
+      )}
       {/* 连接线 */}
       <View
         style={[
@@ -107,6 +122,13 @@ const styles = StyleSheet.create({
   },
   inactiveLabel: {
     color: Colors.textGray,
+  },
+  countBadge: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    marginHorizontal: 2,
+    minWidth: 20,
+    textAlign: 'center',
   },
   line: {
     width: 40,

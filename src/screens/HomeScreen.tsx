@@ -427,6 +427,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const handleAlgoResult = useCallback((resultJson: string) => {
     const parsed = parseAlgoResult(resultJson);
     if (!parsed) return;
+    // 离座时清空 3D 压力云图数据
+    if (parsed.algoSeatStatus.is_off_seat) {
+      sensorDataRef.current = INITIAL_SENSOR_FRAME;
+    }
     // 单次 setState 合并所有算法结果
     setAlgoState({
       seatStatus: parsed.seatStatus,
@@ -699,7 +703,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
   return (
     <View style={styles.container}>
-      <TopBar connectionStatus={connectionStatus} />
+      <TopBar
+        connectionStatus={connectionStatus}
+        onRetry={() => {
+          hasTriedAutoConnect = false;
+          setShowConnectionError(false);
+          setConnectionErrorMessage('');
+          setConnectionStatus('disconnected');
+          setTimeout(() => {
+            autoConnectSensor().catch(() => undefined);
+          }, 100);
+        }}
+      />
 
       <View style={styles.content}>
         {/* ─── 左侧面板 ─── */}
