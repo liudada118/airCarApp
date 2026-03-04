@@ -293,7 +293,16 @@ function getBodyShapeLabel(shape: BodyShape): string {
   if (!shape) {
     return '未识别';
   }
-  return shape;
+  switch (shape) {
+    case '瘦小':
+      return '轻盈型';
+    case '中等':
+      return '均衡型';
+    case '高大':
+      return '稳健型';
+    default:
+      return shape;
+  }
 }
 
 function getBodyShapeColor(shape: BodyShape): string {
@@ -798,8 +807,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             <View style={styles.airbagStatusCard}>
               <Text style={styles.airbagStatusText}>
                 {adaptiveEnabled
-                  ? (bodyType && bodyType !== '未判断'
-                      ? `当前为${bodyType}自适应调节状态`
+                  ? (bodyShapeInfo.body_shape
+                      ? `当前为${getBodyShapeLabel(bodyShapeInfo.body_shape)}自适应调节状态`
                       : '当前为自适应调节状态')
                   : '自适应调节已关闭'}
               </Text>
