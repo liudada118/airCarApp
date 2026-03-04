@@ -262,14 +262,18 @@ class SerialModule(
     }
 
     /**
-     * JS 端调用：发送全停保压帧（所有气囊档位=0x00）
-     * 用于自适应关闭或进入自定义调节时让气囊保压
+     * JS 端调用：发送全部保压帧（所有气囊档位=0x01）
+     * 用于自适应关闭或进入自定义调节时让所有气囊进入保压状态
      */
     @ReactMethod
     fun sendStopAllFrame(promise: Promise) {
         try {
-            // 构建全停帧：所有气囊档位为 GEAR_STOP (0x00)
-            val frame = buildProtocolFrame(emptyMap())
+            // 构建保压帧：所有气囊档位为 GEAR_HOLD (0x01)
+            val holdCommands = mutableMapOf<Int, Int>()
+            for (airbagId in 1..24) {
+                holdCommands[airbagId] = GEAR_HOLD
+            }
+            val frame = buildProtocolFrame(holdCommands)
             val hexStr = frame.joinToString("") { "%02X".format(it) }
 
             Log.i(logTag, "[StopAll] Sending stop-all frame: $hexStr (${frame.size} bytes)")
@@ -368,6 +372,7 @@ class SerialModule(
     private val FRAME_HEADER = 0x1F
     private val FRAME_TAIL = intArrayOf(0xAA, 0x55, 0x03, 0x99)
     private val GEAR_STOP = 0x00
+    private val GEAR_HOLD = 0x01
     private val GEAR_INFLATE = 0x03
     private val GEAR_DEFLATE = 0x04
     private val MODE_AUTO = 0x00
