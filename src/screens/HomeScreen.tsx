@@ -44,6 +44,8 @@ interface HomeScreenProps {
   onNavigateToCustomize: () => void;
   adaptiveEnabled: boolean;
   onAdaptiveChange: (enabled: boolean) => void;
+  connectionStatus: ConnectionStatus;
+  onConnectionStatusChange: (status: ConnectionStatus) => void;
 }
 
 interface SerialDevice {
@@ -382,7 +384,7 @@ function matrixCellColor(val: number): string {
 
 // ─── 组件 ────────────────────────────────────────────────────────────
 
-const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange}) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange}) => {
   // 合并所有算法结果为单个状态对象，减少 setState 调用（8→1），大幅降低重渲染次数
   const [algoState, setAlgoState] = useState({
     seatStatus: 'away' as SeatStatus,
@@ -402,8 +404,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     } as RealtimeAlgoData,
   });
 
-  const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>('disconnected');
+  // connectionStatus 由 App 层管理，通过 props 传入，避免页面切换时状态丢失
+  const setConnectionStatus = onConnectionStatusChange;
   const [connecting, setConnecting] = useState(false);
   // adaptiveEnabled 和 onAdaptiveChange 从 props 传入，由 App 统一管理
   const [showConnectionError, setShowConnectionError] = useState(false);
