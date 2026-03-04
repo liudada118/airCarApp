@@ -77,6 +77,8 @@ class SerialModule(
     @Volatile private var autoWriteText: String? = null
     @Volatile private var autoWriteBytes: ByteArray? = null
     @Volatile private var isAutoMode = true
+    /** JS 端是否主动控制了算法模式（true=JS 端主动设置过，mode frame 不应覆盖） */
+    @Volatile private var jsAlgoModeOverride = false
     @Volatile private var lastAutoWriteHex: String? = null
     private val logTag = "SerialModule"
 
@@ -247,6 +249,7 @@ class SerialModule(
     @ReactMethod
     fun setAlgoMode(enabled: Boolean) {
         Log.i(logTag, "[AlgoMode] setAlgoMode($enabled) isAutoMode was $isAutoMode")
+        jsAlgoModeOverride = true  // 标记 JS 端主动控制了算法模式
         if (enabled && !isAutoMode) {
             isAutoMode = true
             startAutoWrite()
@@ -637,24 +640,30 @@ class SerialModule(
 
     private fun handleModeFrame(values: List<Int>, data: String) {
         val modeValue = values.getOrNull(49) ?: -1
-        // mode frame log disabled
         emitSerialMode(data, modeValue)
+
+        // 如果 JS 端主动控制了算法模式，硬件 mode frame 不应覆盖 JS 的决策
+        if (jsAlgoModeOverride) {
+            Log.d(logTag, "[ModeFrame] modeValue=$modeValue ignored (JS override active, isAutoMode=$isAutoMode)")
+            return
+        }
+
         when (modeValue) {
             0 -> {
                 if (!isAutoMode) {
                     isAutoMode = true
-                    // Log.i(logTag, "auto mode enabled")
+                    Log.i(logTag, "[ModeFrame] auto mode enabled by hardware")
                     startAutoWrite()
                 }
             }
             1 -> {
                 if (isAutoMode) {
                     isAutoMode = false
-                    // Log.i(logTag, "auto mode disabled")
+                    Log.i(logTag, "[ModeFrame] auto mode disabled by hardware")
                     stopAutoWrite()
                 }
             }
-            else -> Log.w(logTag, "unknown mode value: $modeValue")
+            else -> Log.w(logTag, "[ModeFrame] unknown mode value: $modeValue")
         }
     }
 
