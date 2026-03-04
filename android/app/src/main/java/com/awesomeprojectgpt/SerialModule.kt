@@ -250,16 +250,16 @@ class SerialModule(
     fun setAlgoMode(enabled: Boolean) {
         Log.i(logTag, "[AlgoMode] setAlgoMode($enabled) isAutoMode was $isAutoMode")
         jsAlgoModeOverride = true  // 标记 JS 端主动控制了算法模式
-        if (enabled && !isAutoMode) {
+        if (enabled) {
             isAutoMode = true
+            // 确保 autoWrite 定时任务在运行（stopAutoWrite 会将 autoWriteTask 置 null，startAutoWrite 会检查）
             startAutoWrite()
-            Log.i(logTag, "[AlgoMode] Algorithm mode ENABLED, autoWrite started")
-        } else if (!enabled && isAutoMode) {
+            Log.i(logTag, "[AlgoMode] Algorithm mode ENABLED, autoWrite ensured running")
+        } else {
             isAutoMode = false
             stopAutoWrite()
-            // 清空自动写入缓存，确保不会残留指令
-            autoWriteText = null
-            autoWriteBytes = null
+            // 注意：不再清空 autoWriteText/autoWriteBytes 缓存
+            // 缓存保留，以便重新开启时能立即使用最新的算法指令
             Log.i(logTag, "[AlgoMode] Algorithm mode DISABLED, autoWrite stopped")
         }
     }
@@ -582,10 +582,8 @@ class SerialModule(
                 val module = Python.getInstance().getModule("server")
                 val resultJson = module.callAttr("server", values).toString()
                 emitSerialResult(data, resultJson, null)
-                // 仅在自动模式下才更新 autoWrite 缓存
-                if (isAutoMode) {
-                    updateAutoWritePayloadFromResult(resultJson)
-                }
+                // 始终更新 autoWrite 缓存，确保开启自适应时能立即发送最新指令
+                updateAutoWritePayloadFromResult(resultJson)
             } catch (e: Exception) {
                 Log.e(logTag, "python server call failed", e)
                 // Python 算法错误仅作为算法错误上报，不影响连接状态
