@@ -77,8 +77,6 @@ class SerialModule(
     @Volatile private var autoWriteText: String? = null
     @Volatile private var autoWriteBytes: ByteArray? = null
     @Volatile private var isAutoMode = true
-    /** JS 端是否主动控制了算法模式（true=JS 端主动设置过，mode frame 不应覆盖） */
-    @Volatile private var jsAlgoModeOverride = false
     @Volatile private var lastAutoWriteHex: String? = null
     private val logTag = "SerialModule"
 
@@ -249,17 +247,16 @@ class SerialModule(
     @ReactMethod
     fun setAlgoMode(enabled: Boolean) {
         Log.i(logTag, "[AlgoMode] setAlgoMode($enabled) isAutoMode was $isAutoMode")
-        jsAlgoModeOverride = true  // 标记 JS 端主动控制了算法模式
-        if (enabled) {
+        if (enabled && !isAutoMode) {
             isAutoMode = true
-            // 确保 autoWrite 定时任务在运行（stopAutoWrite 会将 autoWriteTask 置 null，startAutoWrite 会检查）
             startAutoWrite()
-            Log.i(logTag, "[AlgoMode] Algorithm mode ENABLED, autoWrite ensured running")
-        } else {
+            Log.i(logTag, "[AlgoMode] Algorithm mode ENABLED, autoWrite started")
+        } else if (!enabled && isAutoMode) {
             isAutoMode = false
             stopAutoWrite()
-            // 注意：不再清空 autoWriteText/autoWriteBytes 缓存
-            // 缓存保留，以便重新开启时能立即使用最新的算法指令
+            // 清空自动写入缓存，确保不会残留指令
+            autoWriteText = null
+            autoWriteBytes = null
             Log.i(logTag, "[AlgoMode] Algorithm mode DISABLED, autoWrite stopped")
         }
     }
@@ -638,30 +635,24 @@ class SerialModule(
 
     private fun handleModeFrame(values: List<Int>, data: String) {
         val modeValue = values.getOrNull(49) ?: -1
+        // mode frame log disabled
         emitSerialMode(data, modeValue)
-
-        // 如果 JS 端主动控制了算法模式，硬件 mode frame 不应覆盖 JS 的决策
-        if (jsAlgoModeOverride) {
-            Log.d(logTag, "[ModeFrame] modeValue=$modeValue ignored (JS override active, isAutoMode=$isAutoMode)")
-            return
-        }
-
         when (modeValue) {
             0 -> {
                 if (!isAutoMode) {
                     isAutoMode = true
-                    Log.i(logTag, "[ModeFrame] auto mode enabled by hardware")
+                    // Log.i(logTag, "auto mode enabled")
                     startAutoWrite()
                 }
             }
             1 -> {
                 if (isAutoMode) {
                     isAutoMode = false
-                    Log.i(logTag, "[ModeFrame] auto mode disabled by hardware")
+                    // Log.i(logTag, "auto mode disabled")
                     stopAutoWrite()
                 }
             }
-            else -> Log.w(logTag, "[ModeFrame] unknown mode value: $modeValue")
+            else -> Log.w(logTag, "unknown mode value: $modeValue")
         }
     }
 
@@ -798,7 +789,7 @@ class SerialModule(
         val count = autoWriteFailCount.incrementAndGet()
         if (count >= autoWriteFailThreshold) {
             Log.e(logTag, "[AutoWrite] $count consecutive write failures, notifying JS of disconnection")
-            stopAutoWrite()
+            // 不停止 autoWrite，让硬件 mode frame 能继续控制；仅通知 JS 层
             emitConnectionLost("串口写入连续失败 $count 次")
         }
     }
