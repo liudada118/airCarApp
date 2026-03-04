@@ -64,6 +64,7 @@ interface SerialModuleType {
   close?: () => void;
   setAlgoMode?: (enabled: boolean) => void;
   sendAirbagCommand?: (zone: string, action: string) => Promise<string>;
+  sendStopAllFrame?: () => Promise<string>;
 }
 
 interface SerialResultEvent {
@@ -653,18 +654,35 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         if (typeof event.result === 'string' && event.result) {
           handleAlgoResult(event.result);
         }
+        // 注意：不再将 event.error 当作连接错误处理
+        // Python 算法错误通过 onAlgoError 事件单独上报，不影响连接状态
+      },
+    );
 
-        if (typeof event.error === 'string' && event.error) {
-          setConnectionStatus('error');
-          setConnectionErrorMessage(event.error);
-          setShowConnectionError(true);
-        }
+    // 监听真正的串口断线事件（由 Native 层读取线程或写入连续失败触发）
+    const disconnectSub = emitter.addListener(
+      'onSerialDisconnect',
+      (event: {reason?: string}) => {
+        console.warn('[Serial] Disconnected:', event.reason);
+        setConnectionStatus('error');
+        setConnectionErrorMessage(event.reason || '串口连接已断开');
+        setShowConnectionError(true);
+      },
+    );
+
+    // 监听算法处理错误（仅记录日志，不影响连接状态）
+    const algoErrorSub = emitter.addListener(
+      'onAlgoError',
+      (event: {error?: string}) => {
+        console.warn('[AlgoError]', event.error);
       },
     );
 
     return () => {
       dataSub.remove();
       resultSub.remove();
+      disconnectSub.remove();
+      algoErrorSub.remove();
     };
   }, [handleAlgoResult]);
 
@@ -779,7 +797,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             </View>
             <View style={styles.airbagStatusCard}>
               <Text style={styles.airbagStatusText}>
-                {adaptiveEnabled ? '当前为自适应调节状态' : '自适应调节已关闭'}
+                {adaptiveEnabled
+                  ? (bodyType && bodyType !== '未判断'
+                      ? `当前为${bodyType}自适应调节状态`
+                      : '当前为自适应调节状态')
+                  : '自适应调节已关闭'}
               </Text>
               <View style={styles.seatThumbnail}>
                 <SeatDiagram
@@ -791,8 +813,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               <View style={styles.divider} />
               <TouchableOpacity
                 onPress={() => {
-                  // 进入自定义气囊调节前，关闭算法模式
+                  // 进入自定义气囊调节前，关闭算法模式（停止透传算法指令）
                   SerialModule?.setAlgoMode?.(false);
+                  // 发送全停保压帧，让所有气囊进入保压状态
+                  SerialModule?.sendStopAllFrame?.().then(() => {
+                    console.log('[AlgoMode] 进入自定义气囊调节，已发送全停保压帧');
+                  }).catch((e: any) => {
+                    console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
+                  });
                   console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
                   onNavigateToCustomize();
                 }}
@@ -875,7 +903,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 ]}
                 onPress={() => {
                   onAdaptiveChange(false);
+                  // 先关闭算法模式（停止透传算法指令）
                   SerialModule?.setAlgoMode?.(false);
+                  // 再发送全停保压帧，让所有气囊进入保压状态
+                  SerialModule?.sendStopAllFrame?.().then(() => {
+                    console.log('[AlgoMode] 自适应调节关闭，已发送全停保压帧');
+                  }).catch((e: any) => {
+                    console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
+                  });
                   console.log('[AlgoMode] 自适应调节关闭，算法模式已停止');
                 }}
                 activeOpacity={0.7}>
