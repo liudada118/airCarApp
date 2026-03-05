@@ -191,6 +191,12 @@ interface RealtimeAlgoData {
     max_commands?: number;
     groups?: Record<string, {locked: boolean; counter: number}>;
   } | null;
+  body_shape_info: {
+    body_shape: string;
+    body_shape_state: string;
+    confidence: number;
+    probabilities: Record<string, number>;
+  } | null;
 }
 
 function parseAlgoResult(resultJson: string): {
@@ -255,6 +261,7 @@ function parseAlgoResult(resultJson: string): {
       living_detection_data: (parsed as any).living_detection_data ?? null,
       body_type_detection_data: (parsed as any).body_type_detection_data ?? null,
       deflate_cooldown: (parsed as any).deflate_cooldown ?? null,
+      body_shape_info: (parsed as any).body_shape_info ?? null,
     };
 
     return {
@@ -401,6 +408,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       control_decision_data: null, body_features: null,
       living_detection_data: null, body_type_detection_data: null,
       deflate_cooldown: null,
+      body_shape_info: null,
     } as RealtimeAlgoData,
   });
 
@@ -1327,6 +1335,35 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   <Text style={styles.cfgValueText}>{safeFixed(realtimeData.living_confidence, 3)}</Text>
                 </View>
               </View>
+
+              {/* 体型三分类 */}
+              {realtimeData.body_shape_info && (
+                <View style={{marginBottom: 12}}>
+                  <Text style={{color: Colors.primary, fontSize: 13, fontWeight: '700', marginBottom: 6, paddingHorizontal: 12}}>体型三分类</Text>
+                  <View style={styles.cfgRow}>
+                    <View style={{flex: 1}}><Text style={styles.cfgKey}>状态</Text></View>
+                    <Text style={[styles.cfgValueText, {color: realtimeData.body_shape_info.body_shape_state === 'COMPLETED' ? '#4CAF50' : realtimeData.body_shape_info.body_shape_state === 'COLLECTING' ? '#FFC107' : '#999'}]}>
+                      {realtimeData.body_shape_info.body_shape_state}
+                    </Text>
+                  </View>
+                  <View style={styles.cfgRow}>
+                    <View style={{flex: 1}}><Text style={styles.cfgKey}>体型</Text></View>
+                    <Text style={styles.cfgValueText}>{realtimeData.body_shape_info.body_shape || '未识别'}</Text>
+                  </View>
+                  <View style={styles.cfgRow}>
+                    <View style={{flex: 1}}><Text style={styles.cfgKey}>置信度</Text></View>
+                    <Text style={styles.cfgValueText}>{safeFixed(realtimeData.body_shape_info.confidence, 3)}</Text>
+                  </View>
+                  {realtimeData.body_shape_info.probabilities && Object.keys(realtimeData.body_shape_info.probabilities).length > 0 && (
+                    <View style={styles.cfgRow}>
+                      <View style={{flex: 1}}><Text style={styles.cfgKey}>概率分布</Text></View>
+                      <Text style={styles.cfgValueText}>
+                        {Object.entries(realtimeData.body_shape_info.probabilities).map(([k, v]) => `${k}:${safeFixed(v as number, 2)}`).join(' ')}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* 控制决策 - 腰托 */}
               {realtimeData.control_decision_data?.lumbar && (
