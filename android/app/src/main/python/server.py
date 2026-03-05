@@ -50,7 +50,8 @@ try:
     # 打印体型三分类器状态
     if hasattr(_system, 'body_shape_classifier') and _system.body_shape_classifier is not None:
         print(f"[server.py] 体型三分类器: 已初始化")
-        print(f"[server.py]   模型已加载: {_system.body_shape_classifier.model is not None}")
+        print(f"[server.py]   模型已加载: {_system.body_shape_classifier._backend is not None}")
+        print(f"[server.py]   推理后端: {_system.body_shape_classifier._backend or '未加载'}")
         print(f"[server.py]   自动触发: {_system.auto_trigger_body_shape}")
     else:
         print(f"[server.py] 体型三分类器: 未初始化（body_shape_classifier is None）")
