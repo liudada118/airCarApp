@@ -571,16 +571,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       if (event.data) {
         const parsed = parseSerialFrame(event.data);
         if (parsed) {
-          // 检测传感器数据是否全为0（离座）：立即清零3D图
-          let frameSum = 0;
-          for (let i = 0; i < parsed.length; i++) { frameSum += parsed[i]; }
-          if (frameSum === 0) {
-            sensorDataRef.current = INITIAL_SENSOR_FRAME;
-            carAirRef.current?.resetToZero?.();
-            return;
-          }
-          // 离座状态时不更新 3D 数据，保持清空状态
-          if (seatStatusRef.current === 'away') return;
+          // 3D图显示完全由算法离座/在座状态控制（冻结/解冻机制）
           sensorDataRef.current = parsed;
         }
       }
@@ -694,16 +685,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       if (!payload) return;
       const parsed = parseSerialFrame(payload);
       if (parsed) {
-        // 检测传感器数据是否全为0（离座）：立即清零3D图
-        let frameSum = 0;
-        for (let i = 0; i < parsed.length; i++) { frameSum += parsed[i]; }
-        if (frameSum === 0) {
-          sensorDataRef.current = INITIAL_SENSOR_FRAME;
-          carAirRef.current?.resetToZero?.();
-          return;
-        }
-        // 离座状态时不更新 3D 数据，保持清空状态
-        if (seatStatusRef.current === 'away') return;
+        // 3D图显示完全由算法离座/在座状态控制：
+        //   离座时 CarAirRN 已被冻结(resetToZero)  → 传感器数据照常更新但不影响3D渲染
+        //   在座时 CarAirRN 已解冻(unfreeze)       → 传感器数据正常驱动3D渲染
         sensorDataRef.current = parsed;
         // 仅当矩阵弹窗打开时触发渲染更新
         if (showMatrixRef.current) {
