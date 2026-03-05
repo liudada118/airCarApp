@@ -1,6 +1,6 @@
 # 架构文档
 
-> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 15:30
+> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 16:00
 
 ## 1. 项目概述
 
@@ -90,8 +90,9 @@ graph TD
     - `FrameParser` 将原始数据解析为 `FrameResult(csv, length)` 对象，包含帧数据和帧字节长度。
     - `SerialModule.handleFrame` 接收到 `FrameResult`，根据帧长度区分处理：
       - **144 字节**：标准传感器帧，调用 Python 的 `server.process_frame`。
-      - **51 字节**：模式帧，处理自动/手动模式切换。
+      - **51 字节**：模式帧，处理自动/手动模式切换，同时打印到回传面板。
       - **其他长度**：非标准帧（如气囊回传指令），通过 `onNonStandardFrame` 事件发送到 JS 端。
+    - `HomeScreen` 监听 `onSerialMode` 事件，根据模式帧自动切换自适应调节状态（自动/手动）。
     - `server.process_frame` 调用 `integrated_system.py` 中的算法，返回 JSON 结果。
     - `SerialModule` 将 JSON 结果通过 `onSerialData` 事件发送给 JS 端。
     - `HomeScreen` 接收到事件，更新 `sensorData` 和 `realtimeData` 状态，触发 3D 模型和实时数据弹窗的重新渲染。
@@ -144,6 +145,7 @@ graph TD
 | 2026-03-01 | 配置参数设置弹窗 | 实现可直接更改 Python 配置参数的弹窗 |
 | 2026-02-28 | 3D 模型与数据可视化 | 实现 3D 座椅模型，实时展示传感器数据和气囊状态 |
 | 2026-03-05 15:30 | manus | 非标准帧回传数据显示 | FrameParser 输出 FrameResult 含帧长度，SerialModule 区分标准帧/非标准帧，HomeScreen 新增"回传"按钮和弹窗显示非 144 字节帧的 HEX 数据 |
+| 2026-03-05 16:00 | manus | 自适应调节改为模式帧控制 | 监听 onSerialMode 事件，根据 51 字节模式帧自动切换自适应调节状态，开关改为只读状态显示 |
 
 ## 7. 更新日志
 
@@ -156,6 +158,7 @@ graph TD
 | 2026-03-01 | 新增功能 | 实现配置参数设置弹窗 |
 | 2026-02-29 | 初始化 | 创建项目架构文档 |
 | 2026-03-05 15:30 | manus | 新增功能 | 添加非标准帧回传数据显示功能，用于调试气囊回传指令 |
+| 2026-03-05 16:00 | manus | 新增功能 | 自适应调节改为根据模式帧控制，开关变为只读状态显示 |
 
 ---
 
