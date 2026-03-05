@@ -419,6 +419,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const showMatrixRef = useRef(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showRealtimeData, setShowRealtimeData] = useState(false);
+  const [showNonStdFrames, setShowNonStdFrames] = useState(false);
+  const nonStdFramesRef = useRef<{hex: string; length: number; timestamp: number; csv: string}[]>([]);
+  const [nonStdFrameVersion, setNonStdFrameVersion] = useState(0);
   const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
   // realtimeData 已合并到 algoState 中
@@ -658,9 +661,23 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       },
     );
 
+    const nonStdSub = emitter.addListener('onNonStandardFrame', (event: {data?: string; hex?: string; length?: number; timestamp?: number}) => {
+      const entry = {
+        hex: event.hex ?? '',
+        length: event.length ?? 0,
+        timestamp: event.timestamp ?? Date.now(),
+        csv: event.data ?? '',
+      };
+      const frames = nonStdFramesRef.current;
+      frames.unshift(entry);
+      if (frames.length > 50) frames.length = 50;
+      setNonStdFrameVersion(v => v + 1);
+    });
+
     return () => {
       dataSub.remove();
       resultSub.remove();
+      nonStdSub.remove();
     };
   }, [handleAlgoResult]);
 
@@ -861,7 +878,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 onPress={() => {
                   onAdaptiveChange(false);
                   SerialModule?.setAlgoMode?.(false);
-                  console.log('[AlgoMode] 自适应调节关闭，算法模式已停止');
+                  // 清空气囊状态
+                  setAlgoState(prev => ({
+                    ...prev,
+                    commandStates: DEFAULT_AIRBAG_COMMAND_STATES as AirbagCommandStates,
+                    rawCommand: null,
+                  }));
+                  console.log('[AlgoMode] 自适应调节关闭，算法模式已停止，气囊状态已清空');
                 }}
                 activeOpacity={0.7}>
                 <Text
@@ -900,6 +923,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 onPress={() => setShowRealtimeData(true)}
                 activeOpacity={0.7}>
                 <Text style={styles.matrixToggleBtnText}>数据</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.matrixToggleBtn, {marginLeft: 6, backgroundColor: nonStdFramesRef.current.length > 0 ? 'rgba(255,59,48,0.7)' : 'rgba(0,0,0,0.55)'}]}
+                onPress={() => setShowNonStdFrames(true)}
+                activeOpacity={0.7}>
+                <Text style={styles.matrixToggleBtnText}>回传{nonStdFramesRef.current.length > 0 ? `(${nonStdFramesRef.current.length})` : ''}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1447,6 +1476,61 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 </View>
               )}
 
+              <View style={{height: 20}} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      )}
+
+      {/* 非标准帧回传数据弹窗 */}
+      {showNonStdFrames && (
+      <Modal
+        visible={showNonStdFrames}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNonStdFrames(false)}>
+        <View style={styles.matrixModalOverlay}>
+          <View style={[styles.matrixModalContent, {maxWidth: 700, maxHeight: '85%'}]}>
+            <View style={styles.matrixModalHeader}>
+              <Text style={styles.matrixModalTitle}>非标准帧回传数据 (非144字节)</Text>
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <TouchableOpacity
+                  onPress={() => { nonStdFramesRef.current = []; setNonStdFrameVersion(v => v + 1); }}
+                  activeOpacity={0.7}
+                  style={{marginRight: 12, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: Colors.warning, borderRadius: 4}}>
+                  <Text style={{color: '#fff', fontSize: 12}}>清空</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowNonStdFrames(false)}
+                  activeOpacity={0.7}
+                  style={styles.matrixModalClose}>
+                  <Text style={styles.matrixModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
+              {nonStdFramesRef.current.length === 0 ? (
+                <View style={{padding: 40, alignItems: 'center'}}>
+                  <Text style={{color: Colors.textGray}}>暂无非标准帧数据</Text>
+                  <Text style={{color: Colors.textGray, fontSize: 11, marginTop: 8}}>当串口收到非144字节的帧时将显示在这里</Text>
+                </View>
+              ) : (
+                nonStdFramesRef.current.map((frame, idx) => {
+                  const time = new Date(frame.timestamp);
+                  const timeStr = `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}:${time.getSeconds().toString().padStart(2, '0')}.${time.getMilliseconds().toString().padStart(3, '0')}`;
+                  return (
+                    <View key={`nsf-${idx}-${frame.timestamp}`} style={{paddingHorizontal: 12, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)'}}>
+                      <View style={{flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3}}>
+                        <Text style={{fontSize: 11, color: '#90A4AE', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace'}}>#{nonStdFramesRef.current.length - idx}</Text>
+                        <Text style={{fontSize: 11, color: '#90A4AE'}}>{timeStr}</Text>
+                        <Text style={{fontSize: 11, color: frame.length < 144 ? '#FF9800' : '#F44336', fontWeight: '600'}}>{frame.length} bytes</Text>
+                      </View>
+                      <Text style={{fontSize: 10, color: '#E0E0E0', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 14}} selectable>{frame.hex}</Text>
+                    </View>
+                  );
+                })
+              )}
               <View style={{height: 20}} />
             </ScrollView>
           </View>

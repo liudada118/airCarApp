@@ -81,50 +81,30 @@ class SerialModule(
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            // 检查接收到的Intent是否是USB权限请求的响应
             if (intent.action != permissionAction) return
-            
-            // 从Intent中获取USB设备信息，如果获取失败则直接返回
             val device =
                 intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE) ?: return
-            
-            // 检查用户是否授予了USB权限
             val granted =
                 intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-            
-            // 获取当前待处理的打开请求
             val pending = pendingOpen
-            
-            // 验证当前设备是否与待处理请求中的设备匹配，防止处理过期或无关的权限响应
             if (pending == null || device.deviceId != pending.device.deviceId) return
-            
-            // 清除待处理请求和超时任务
             pendingOpen = null
             clearPendingTimeout()
-            
-            // 如果用户拒绝了权限，则拒绝Promise并返回
             if (!granted) {
                 pending.promise.reject("NO_PERMISSION", "usb permission denied")
                 return
             }
-            
-            // 尝试打开串口连接，并设置数据帧处理回调
-            val result = manager.open(pending.vendorId, pending.productId, pending.baudRate) { data ->
-                handleFrame(data)
+            val result = manager.open(pending.vendorId, pending.productId, pending.baudRate) { frameResult ->
+                handleFrame(frameResult)
             }
-            
-            // 根据打开结果处理Promise
             when (result) {
                 is SerialManager.OpenResult.Ok -> {
-                    // 如果当前处于自动模式，则启动自动写入任务
                     if (isAutoMode) {
                         startAutoWrite()
                     }
-                    // 成功打开连接，解决Promise
                     pending.promise.resolve(true)
                 }
                 is SerialManager.OpenResult.Fail ->
-                    // 打开失败，拒绝Promise并传递错误信息
                     pending.promise.reject(result.code, result.message)
             }
         }
@@ -165,8 +145,8 @@ class SerialModule(
             clearPendingTimeout()
         }
         if (usbManager.hasPermission(device)) {
-            val result = manager.open(vendorId, productId, 1000000) { data ->
-                handleFrame(data)
+            val result = manager.open(vendorId, productId, 1000000) { frameResult ->
+                handleFrame(frameResult)
             }
             when (result) {
                 is SerialManager.OpenResult.Ok -> {
@@ -205,8 +185,8 @@ class SerialModule(
             clearPendingTimeout()
         }
         if (usbManager.hasPermission(device)) {
-            val result = manager.open(vendorId, productId, baudRate) { data ->
-                handleFrame(data)
+            val result = manager.open(vendorId, productId, baudRate) { frameResult ->
+                handleFrame(frameResult)
             }
             when (result) {
                 is SerialManager.OpenResult.Ok -> {
@@ -256,7 +236,6 @@ class SerialModule(
         } else if (!enabled && isAutoMode) {
             isAutoMode = false
             stopAutoWrite()
-            // 清空自动写入缓存，确保不会残留指令
             autoWriteText = null
             autoWriteBytes = null
             Log.i(logTag, "[AlgoMode] Algorithm mode DISABLED, autoWrite stopped")
@@ -352,18 +331,13 @@ class SerialModule(
      */
     private fun buildProtocolFrame(commands: Map<Int, Int>): ByteArray {
         val frame = mutableListOf<Int>()
-        // 帧头
         frame.add(FRAME_HEADER)
-        // 24 个气囊 × 2 字节
         for (airbagId in 1..24) {
             frame.add(airbagId)
             frame.add(commands.getOrDefault(airbagId, GEAR_STOP))
         }
-        // 工作模式
         frame.add(MODE_AUTO)
-        // 方向标识
         frame.add(DIRECTION_DOWNLOAD)
-        // 帧尾
         for (b in FRAME_TAIL) {
             frame.add(b)
         }
@@ -397,11 +371,9 @@ class SerialModule(
             val frame = buildProtocolFrame(commands)
             val hexStr = frame.joinToString("") { "%02X".format(it) }
 
-            // 打印发送指令到控制台
             Log.i(logTag, "[AirbagCmd] zone=$zone action=$action airbagIds=$airbagIds gear=0x${Integer.toHexString(gear)}")
             Log.i(logTag, "[AirbagCmd] HEX: $hexStr (${frame.size} bytes)")
 
-            // 同时发送事件到 JS 端，让前端也能看到
             val params = Arguments.createMap().apply {
                 putString("zone", zone)
                 putString("action", action)
@@ -475,7 +447,6 @@ class SerialModule(
     }
 
     override fun onCatalystInstanceDestroy() {
-        // reload 时的兆底清理
         invalidate()
         super.onCatalystInstanceDestroy()
     }
@@ -510,14 +481,24 @@ class SerialModule(
         pendingTimeout = null
     }
 
-    private fun handleFrame(data: String) {
+    private fun handleFrame(frameResult: FrameResult) {
+        val data = frameResult.csv
+        val frameLen = frameResult.length
+
+        // 非标准帧（不是 144 字节也不是 51 字节）→ 发送到 JS 的 onNonStandardFrame 事件
+        if (frameLen != 144 && frameLen != 51) {
+            Log.w(logTag, "[NonStdFrame] length=$frameLen data=$data")
+            emitNonStandardFrame(data, frameLen)
+            return
+        }
+
+        // 标准帧 → 正常处理
         emitSerialData(data)
         val values = parseCsvToIntList(data)
         if (values == null) {
             emitSerialResult(data, null, "PARSE_ERROR")
             return
         }
-        // frame log disabled
         if (values.size == 51) {
             handleModeFrame(values, data)
             return
@@ -568,22 +549,38 @@ class SerialModule(
             .emit("onSerialMode", map)
     }
 
+    /** 发送非标准帧数据到 JS 端 */
+    private fun emitNonStandardFrame(data: String, length: Int) {
+        val map = Arguments.createMap()
+        map.putString("data", data)
+        map.putInt("length", length)
+        map.putDouble("timestamp", System.currentTimeMillis().toDouble())
+        // 将 CSV 转为 HEX 方便查看
+        val hexStr = try {
+            data.split(",").joinToString(" ") {
+                val v = it.trim().toIntOrNull() ?: 0
+                "%02X".format(v and 0xFF)
+            }
+        } catch (_: Exception) { data }
+        map.putString("hex", hexStr)
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onNonStandardFrame", map)
+    }
+
     private fun handleModeFrame(values: List<Int>, data: String) {
         val modeValue = values.getOrNull(49) ?: -1
-        // mode frame log disabled
         emitSerialMode(data, modeValue)
         when (modeValue) {
             0 -> {
                 if (!isAutoMode) {
                     isAutoMode = true
-                    // Log.i(logTag, "auto mode enabled")
                     startAutoWrite()
                 }
             }
             1 -> {
                 if (isAutoMode) {
                     isAutoMode = false
-                    // Log.i(logTag, "auto mode disabled")
                     stopAutoWrite()
                 }
             }
@@ -608,7 +605,6 @@ class SerialModule(
         try {
             val json = JSONObject(resultJson)
 
-            // 优先从 airbag_command.command 获取，其次从 control_command 获取
             var arr: JSONArray? = null
             if (json.has("airbag_command") && !json.isNull("airbag_command")) {
                 val airbagCmd = json.optJSONObject("airbag_command")
@@ -637,7 +633,6 @@ class SerialModule(
                 return
             }
 
-            // 将 hex 字符串解码为二进制 ByteArray（等价于 Node.js 的 Buffer.from(hexStr, 'hex')）
             val bytes = hexStringToByteArray(hex)
             autoWriteText = hex
             autoWriteBytes = bytes
@@ -648,7 +643,6 @@ class SerialModule(
         }
     }
 
-    /** 将 hex 字符串解码为二进制 ByteArray，等价于 Node.js 的 Buffer.from(hexStr, 'hex') */
     private fun hexStringToByteArray(hex: String): ByteArray {
         val len = hex.length
         val data = ByteArray(len / 2)
@@ -680,7 +674,6 @@ class SerialModule(
             }
             autoWriteTask = autoWriteScheduler.scheduleAtFixedRate({
                 try {
-                    // 优先使用二进制 ByteArray 发送（等价于 Node.js 的 port.write(Buffer.from(hexStr, 'hex'))）
                     val bytes = autoWriteBytes
                     if (bytes != null && bytes.isNotEmpty()) {
                         val hex = autoWriteText ?: bytes.joinToString("") { "%02X".format(it) }
@@ -692,7 +685,6 @@ class SerialModule(
                         }
                         return@scheduleAtFixedRate
                     }
-                    // 回退：如果没有缓存的 bytes，尝试从 hex 字符串转换
                     val payload = autoWriteText
                     if (payload.isNullOrEmpty()) return@scheduleAtFixedRate
                     val fallbackBytes = hexStringToByteArray(payload)

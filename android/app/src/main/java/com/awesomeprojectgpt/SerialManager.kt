@@ -38,7 +38,7 @@ class SerialManager(private val context: Context) {
         vendorId: Int,
         productId: Int,
         baudRate: Int,
-        onFrame: (String) -> Unit
+        onFrame: (FrameResult) -> Unit
     ): OpenResult {
         close()
         val device = usbManager.deviceList.values.find {

@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS = {
   coherent: 1.3, // 第二层平滑（插值后）：轻度平滑，新值占 77%
   rawSmooth: 1.3, // 第一层平滑（插值前）：轻度平滑，新值占 77%
   deadZone: 0, // 死区阈值：0=不启用死区
+  zeroFrameThreshold: 10, // 全 0 帧检测：帧总和低于此值视为气囊动作干扰帧，直接跳过
 };
 // 数据更新频率：15Hz（匹配串口数据源）
 const SEAT_UPDATE_INTERVAL = 1000 / 15;
@@ -1212,9 +1213,22 @@ function CarAirRNInner({data = [], style}, ref) {
             }
           }
 
+          // 全 0 帧检测：气囊动作时传感器可能返回全 0 数据，直接跳过该帧
+          const _dynSettings = pointSettingsRef.current;
+          const zeroThreshold = _dynSettings.zeroFrameThreshold || 10;
+          let frameSum = 0;
+          for (let zi = 0; zi < 144; zi++) {
+            frameSum += seatData[zi];
+          }
+          if (frameSum < zeroThreshold && frameState.rawSmoothInited) {
+            // 全 0 帧（气囊动作干扰），跳过不更新渲染数据
+            frameState.lastSeatUpdate = now;
+            frameRef.current = requestAnimationFrame(animate);
+            return;
+          }
+
           // 第一层平滑：原始 144 字节数据帧间混合（在插值放大之前）
           const rawBuf = frameState.rawSmoothBuf;
-          const _dynSettings = pointSettingsRef.current;
           const rawAlpha = _dynSettings.rawSmooth || 1;
           if (!frameState.rawSmoothInited) {
             // 第一帧直接拷贝
