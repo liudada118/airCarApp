@@ -221,6 +221,7 @@ export type ConnectionStatus =
 export type ModalType =
   | 'confirmSave'
   | 'confirmRestore'
+  | 'confirmReset'
   | 'saving'
   | 'connectionError'
   | null;
