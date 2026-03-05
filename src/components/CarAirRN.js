@@ -808,11 +808,12 @@ function CarAirRNInner({data = [], style}, ref) {
     isBaselineActive() {
       return !!stateRef.current.baseline;
     },
-    /** 算法判断离座时调用：立即清零 3D 图所有点位数据 */
+    /** 算法判断离座时调用：立即清零 3D 图所有点位数据，并冻结数据更新 */
     resetToZero() {
       const fs = stateRef.current;
-      // 将 smoothBig 所有区域填 0（而非 createSmoothBig 的默认值 1），
-      // 这样下一帧渲染时 3D 点位高度和颜色立即归零
+      // 冻结数据更新：渲染循环不再用传感器数据更新 smoothBig
+      fs._frozen = true;
+      // 将 smoothBig 所有区域填 0
       if (fs.smoothBig) {
         Object.keys(fs.smoothBig).forEach(key => {
           const arr = fs.smoothBig[key];
@@ -825,11 +826,16 @@ function CarAirRNInner({data = [], style}, ref) {
       if (fs.rawSmoothBuf) {
         fs.rawSmoothBuf.fill(0);
       }
-      // 标记平滑已初始化（值为全 0），避免下一帧跳过平滑直接拷贝
-      fs.rawSmoothInited = true;
-      // 重置零帧计数，让后续全零帧不被 <=3 的保护逻辑跳过
+      fs.rawSmoothInited = false;
       fs._zeroFrameCount = 99;
-      // 强制重新渲染
+      fs.lastDataHash = -1;
+      fs.dirty = true;
+    },
+    /** 算法判断重新入座时调用：解冻数据更新，恢复3D图显示 */
+    unfreeze() {
+      const fs = stateRef.current;
+      fs._frozen = false;
+      fs.rawSmoothInited = false;
       fs.lastDataHash = -1;
       fs.dirty = true;
     },
@@ -1232,6 +1238,15 @@ function CarAirRNInner({data = [], style}, ref) {
 
         if (hash !== frameState.lastDataHash || !frameState.lastSeatUpdate || hasZeroPending) {
           frameState.lastDataHash = hash;
+
+          // 冻结状态：算法判断离座后，跳过数据更新，保持全零状态
+          if (frameState._frozen) {
+            frameState.lastSeatUpdate = now;
+            frameState.dirty = true; // 确保渲染全零状态
+            frameRef.current = requestAnimationFrame(animate);
+            return;
+          }
+
           const seatData = normalizeSeatData(currentData);
 
           // 清零：减去基线预压力

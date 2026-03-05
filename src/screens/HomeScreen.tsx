@@ -462,13 +462,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     // 更新离座状态 ref
     seatStatusRef.current = parsed.seatStatus;
     // 算法判断离座时：清空传感器数据 + 立即清零 3D 图
-    if (parsed.algoSeatStatus.is_off_seat) {
+    // OFF_SEAT 或 RESETTING 状态都应该清零：
+    //   - OFF_SEAT: 完全离座
+    //   - RESETTING: 人已离开，气囊正在复位（等待130帧才到OFF_SEAT太慢）
+    const shouldClear3D = parsed.algoSeatStatus.is_off_seat || parsed.algoSeatStatus.is_resetting;
+    if (shouldClear3D) {
       sensorDataRef.current = INITIAL_SENSOR_FRAME;
-      // 直接调用 CarAirRN 的 resetToZero，立即清零 3D 点位数据
-      const hasRef = !!carAirRef.current;
-      const hasMethod = !!carAirRef.current?.resetToZero;
-      console.log('[3D清零] 离座触发清零! carAirRef存在:', hasRef, 'resetToZero存在:', hasMethod);
+      // 立即清零 3D 点位数据并冻结，阻止传感器残留数据重新填充
+      console.log('[3D清零] 触发清零+冻结! state:', parsed.algoSeatStatus.state);
       carAirRef.current?.resetToZero?.();
+    } else {
+      // 非离座状态（入座/自适应）：解冻3D图数据更新
+      carAirRef.current?.unfreeze?.();
     }
     // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
     const isAdaptive = adaptiveEnabledRef.current;
@@ -564,10 +569,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
     const removeDataListener = mockSerial.addDataListener(event => {
       if (event.data) {
-        // 离座时不更新 3D 数据，保持清空状态
-        if (seatStatusRef.current === 'away') return;
         const parsed = parseSerialFrame(event.data);
         if (parsed) {
+          // 3D图显示完全由算法离座/在座状态控制（冻结/解冻机制）
           sensorDataRef.current = parsed;
         }
       }
@@ -679,10 +683,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       const payload =
         event && typeof event.data === 'string' ? event.data : '';
       if (!payload) return;
-      // 离座时不更新 3D 数据，保持清空状态
-      if (seatStatusRef.current === 'away') return;
       const parsed = parseSerialFrame(payload);
       if (parsed) {
+        // 3D图显示完全由算法离座/在座状态控制：
+        //   离座时 CarAirRN 已被冻结(resetToZero)  → 传感器数据照常更新但不影响3D渲染
+        //   在座时 CarAirRN 已解冻(unfreeze)       → 传感器数据正常驱动3D渲染
         sensorDataRef.current = parsed;
         // 仅当矩阵弹窗打开时触发渲染更新
         if (showMatrixRef.current) {
