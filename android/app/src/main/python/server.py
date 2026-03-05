@@ -183,6 +183,58 @@ def _sync_runtime(key_path, value):
         setattr(_system, attr, value)
 
 
+# ─── 品味记录接口（供 Chaquopy / Native 桥接调用） ─────────────
+
+def trigger_preference_recording(body_shape=None):
+    """
+    触发品味记录（用户手动调节完气囊后调用）。
+
+    系统将采集一段时间的压力数据，记录当前压力比例并生成个性化调节区间。
+
+    Args:
+        body_shape: 指定体型（可选，默认使用体型三分类识别的结果）
+    Returns:
+        JSON 字符串 - 操作结果
+    """
+    try:
+        result = _system.trigger_preference_recording(body_shape)
+        return json.dumps(_to_builtin(result), ensure_ascii=False)
+    except Exception as e:
+        import traceback
+        err_detail = traceback.format_exc()
+        return json.dumps({
+            "success": False,
+            "error": str(e),
+            "traceback": err_detail
+        }, ensure_ascii=False)
+
+
+def cancel_preference_recording():
+    """
+    取消正在进行的品味记录。
+    Returns:
+        JSON 字符串 - 操作结果
+    """
+    try:
+        result = _system.cancel_preference_recording()
+        return json.dumps(_to_builtin(result), ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
+
+
+def get_preference_status():
+    """
+    获取品味管理器的完整状态。
+    Returns:
+        JSON 字符串 - 品味管理器状态
+    """
+    try:
+        result = _system.get_preference_status()
+        return json.dumps(_to_builtin(result), ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
 def main():
     return
 
