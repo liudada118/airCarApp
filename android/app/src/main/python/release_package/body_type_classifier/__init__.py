@@ -17,7 +17,8 @@ V2核心改进:
     - visualizer: 分类结果可视化
 """
 
-__version__ = "2.0.0"
+# 子模块版本号，算法包统一版本见 version.py
+__sub_version__ = "2.0.0"
 __author__ = "Hirkond"
 
 from .data_loader import DataLoader

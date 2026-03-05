@@ -19,6 +19,7 @@ from config import Config
 from control import LivingDetector, BodyTypeDetector, ControlAction
 from body_shape_classifier import BodyShapeClassifier, ClassifierState
 from preference_manager import PreferenceManager
+from version import __version__
 
 
 class IntegratedState(Enum):
@@ -204,6 +205,14 @@ class IntegratedSeatSystem:
         # 最新结果缓存
         self.latest_result: Optional[Dict] = None
 
+        # 腿托前3后3比配置
+        self.leg_front_rows = self.config.get('leg_support.front_rows', [0, 3])  # 前3行范围
+        self.leg_rear_rows = self.config.get('leg_support.rear_rows', [7, 10])   # 后3行范围
+
+        # 重心标定状态（入座稳定后标定一次列方向重心，用于划分左右腿）
+        self.cushion_col_centroid = None  # 标定后的列重心值（0~5之间的浮点数）
+        self.centroid_calibrated = False  # 是否已标定
+
         # 阶跃下降检测配置
         self.step_drop_enabled = self.config.get('integrated_system.step_drop_detection.enabled', False)
         self.step_drop_window_frames = self.config.get('integrated_system.step_drop_detection.window_frames', 26)
@@ -223,7 +232,7 @@ class IntegratedSeatSystem:
         self.step_drop_triggered = False  # 是否已触发阶跃
         self.step_drop_deflate_counter = 0  # 放气周期计数器
 
-        print(f"[集成系统] 初始化完成")
+        print(f"[集成系统] v{__version__} 初始化完成")
         print(f"  - 坐垫阈值: {self.cushion_sum_threshold}")
         print(f"  - 靠背阈值: {self.backrest_sum_threshold}")
         print(f"  - 离座帧数: {self.off_seat_frames_threshold}")
@@ -567,6 +576,11 @@ class IntegratedSeatSystem:
                     else:
                         print(f"[集成系统] 体型 '{classified_shape}' 已识别，使用默认调节区间")
 
+                    # 体型分类完成时标定列方向重心（此时入座已稳定）
+                    if not self.centroid_calibrated:
+                        cushion_total = regions['cushion_total']
+                        self._calibrate_col_centroid(cushion_total)
+
         # 品味管理器喂入帧数据（仅在ADAPTIVE_LOCKED状态且正在记录品味时）
         preference_record_result = None
         if self.preference_manager.is_recording and self.state == IntegratedState.ADAPTIVE_LOCKED:
@@ -703,6 +717,11 @@ class IntegratedSeatSystem:
             print(f"[集成系统] 离座时取消了进行中的品味记录")
         self.preference_manager.set_active_body_shape(None)
 
+        # 重置重心标定状态（下次入座重新标定）
+        self.cushion_col_centroid = None
+        self.centroid_calibrated = False
+        self.preference_manager.set_centroid(None)
+
     def _split_matrices(self, sensor_data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """拆分传感器数据为靠背和坐垫"""
         data = sensor_data.flatten()
@@ -806,6 +825,76 @@ class IntegratedSeatSystem:
         corrected = np.clip(corrected, 0, 255).astype(np.uint8)
         return corrected
 
+    def _calibrate_col_centroid(self, cushion_matrix: np.ndarray):
+        """
+        标定列方向压力重心（入座稳定后调用一次）
+
+        计算坐垫10x6矩阵的列方向压力重心（加权平均列索引），
+        作为左右腿的分界线。
+
+        Args:
+            cushion_matrix: 10x6的坐垫压力矩阵
+        """
+        col_sums = np.sum(cushion_matrix, axis=0)  # 每列的压力总和
+        total = np.sum(col_sums)
+        if total <= 0:
+            self.cushion_col_centroid = cushion_matrix.shape[1] / 2.0  # 默认中间
+        else:
+            col_indices = np.arange(cushion_matrix.shape[1])
+            self.cushion_col_centroid = float(np.sum(col_indices * col_sums) / total)
+        self.centroid_calibrated = True
+        # 同步重心到品味管理器（确保品味采集时使用相同的重心）
+        self.preference_manager.set_centroid(self.cushion_col_centroid)
+        print(f"[集成系统] 列方向重心标定完成: {self.cushion_col_centroid:.3f}"
+              f"（帧{self.frame_count}）")
+
+    def _compute_f3r3_by_centroid(self, front3: np.ndarray, rear3: np.ndarray) -> dict:
+        """
+        基于重心划分左右腿，分别计算前3后3比
+
+        重心左侧（含重心列）= 左腿，重心右侧 = 右腿
+        使用连续权重分配：重心所在列按比例分配给左右两侧
+
+        Args:
+            front3: 前3行压力矩阵 (3, 6)
+            rear3: 后3行压力矩阵 (3, 6)
+
+        Returns:
+            dict: left_f3r3, right_f3r3, left_weights, right_weights
+        """
+        centroid = self.cushion_col_centroid
+        cols = front3.shape[1]
+
+        # 计算每列属于左腿的权重
+        left_weights = np.zeros(cols)
+        for c in range(cols):
+            if c + 0.5 <= centroid:
+                left_weights[c] = 1.0
+            elif c - 0.5 >= centroid:
+                left_weights[c] = 0.0
+            else:
+                left_weights[c] = centroid - (c - 0.5)
+        right_weights = 1.0 - left_weights
+
+        # 左腿前3后3比
+        left_f3 = float(np.sum(front3 * left_weights[np.newaxis, :]))
+        left_r3 = float(np.sum(rear3 * left_weights[np.newaxis, :]))
+        left_f3r3 = left_f3 / left_r3 if left_r3 > 1 else 0.0
+
+        # 右腿前3后3比
+        right_f3 = float(np.sum(front3 * right_weights[np.newaxis, :]))
+        right_r3 = float(np.sum(rear3 * right_weights[np.newaxis, :]))
+        right_f3r3 = right_f3 / right_r3 if right_r3 > 1 else 0.0
+
+        return {
+            'left_f3r3': left_f3r3,
+            'right_f3r3': right_f3r3,
+            'left_f3': left_f3,
+            'left_r3': left_r3,
+            'right_f3': right_f3,
+            'right_r3': right_r3,
+        }
+
     def _extract_regions(self, backrest_matrix: np.ndarray, cushion_matrix: np.ndarray) -> Dict:
         """提取压力区域"""
         backrest_upper_rows = self.config.get('matrix.backrest_upper_rows', [0, 5])
@@ -815,6 +904,10 @@ class IntegratedSeatSystem:
 
         # 中间列分界
         mid_col = cushion_matrix.shape[1] // 2  # 通常是3
+
+        # 腿托前3后3行范围
+        front_rows = self.leg_front_rows  # [0, 3]
+        rear_rows = self.leg_rear_rows    # [7, 10]
 
         return {
             'backrest_upper': backrest_matrix[backrest_upper_rows[0]:backrest_upper_rows[1], :],
@@ -828,7 +921,10 @@ class IntegratedSeatSystem:
             'cushion_leg_left': cushion_matrix[cushion_leg_rows[0]:cushion_leg_rows[1], :mid_col],
             'cushion_leg_right': cushion_matrix[cushion_leg_rows[0]:cushion_leg_rows[1], mid_col:],
             'cushion_total': cushion_matrix,
-            'backrest_total': backrest_matrix
+            'backrest_total': backrest_matrix,
+            # 腿托前3后3行区域（用于重心划分+前3后3比方案）
+            'cushion_front3': cushion_matrix[front_rows[0]:front_rows[1], :],
+            'cushion_rear3': cushion_matrix[rear_rows[0]:rear_rows[1], :],
         }
 
     def _get_sum_values(self, body_result: Optional[Dict]) -> Tuple[float, float]:
@@ -1178,48 +1274,48 @@ class IntegratedSeatSystem:
             left_action = 'DEFLATE'
             right_action = 'DEFLATE'
 
-        # 腿托数据（保留整体数据用于兼容，同时添加左右分开数据）
-        butt = regions['cushion_butt']
-        leg = regions['cushion_leg']
-        butt_pressure = float(np.sum(butt))
-        leg_pressure = float(np.sum(leg))
+        # 腿托数据（基于重心划分+前3后3比方案）
+        front3 = regions['cushion_front3']
+        rear3 = regions['cushion_rear3']
 
-        if butt_pressure > 0:
-            leg_ratio = leg_pressure / butt_pressure
-        else:
-            leg_ratio = 0.0
+        # 若重心未标定，使用实时计算（回退）
+        if not self.centroid_calibrated:
+            cushion_total = regions['cushion_total']
+            col_sums = np.sum(cushion_total, axis=0)
+            total = np.sum(col_sums)
+            if total > 0:
+                temp_centroid = float(np.sum(np.arange(cushion_total.shape[1]) * col_sums) / total)
+            else:
+                temp_centroid = cushion_total.shape[1] / 2.0
+            self.cushion_col_centroid = temp_centroid
 
-        # 左右分开的腿托数据（使用均值而非总和）
-        left_butt = regions['cushion_butt_left']
-        left_leg = regions['cushion_leg_left']
-        left_butt_pressure = float(np.mean(left_butt))
-        left_leg_pressure = float(np.mean(left_leg))
-
-        if left_butt_pressure > 0:
-            left_leg_ratio = left_leg_pressure / left_butt_pressure
+        # 计算左右腿前3后3比
+        if self.cushion_col_centroid is not None:
+            f3r3 = self._compute_f3r3_by_centroid(front3, rear3)
+            left_leg_ratio = f3r3['left_f3r3']
+            right_leg_ratio = f3r3['right_f3r3']
+            left_f3 = f3r3['left_f3']
+            left_r3 = f3r3['left_r3']
+            right_f3 = f3r3['right_f3']
+            right_r3 = f3r3['right_r3']
         else:
             left_leg_ratio = 0.0
-
-        right_butt = regions['cushion_butt_right']
-        right_leg = regions['cushion_leg_right']
-        right_butt_pressure = float(np.mean(right_butt))
-        right_leg_pressure = float(np.mean(right_leg))
-
-        if right_butt_pressure > 0:
-            right_leg_ratio = right_leg_pressure / right_butt_pressure
-        else:
             right_leg_ratio = 0.0
+            left_f3 = left_r3 = right_f3 = right_r3 = 0.0
 
-        # 腿托动作判断（使用左右独立的阈值）
-        left_inflate_threshold = self.config.get('leg_support.left_leg_butt_ratio_inflate', 0.7)
-        left_deflate_threshold = self.config.get('leg_support.left_leg_butt_ratio_deflate', 1.3)
-        right_inflate_threshold = self.config.get('leg_support.right_leg_butt_ratio_inflate', 0.7)
-        right_deflate_threshold = self.config.get('leg_support.right_leg_butt_ratio_deflate', 1.3)
+        # 获取阈值
+        left_inflate_threshold = self.config.get('leg_support.left_f3r3_inflate', 0.48)
+        left_deflate_threshold = self.config.get('leg_support.left_f3r3_deflate', 0.70)
+        right_inflate_threshold = self.config.get('leg_support.right_f3r3_inflate', 0.64)
+        right_deflate_threshold = self.config.get('leg_support.right_f3r3_deflate', 0.96)
 
-        # 整体动作（保留用于兼容，使用左侧阈值）
-        if leg_ratio < left_inflate_threshold:
+        # 整体动作（使用左右平均比值，保留用于兼容显示）
+        avg_ratio = (left_leg_ratio + right_leg_ratio) / 2.0 if (left_leg_ratio + right_leg_ratio) > 0 else 0.0
+        avg_inflate = (left_inflate_threshold + right_inflate_threshold) / 2.0
+        avg_deflate = (left_deflate_threshold + right_deflate_threshold) / 2.0
+        if avg_ratio < avg_inflate:
             leg_action = 'INFLATE'
-        elif leg_ratio > left_deflate_threshold:
+        elif avg_ratio > avg_deflate:
             leg_action = 'DEFLATE'
         else:
             leg_action = 'HOLD'
@@ -1256,17 +1352,20 @@ class IntegratedSeatSystem:
                 'right_action': right_action
             },
             'leg_support': {
-                'butt_pressure': butt_pressure,
-                'leg_pressure': leg_pressure,
-                'ratio': leg_ratio,
+                # 整体数据（兼容显示）
+                'ratio': avg_ratio,
                 'action': leg_action,
-                # 左右分开的数据
-                'left_butt_pressure': left_butt_pressure,
-                'left_leg_pressure': left_leg_pressure,
+                # 重心标定状态
+                'centroid': self.cushion_col_centroid,
+                'centroid_calibrated': self.centroid_calibrated,
+                # 左腿前3后3比数据
+                'left_f3': left_f3,
+                'left_r3': left_r3,
                 'left_ratio': left_leg_ratio,
                 'left_action': left_leg_action,
-                'right_butt_pressure': right_butt_pressure,
-                'right_leg_pressure': right_leg_pressure,
+                # 右腿前3后3比数据
+                'right_f3': right_f3,
+                'right_r3': right_r3,
                 'right_ratio': right_leg_ratio,
                 'right_action': right_leg_action
             }
@@ -1392,34 +1491,36 @@ class IntegratedSeatSystem:
 
     def _leg_support_control(self, regions: Dict) -> Tuple[ControlAction, ControlAction]:
         """
-        腿托控制逻辑（左右独立）
+        腿托控制逻辑（左右独立，基于重心划分+前3后3比）
 
-        使用均值而非总和来计算压力比，更准确地反映压力分布
-        左右腿托使用独立的阈值配置
+        算法方案：
+        1. 使用入座时标定的列方向重心划分左右腿
+        2. 分别计算左右腿的前3行/后3行压力比
+        3. 比值低 = 腿悬空（需充气），比值高 = 腿压实（需放气）
+
+        回退机制：若重心未标定，使用固定列分界（列中点）
 
         支持品味区间覆盖：如果当前体型有品味数据，使用品味区间替代默认阈值
         """
-        # 左侧腿托逻辑
-        left_butt = regions['cushion_butt_left']
-        left_leg = regions['cushion_leg_left']
-        left_butt_mean = float(np.mean(left_butt))
-        left_leg_mean = float(np.mean(left_leg))
+        front3 = regions['cushion_front3']  # 前3行 (3, 6)
+        rear3 = regions['cushion_rear3']    # 后3行 (3, 6)
 
-        if left_butt_mean > 0:
-            left_ratio = left_leg_mean / left_butt_mean
-        else:
-            left_ratio = 0
+        # 若重心未标定，使用当前帧的坐垫矩阵实时计算重心（回退方案）
+        if not self.centroid_calibrated:
+            cushion_total = regions['cushion_total']
+            col_sums = np.sum(cushion_total, axis=0)
+            total = np.sum(col_sums)
+            if total > 0:
+                self.cushion_col_centroid = float(
+                    np.sum(np.arange(cushion_total.shape[1]) * col_sums) / total
+                )
+            else:
+                self.cushion_col_centroid = cushion_total.shape[1] / 2.0
 
-        # 右侧腿托逻辑
-        right_butt = regions['cushion_butt_right']
-        right_leg = regions['cushion_leg_right']
-        right_butt_mean = float(np.mean(right_butt))
-        right_leg_mean = float(np.mean(right_leg))
-
-        if right_butt_mean > 0:
-            right_ratio = right_leg_mean / right_butt_mean
-        else:
-            right_ratio = 0
+        # 基于重心计算左右腿前3后3比
+        f3r3 = self._compute_f3r3_by_centroid(front3, rear3)
+        left_ratio = f3r3['left_f3r3']
+        right_ratio = f3r3['right_f3r3']
 
         # 获取调节阈值：优先使用品味区间，否则使用默认配置
         thresholds, is_preference = self.preference_manager.get_active_thresholds()
@@ -1429,10 +1530,10 @@ class IntegratedSeatSystem:
             right_inflate_threshold = thresholds['leg_support']['right_inflate']
             right_deflate_threshold = thresholds['leg_support']['right_deflate']
         else:
-            left_inflate_threshold = self.config.get('leg_support.left_leg_butt_ratio_inflate', 0.7)
-            left_deflate_threshold = self.config.get('leg_support.left_leg_butt_ratio_deflate', 1.3)
-            right_inflate_threshold = self.config.get('leg_support.right_leg_butt_ratio_inflate', 0.7)
-            right_deflate_threshold = self.config.get('leg_support.right_leg_butt_ratio_deflate', 1.3)
+            left_inflate_threshold = self.config.get('leg_support.left_f3r3_inflate', 0.48)
+            left_deflate_threshold = self.config.get('leg_support.left_f3r3_deflate', 0.70)
+            right_inflate_threshold = self.config.get('leg_support.right_f3r3_inflate', 0.64)
+            right_deflate_threshold = self.config.get('leg_support.right_f3r3_deflate', 0.96)
 
         # 判断左侧动作
         if left_ratio < left_inflate_threshold:
@@ -2005,15 +2106,28 @@ class IntegratedSeatSystem:
 
     # ==================== 品味管理接口 ====================
 
-    def trigger_preference_recording(self, body_shape: str = None) -> Dict:
+    def trigger_preference_recording(self, body_shape: str = None,
+                                      airbag_ops: Dict = None) -> Dict:
         """
         触发品味记录（外部调用接口）
 
         必须先识别到体型才能触发。上层软件在用户手动调节完气囊、坐稳定后调用此接口。
         系统将采集一段时间的压力数据，记录当前压力比例并生成个性化调节区间。
 
+        传入充放气次数字典后，系统会基于当前自适应阈值构建置信区间，
+        对采集帧进行鲁棒过滤（截断或卡尔曼融合），避免用户乱动导致异常比例值。
+
         Args:
             body_shape: 指定体型（可选，默认使用体型三分类识别的结果）
+            airbag_ops: 充放气次数字典（可选），格式如:
+                {
+                    'lumbar': {'inflate': 3, 'deflate': 0},
+                    'side_wings_left': {'inflate': 1, 'deflate': 0},
+                    'side_wings_right': {'inflate': 0, 'deflate': 0},
+                    'leg_left': {'inflate': 0, 'deflate': 2},
+                    'leg_right': {'inflate': 0, 'deflate': 1},
+                }
+                未传入时退化为原始无过滤采集。
 
         Returns:
             Dict - 操作结果
@@ -2022,8 +2136,10 @@ class IntegratedSeatSystem:
                 'state': str - 当前状态 ('RECORDING' / 'ERROR')
                 'target_shape': str - 目标体型（仅成功时）
                 'total_frames': int - 需采集的总帧数（仅成功时）
+                'filter_mode': str - 过滤模式 ('none'/'clamp'/'kalman')（仅成功时）
+                'confidence_intervals': Dict - 各比例的置信区间（仅成功时且有airbag_ops）
         """
-        return self.preference_manager.start_recording(body_shape)
+        return self.preference_manager.start_recording(body_shape, airbag_ops)
 
     def cancel_preference_recording(self) -> Dict:
         """

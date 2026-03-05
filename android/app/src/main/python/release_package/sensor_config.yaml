@@ -32,12 +32,18 @@ side_wings:
   - 3
 
 leg_support:
-  # 左侧腿托阈值
-  left_leg_butt_ratio_inflate: 0.75 # 左侧腿/臀压力比 < 0.7 时充气左腿托
-  left_leg_butt_ratio_deflate: 0.9  # 左侧腿/臀压力比 > 1.3 时放气左腿托
-  # 右侧腿托阈值
-  right_leg_butt_ratio_inflate: 0.75 # 右侧腿/臀压力比 < 0.7 时充气右腿托
-  right_leg_butt_ratio_deflate: 0.9  # 右侧腿/臀压力比 > 1.3 时放气右腿托
+  # 算法方案：重心划分左右腿 + 前3后3比（行0-2均值 / 行7-9均值）
+  # 重心标定：入座稳定后用舒适状态数据计算列方向压力重心，一次标定
+  # 前3行 = 腿前端（膝盖侧），后3行 = 臀后端（靠近臀部侧）
+  # 比值低 = 腿悬空（需充气），比值高 = 腿压实（需放气）
+  front_rows: [0, 3]   # 前3行范围（行0-2），腿前端
+  rear_rows: [7, 10]   # 后3行范围（行7-9），臀后端
+  # 左腿阈值（基于重心划分，所有体型统一）
+  left_f3r3_inflate: 0.48   # 左腿前3后3比 < 此值时充气（腿悬空）
+  left_f3r3_deflate: 0.70   # 左腿前3后3比 > 此值时放气（腿压实）
+  # 右腿阈值（右腿比值普遍高于左腿，与座椅本身有关）
+  right_f3r3_inflate: 0.64  # 右腿前3后3比 < 此值时充气（腿悬空）
+  right_f3r3_deflate: 0.96  # 右腿前3后3比 > 此值时放气（腿压实）
   left_airbags:  # 左腿托气囊编号
   - 10
   right_airbags:  # 右腿托气囊编号
@@ -270,5 +276,23 @@ tap_massage:
 preference:
   enabled: true  # 是否启用品味管理功能
   record_frames: 30  # 品味记录时采集的帧数，30帧 ≈ 2.3秒 @13Hz
-  margin: 0.15  # 品味区间的上下拓展幅度（基于记录的比例 ± margin 生成保持区间）
   storage_path: preference_data.json  # 品味数据持久化文件路径（相对于项目根目录）
+
+  # 品味区间的margin（各区域独立配置）
+  lumbar_margin: 0.3       # 腰托区间拓展幅度
+  side_wing_margin: 0.2    # 侧翼区间拓展幅度
+  leg_support_margin: 0.2  # 腿托区间拓展幅度
+
+  # === 鲁棒品味记录配置 ===
+  # 过滤模式: 'clamp'=截断模式, 'kalman'=卡尔曼融合模式
+  robust_filter_mode: clamp
+  # 每次充/放气操作对比例值的乘法因子（非线性偏移）
+  # 预期比例 = 基线中心 × (1 + step_factor)^net_count
+  step_factor: 0.05
+  # 置信区间容差（乘法容差）
+  # 置信区间 = [预期 × (1-tolerance), 预期 × (1+tolerance)]
+  confidence_tolerance: 0.3
+  # 卡尔曼融合参数
+  kalman_process_variance: 0.01     # 过程噪声方差
+  kalman_base_measure_variance: 0.02  # 基础观测噪声方差
+  kalman_outlier_scale: 5.0          # 异常值方差放大系数
