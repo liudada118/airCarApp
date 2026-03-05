@@ -1,6 +1,6 @@
 # 架构文档
 
-> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-02
+> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 15:30
 
 ## 1. 项目概述
 
@@ -87,8 +87,11 @@ graph TD
 
 1.  **传感器数据接收与处理**
     - `SerialManager` 通过 `SerialReadThread` 从 USB 串口持续读取数据。
-    - `FrameParser` 将原始数据解析为完整的帧（CSV 格式字符串）。
-    - `SerialModule.handleFrame` 接收到帧数据，调用 Python 的 `server.process_frame`。
+    - `FrameParser` 将原始数据解析为 `FrameResult(csv, length)` 对象，包含帧数据和帧字节长度。
+    - `SerialModule.handleFrame` 接收到 `FrameResult`，根据帧长度区分处理：
+      - **144 字节**：标准传感器帧，调用 Python 的 `server.process_frame`。
+      - **51 字节**：模式帧，处理自动/手动模式切换。
+      - **其他长度**：非标准帧（如气囊回传指令），通过 `onNonStandardFrame` 事件发送到 JS 端。
     - `server.process_frame` 调用 `integrated_system.py` 中的算法，返回 JSON 结果。
     - `SerialModule` 将 JSON 结果通过 `onSerialData` 事件发送给 JS 端。
     - `HomeScreen` 接收到事件，更新 `sensorData` 和 `realtimeData` 状态，触发 3D 模型和实时数据弹窗的重新渲染。
@@ -119,6 +122,16 @@ graph TD
 | `setAlgoMode` | `enabled: boolean` | 开启/关闭算法自动控制 |
 | `sendAirbagCommand`| `zone: string`, `action: string` | 发送手动气囊控制指令 |
 
+**Native → JS 事件：**
+
+| 事件名 | 数据字段 | 描述 |
+| :--- | :--- | :--- |
+| `onSerialData` | `data: string` | 标准传感器帧 CSV 数据 |
+| `onSerialResult` | `data`, `result`, `error` | Python 算法处理结果 |
+| `onSerialMode` | `data`, `modeValue`, `manual`, `auto` | 模式帧（自动/手动切换） |
+| `onNonStandardFrame` | `data`, `hex`, `length`, `timestamp` | 非标准帧回传数据（非 144/51 字节） |
+| `onAirbagCommandSent` | `zone`, `action`, `hex`, `bytes` | 气囊指令发送确认 |
+
 ## 6. 项目进度
 
 > 记录项目从开始到现在已经完成的所有工作，每次新增追加到末尾。
@@ -130,6 +143,7 @@ graph TD
 | 2026-03-02 | 实时算法数据弹窗 | 新增独立的实时算法数据弹窗，使用与配置弹窗相同的模板 |
 | 2026-03-01 | 配置参数设置弹窗 | 实现可直接更改 Python 配置参数的弹窗 |
 | 2026-02-28 | 3D 模型与数据可视化 | 实现 3D 座椅模型，实时展示传感器数据和气囊状态 |
+| 2026-03-05 15:30 | manus | 非标准帧回传数据显示 | FrameParser 输出 FrameResult 含帧长度，SerialModule 区分标准帧/非标准帧，HomeScreen 新增"回传"按钮和弹窗显示非 144 字节帧的 HEX 数据 |
 
 ## 7. 更新日志
 
@@ -141,6 +155,7 @@ graph TD
 | 2026-03-01 | 修复缺陷 | 修复配置弹窗加载失败问题，回退到 `pythonExecutor` 实现 |
 | 2026-03-01 | 新增功能 | 实现配置参数设置弹窗 |
 | 2026-02-29 | 初始化 | 创建项目架构文档 |
+| 2026-03-05 15:30 | manus | 新增功能 | 添加非标准帧回传数据显示功能，用于调试气囊回传指令 |
 
 ---
 
