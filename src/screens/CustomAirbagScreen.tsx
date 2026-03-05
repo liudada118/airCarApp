@@ -92,14 +92,43 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const [connectionStatus] = useState<ConnectionStatus>('connected');
   const [selectedZone, setSelectedZone] = useState<CustomAirbagZone>('lumbar');
   const [airbagValues, setAirbagValues] = useState<CustomAirbagValues>(
-    initialValues || {
-      shoulder: 3,
-      sideWing: 4,
-      lumbar: 5,
-      hipFirm: 3,
-      legRest: 3,
-    },
+    initialValues || DEFAULT_CUSTOM_AIRBAG_VALUES,
   );
+  const [storageLoaded, setStorageLoaded] = useState(false);
+
+  // 组件挂载时直接从 SharedPreferences 加载已保存的气囊值
+  // 这是最可靠的方式：不依赖 App 层传递 initialValues
+  useEffect(() => {
+    if (initialValues) {
+      // App 层已传入有效值，直接使用
+      setStorageLoaded(true);
+      return;
+    }
+    // 否则自己从 SharedPreferences 读取
+    if (sm?.loadAirbagSettings) {
+      sm.loadAirbagSettings()
+        .then((json: string | null) => {
+          if (json) {
+            try {
+              const parsed = JSON.parse(json) as CustomAirbagValues;
+              console.log('[CustomAirbag] 从 SharedPreferences 加载气囊值:', parsed);
+              setAirbagValues(parsed);
+            } catch (e) {
+              console.warn('[CustomAirbag] 解析保存的气囊值失败:', e);
+            }
+          } else {
+            console.log('[CustomAirbag] 无已保存的气囊值，使用默认值');
+          }
+          setStorageLoaded(true);
+        })
+        .catch((e: any) => {
+          console.warn('[CustomAirbag] 加载气囊值失败:', e?.message || e);
+          setStorageLoaded(true);
+        });
+    } else {
+      setStorageLoaded(true);
+    }
+  }, []); // 只在挂载时执行一次
   const [modalType, setModalType] = useState<ModalType>(null);
   const [toast, setToast] = useState({
     visible: false,
@@ -191,8 +220,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     onClose();
   }, [adaptiveEnabled, onClose]);
 
-  // 保存成功时也恢复算法模式，并将当前气囊值回传给 App 层持久化
-  // 使用 airbagValuesRef 确保始终获取最新值，避免 setTimeout 闭包捕获旧值
+  // 保存成功时也恢复算法模式，并将当前气囊值回传给 App 层
+  // 同时在组件内直接写入 SharedPreferences，确保双重保障
   const handleSaveAndRestore = useCallback(() => {
     if (adaptiveEnabled) {
       sm?.setAlgoMode?.(true);
@@ -200,6 +229,20 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     }
     const latestValues = airbagValuesRef.current;
     console.log('[AirbagStorage] 保存的气囊值:', JSON.stringify(latestValues));
+
+    // 组件内直接写入 SharedPreferences（不依赖 App 层）
+    if (sm?.saveAirbagSettings) {
+      const jsonStr = JSON.stringify(latestValues);
+      sm.saveAirbagSettings(jsonStr)
+        .then(() => {
+          console.log('[AirbagStorage] 组件内直接保存成功:', jsonStr);
+        })
+        .catch((e: any) => {
+          console.warn('[AirbagStorage] 组件内保存失败:', e?.message || e);
+        });
+    }
+
+    // 回传给 App 层（更新内存状态 + 返回首页）
     onSaveSuccess(latestValues);
   }, [adaptiveEnabled, onSaveSuccess]);
 
