@@ -811,6 +811,7 @@ function CarAirRNInner({data = [], style}, ref) {
     /** 算法判断离座时调用：立即清零 3D 图所有点位数据，并冻结数据更新 */
     resetToZero() {
       const fs = stateRef.current;
+      console.log('[CarAirRN] resetToZero 调用, smoothBig存在:', !!fs.smoothBig, 'pointMeshes存在:', !!fs.pointMeshes);
       // 冻结数据更新：渲染循环不再用传感器数据更新 smoothBig
       fs._frozen = true;
       // 将 smoothBig 所有区域填 0
@@ -825,6 +826,34 @@ function CarAirRNInner({data = [], style}, ref) {
       // 清零第一层平滑缓冲区
       if (fs.rawSmoothBuf) {
         fs.rawSmoothBuf.fill(0);
+      }
+      // 直接把所有 3D 点位的 position.y 设为 0、scale 设为 0，确保 GPU 立即渲染清零
+      if (fs.pointMeshes) {
+        Object.keys(fs.pointMeshes).forEach(name => {
+          const mesh = fs.pointMeshes[name];
+          if (!mesh || !mesh.geometry) return;
+          const posAttr = mesh.geometry.getAttribute('position');
+          const colorAttr = mesh.geometry.getAttribute('color');
+          const scalesAttr = mesh.geometry.getAttribute('aScale');
+          if (posAttr) {
+            const pos = posAttr.array;
+            // 只清零 y 分量（高度），保留 x/z 位置
+            for (let i = 1; i < pos.length; i += 3) {
+              pos[i] = 0;
+            }
+            posAttr.needsUpdate = true;
+          }
+          if (colorAttr) {
+            // 设为白色 (1,1,1)
+            colorAttr.array.fill(1);
+            colorAttr.needsUpdate = true;
+          }
+          if (scalesAttr) {
+            // 隐藏所有点
+            scalesAttr.array.fill(0);
+            scalesAttr.needsUpdate = true;
+          }
+        });
       }
       fs.rawSmoothInited = false;
       fs._zeroFrameCount = 99;
@@ -1221,6 +1250,19 @@ function CarAirRNInner({data = [], style}, ref) {
       const now = Date.now();
       const frameState = stateRef.current;
 
+      // ━━━ 最高优先级：算法离座冻结 ━━━
+      // 冻结时完全跳过数据更新，只渲染已清零的 smoothBig
+      if (frameState._frozen) {
+        // 首次冻结时需要渲染一帧把清零状态写入GPU
+        if (frameState.dirty) {
+          renderer.render(scene, camera);
+          gl.endFrameEXP();
+          frameState.dirty = false;
+        }
+        frameRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
       if (
         !frameState.lastSeatUpdate ||
         now - frameState.lastSeatUpdate >= SEAT_UPDATE_INTERVAL
@@ -1238,14 +1280,6 @@ function CarAirRNInner({data = [], style}, ref) {
 
         if (hash !== frameState.lastDataHash || !frameState.lastSeatUpdate || hasZeroPending) {
           frameState.lastDataHash = hash;
-
-          // 冻结状态：算法判断离座后，跳过数据更新，保持全零状态
-          if (frameState._frozen) {
-            frameState.lastSeatUpdate = now;
-            frameState.dirty = true; // 确保渲染全零状态
-            frameRef.current = requestAnimationFrame(animate);
-            return;
-          }
 
           const seatData = normalizeSeatData(currentData);
 
