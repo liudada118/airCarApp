@@ -485,10 +485,14 @@ class SerialModule(
         val data = frameResult.csv
         val frameLen = frameResult.length
 
-        // 非标准帧（不是 144 字节也不是 51 字节）→ 发送到 JS 的 onNonStandardFrame 事件
-        if (frameLen != 144 && frameLen != 51) {
+        // 非 144 字节的帧都打印到回传面板（包括 51 字节模式帧、气囊回传等）
+        if (frameLen != 144) {
             Log.w(logTag, "[NonStdFrame] length=$frameLen data=$data")
             emitNonStandardFrame(data, frameLen)
+        }
+
+        // 非标准帧（不是 144 也不是 51）→ 仅打印，不走后续处理
+        if (frameLen != 144 && frameLen != 51) {
             return
         }
 
