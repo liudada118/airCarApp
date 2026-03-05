@@ -108,6 +108,20 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       console.log('[CustomAirbag] 开始加载已保存的气囊值...');
       console.log('[CustomAirbag] initialValues:', JSON.stringify(initialValues));
 
+      // 加载成功后同时更新 airbagValues 和 cmdCounts
+      const applyLoadedValues = (values: CustomAirbagValues) => {
+        setAirbagValues(values);
+        // 用已保存的值初始化 cmdCounts，让操作总和面板和气囊标签显示已保存的累计值
+        setCmdCounts({
+          shoulder: values.shoulder,
+          sideWing: values.sideWing,
+          lumbar: values.lumbar,
+          hipFirm: values.hipFirm,
+          legRest: values.legRest,
+        });
+        console.log('[CustomAirbag] 已同步 cmdCounts:', JSON.stringify(values));
+      };
+
       // 1. 尝试从 SharedPreferences 读取
       if (sm?.loadAirbagSettings) {
         try {
@@ -115,10 +129,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
           console.log('[CustomAirbag] SharedPreferences 返回:', json);
           if (json) {
             const parsed = JSON.parse(json) as CustomAirbagValues;
-            // 检查是否与默认值不同（确认确实有保存过）
             const hasNonZero = Object.values(parsed).some(v => v !== 0);
             console.log('[CustomAirbag] SharedPreferences 解析结果:', JSON.stringify(parsed), '有非零值:', hasNonZero);
-            setAirbagValues(parsed);
+            applyLoadedValues(parsed);
             // 同步到 AsyncStorage
             AsyncStorage.setItem(ASYNC_STORAGE_KEY, json).catch(() => {});
             setStorageLoaded(true);
@@ -138,7 +151,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         if (json) {
           const parsed = JSON.parse(json) as CustomAirbagValues;
           console.log('[CustomAirbag] AsyncStorage 解析结果:', JSON.stringify(parsed));
-          setAirbagValues(parsed);
+          applyLoadedValues(parsed);
           // 同步回 SharedPreferences
           if (sm?.saveAirbagSettings) {
             sm.saveAirbagSettings(json).catch(() => {});
@@ -153,7 +166,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       // 3. 存储中都没有，使用 App 层传入的 initialValues
       if (initialValues) {
         console.log('[CustomAirbag] 使用 App 层传入的 initialValues:', JSON.stringify(initialValues));
-        setAirbagValues(initialValues);
+        applyLoadedValues(initialValues);
         setStorageLoaded(true);
         return;
       }

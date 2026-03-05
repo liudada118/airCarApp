@@ -1,6 +1,6 @@
 # 架构文档
 
-> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 22:30
+> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 23:00
 
 ## 1. 项目概述
 
@@ -177,6 +177,7 @@ graph TD
 | 2026-03-05 18:31 | 依赖修复 | 补充安装 expo-file-system 依赖，修复 CarAirRN 页面运行时 Metro 无法解析模块导致的 500 报错 |
 | 2026-03-05 18:45 | 构建修复 | 修复 Android 构建链路中的仓库解析问题：为 AsyncStorage 补充本地 Maven 仓库并扩展仓库补丁脚本，解决 TLS 握手失败后续的依赖解析失败 |
 | 2026-03-05 22:30 | baocun v2 | 自定义气囊加载逻辑重构 | CustomAirbagScreen 不再依赖 App 层 initialValues，挂载时始终主动从存储中读取；SharedPreferences > AsyncStorage > initialValues > 默认值；增加保存后回读验证；添加全链路调试日志 |
+| 2026-03-05 23:00 | baocun v3 | 操作总和面板显示已保存值 | 加载已保存值时同步初始化 cmdCounts，让操作总和面板和气囊标签显示已保存的累计值（如 +16、+30） |
 
 ## 7. 更新日志
 
@@ -202,6 +203,7 @@ graph TD
 | 2026-03-05 18:31 | 修复缺陷 | 修复 `UnableToResolveError: expo-file-system`：为项目补充 `expo-file-system@~19.0.21` 依赖并更新锁文件 |
 | 2026-03-05 18:45 | 配置变更 | 修复 Gradle 依赖仓库配置：将 `@react-native-async-storage` 模块纳入仓库补丁覆盖，并在 `android/settings.gradle` 增加其 `local_repo`，恢复 `npm run android` 构建安装链路 |
 | 2026-03-05 22:30 | 修复缺陷 | 重构加载逻辑：CustomAirbagScreen 挂载时始终主动从存储读取，不依赖 App 层 props 传值；增加保存后回读验证；添加全链路调试日志 |
+| 2026-03-05 23:00 | 修复缺陷 | 操作总和面板和气囊标签显示已保存的累计值：加载已保存值时同步初始化 cmdCounts，再次进入页面时显示 +N/-N 而不是 0 |
 
 ---
 
