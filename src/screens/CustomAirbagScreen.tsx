@@ -78,7 +78,7 @@ interface CmdLog {
 
 interface CustomAirbagScreenProps {
   onClose: () => void;
-  onSaveSuccess: () => void;
+  onSaveSuccess: (values: CustomAirbagValues) => void;
   initialValues?: CustomAirbagValues;
   adaptiveEnabled?: boolean;
 }
@@ -185,14 +185,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     onClose();
   }, [adaptiveEnabled, onClose]);
 
-  // 保存成功时也恢复算法模式
+  // 保存成功时也恢复算法模式，并将当前气囊值回传给 App 层持久化
   const handleSaveAndRestore = useCallback(() => {
     if (adaptiveEnabled) {
       sm?.setAlgoMode?.(true);
       console.log('[AlgoMode] 保存成功，自适应已开启，恢复算法模式');
     }
-    onSaveSuccess();
-  }, [adaptiveEnabled, onSaveSuccess]);
+    onSaveSuccess(airbagValues);
+  }, [adaptiveEnabled, onSaveSuccess, airbagValues]);
 
   // 监听 Native 端发送的气囊指令事件
   useEffect(() => {
