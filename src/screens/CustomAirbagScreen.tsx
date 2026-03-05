@@ -509,6 +509,55 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     });
   }, [sendAirbagCmd]);
 
+  // 点击归零按钮
+  const handleResetPress = useCallback(() => {
+    setModalType('confirmReset');
+  }, []);
+
+  // 确认归零：将所有气囊值重置为 0，清除本地缓存，发送停止指令
+  const handleConfirmReset = useCallback(async () => {
+    console.log('[AirbagStorage] 归零操作');
+    setModalType(null);
+
+    // 1. 重置 UI 状态
+    const zeroValues = {...DEFAULT_CUSTOM_AIRBAG_VALUES};
+    setAirbagValues(zeroValues);
+    setCmdCounts({
+      shoulder: 0,
+      sideWing: 0,
+      lumbar: 0,
+      hipFirm: 0,
+      legRest: 0,
+    });
+    setSelectedZone('lumbar');
+
+    // 2. 发送停止指令给所有气囊
+    AIRBAG_ZONES.forEach(z => sendAirbagCmd(z.key, 'stop'));
+
+    // 3. 清除本地缓存（同时写入全零值到存储）
+    const zeroJson = JSON.stringify(zeroValues);
+    try {
+      await AsyncStorage.setItem(ASYNC_STORAGE_KEY, zeroJson);
+      console.log('[AirbagStorage] 归零 AsyncStorage 写入成功');
+    } catch (e: any) {
+      console.warn('[AirbagStorage] 归零 AsyncStorage 写入失败:', e?.message || e);
+    }
+    if (sm?.saveAirbagSettings) {
+      try {
+        await sm.saveAirbagSettings(zeroJson);
+        console.log('[AirbagStorage] 归零 SharedPreferences 写入成功');
+      } catch (e: any) {
+        console.warn('[AirbagStorage] 归零 SharedPreferences 写入失败:', e?.message || e);
+      }
+    }
+
+    setToast({
+      visible: true,
+      message: '已归零所有气囊参数，所有气囊已停止',
+      type: 'info',
+    });
+  }, [sendAirbagCmd]);
+
   // 隐藏 Toast
   const hideToast = useCallback(() => {
     setToast(prev => ({...prev, visible: false}));
@@ -811,6 +860,12 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             <Text style={styles.restoreButtonText}>恢复默认</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={styles.resetButton}
+            onPress={handleResetPress}
+            activeOpacity={0.7}>
+            <Text style={styles.resetButtonText}>归零</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.saveButton}
             onPress={handleSavePress}
             activeOpacity={0.7}>
@@ -847,6 +902,17 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         confirmText="恢复默认"
         onCancel={() => setModalType(null)}
         onConfirm={handleConfirmRestore}
+      />
+
+      {/* 确认归零弹窗 */}
+      <ConfirmModal
+        visible={modalType === 'confirmReset'}
+        title="确认归零所有气囊？"
+        description="归零后所有气囊参数将重置为 0，并清除已保存的设置。此操作不可撤销。"
+        cancelText="取消"
+        confirmText="确认归零"
+        onCancel={() => setModalType(null)}
+        onConfirm={handleConfirmReset}
       />
 
       {/* 正在保存弹窗 */}
@@ -1228,6 +1294,19 @@ const styles = StyleSheet.create({
   restoreButtonText: {
     fontSize: FontSize.md,
     color: Colors.textWhite,
+    fontWeight: '500',
+  },
+  resetButton: {
+    paddingHorizontal: Spacing.xxl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#F0883E',
+    backgroundColor: 'rgba(240, 136, 62, 0.1)',
+  },
+  resetButtonText: {
+    fontSize: FontSize.md,
+    color: '#F0883E',
     fontWeight: '500',
   },
   saveButton: {
