@@ -1184,7 +1184,6 @@ function CarAirRNInner({data = [], style}, ref) {
       lastDataHash: 0,
       baseline: null, // 清零基线：144 元素数组，null 表示未清零
       _gaussKernel: GAUSS_KERNEL, // 动态高斯核
-      lastFrameSum: 0, // 上一帧总和，用于帧间突降检测
     };
 
     const animate = () => {
@@ -1229,17 +1228,6 @@ function CarAirRNInner({data = [], style}, ref) {
             return;
           }
 
-          // 检测2：帧间突降检测 — 如果当前帧总和相比上一帧突然下降超过 70%，视为干扰帧
-          if (frameState.rawSmoothInited && frameState.lastFrameSum > 0) {
-            const dropRatio = frameSum / frameState.lastFrameSum;
-            if (dropRatio < 0.3) {
-              // 突降帧，跳过不更新，避免3D图抖动
-              frameState.lastSeatUpdate = now;
-              frameRef.current = requestAnimationFrame(animate);
-              return;
-            }
-          }
-          frameState.lastFrameSum = frameSum;
 
           // 第一层平滑：原始 144 字节数据帧间混合（在插值放大之前）
           const rawBuf = frameState.rawSmoothBuf;
