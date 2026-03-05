@@ -315,9 +315,30 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setModalType('confirmSave');
   }, []);
 
-  // 确认保存
+  // 确认保存：调用 Python 品味记录 + 持久化保存
   const handleConfirmSave = useCallback(() => {
     setModalType('saving');
+
+    // 调用 Python 的 trigger_preference_recording，让算法采集当前压力数据并记录品味
+    if (sm?.triggerPreferenceRecording) {
+      sm.triggerPreferenceRecording(null)
+        .then((resultJson: string) => {
+          try {
+            const result = JSON.parse(resultJson);
+            if (result.success) {
+              console.log('[Preference] 品味记录已触发:', result);
+            } else {
+              console.warn('[Preference] 品味记录触发失败:', result.message || result.error);
+            }
+          } catch (e) {
+            console.warn('[Preference] 解析品味记录结果失败:', e);
+          }
+        })
+        .catch((e: any) => {
+          console.warn('[Preference] 调用 triggerPreferenceRecording 失败:', e?.message || e);
+        });
+    }
+
     savingTimerRef.current = setTimeout(() => {
       setModalType(null);
       handleSaveAndRestore();

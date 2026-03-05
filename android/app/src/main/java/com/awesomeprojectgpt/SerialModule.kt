@@ -347,6 +347,51 @@ class SerialModule(
         }
     }
 
+    // ─── 品味记录接口 ─────────────────────────────────────────
+
+    @ReactMethod
+    fun triggerPreferenceRecording(bodyShape: String?, promise: Promise) {
+        pythonExecutor.execute {
+            try {
+                val module = Python.getInstance().getModule("server")
+                val resultJson = if (bodyShape != null && bodyShape.isNotEmpty()) {
+                    module.callAttr("trigger_preference_recording", bodyShape).toString()
+                } else {
+                    module.callAttr("trigger_preference_recording").toString()
+                }
+                promise.resolve(resultJson)
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "trigger_preference_recording failed")
+            }
+        }
+    }
+
+    @ReactMethod
+    fun cancelPreferenceRecording(promise: Promise) {
+        pythonExecutor.execute {
+            try {
+                val module = Python.getInstance().getModule("server")
+                val resultJson = module.callAttr("cancel_preference_recording").toString()
+                promise.resolve(resultJson)
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "cancel_preference_recording failed")
+            }
+        }
+    }
+
+    @ReactMethod
+    fun getPreferenceStatus(promise: Promise) {
+        pythonExecutor.execute {
+            try {
+                val module = Python.getInstance().getModule("server")
+                val resultJson = module.callAttr("get_preference_status").toString()
+                promise.resolve(resultJson)
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "get_preference_status failed")
+            }
+        }
+    }
+
     // ─── 气囊手动控制 ─────────────────────────────────────────────────
 
     /** AirbagZone → 协议气囊 ID 列表
