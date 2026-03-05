@@ -396,6 +396,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     useState<ConnectionStatus>('disconnected');
   const [connecting, setConnecting] = useState(false);
   // adaptiveEnabled 和 onAdaptiveChange 从 props 传入，由 App 统一管理
+  const adaptiveEnabledRef = useRef(adaptiveEnabled);
+  adaptiveEnabledRef.current = adaptiveEnabled;
   const [showConnectionError, setShowConnectionError] = useState(false);
   const [connectionErrorMessage, setConnectionErrorMessage] = useState('');
 
@@ -426,17 +428,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [configLoading, setConfigLoading] = useState(false);
   // realtimeData 已合并到 algoState 中
 
-  // ─── 处理算法结果（单次 setState，减少 87.5% 重渲染）──────────────
+   // ─── 处理算法结果（单次 setState，减少 87.5% 重渲染）────────────
   const handleAlgoResult = useCallback((resultJson: string) => {
     const parsed = parseAlgoResult(resultJson);
     if (!parsed) return;
-    // 单次 setState 合并所有算法结果
+    // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
+    const isAdaptive = adaptiveEnabledRef.current;
     setAlgoState({
       seatStatus: parsed.seatStatus,
       algoSeatStatus: parsed.algoSeatStatus,
       bodyShapeInfo: parsed.bodyShapeInfo,
-      commandStates: parsed.commandStates,
-      rawCommand: parsed.rawCommand,
+      commandStates: isAdaptive ? parsed.commandStates : DEFAULT_AIRBAG_COMMAND_STATES as AirbagCommandStates,
+      rawCommand: isAdaptive ? parsed.rawCommand : null,
       livingStatus: parsed.livingStatus,
       bodyType: parsed.bodyType,
       realtimeData: parsed.realtimeData,
