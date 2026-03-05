@@ -349,18 +349,13 @@ class SerialModule(
 
     // ─── 气囊手动控制 ─────────────────────────────────────────────────
 
-    /** AirbagZone → 协议气囊 ID 列表 */
+    /** AirbagZone → 协议气囊 ID 列表（5 组，每组 2 个物理气囊） */
     private val zoneToAirbagIds: Map<String, List<Int>> = mapOf(
-        "sideWingL"  to listOf(2, 4),   // 左侧翼上、左侧翼下
-        "sideWingR"  to listOf(1, 3),   // 右侧翼上、右侧翼下
-        "lumbarUp"   to listOf(5),      // 腰托1
-        "lumbarDown"  to listOf(6),     // 腰托2
-        "shoulderL"  to listOf(7),      // 肩部左（预留）
-        "shoulderR"  to listOf(8),      // 肩部右（预留）
-        "cushionFL"  to listOf(11),     // 坐垫前左（预留）
-        "cushionFR"  to listOf(12),     // 坐垫前右（预留）
-        "cushionRL"  to listOf(9),      // 坐垫后左 → 腿托1
-        "cushionRR"  to listOf(10)      // 坐垫后右 → 腿托2
+        "shoulder"   to listOf(1, 2),   // 肩部气囊
+        "sideWing"   to listOf(3, 4),   // 侧翼气囊
+        "lumbar"     to listOf(5, 6),   // 腰托气囊
+        "hipFirm"    to listOf(7, 8),   // 臀部软硬度气囊
+        "legRest"    to listOf(9, 10)   // 腿托气囊
     )
 
     private val FRAME_HEADER = 0x1F

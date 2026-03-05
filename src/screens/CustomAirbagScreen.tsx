@@ -30,34 +30,24 @@ import {DEFAULT_AIRBAG_VALUES} from '../types';
 
 const sm = NativeModules.SerialModule;
 
-/** 气囊区域配置 - 10 个独立气囊 */
+/** 气囊区域配置 - 5 组气囊 */
 const AIRBAG_ZONES: AirbagZoneConfig[] = [
-  // 左侧标签（靠背左 + 坐垫左）
-  {key: 'shoulderL', label: '肩部左', side: 'left'},
-  {key: 'sideWingL', label: '侧翼左', side: 'left'},
-  {key: 'lumbarUp', label: '腰部上', side: 'left'},
-  {key: 'cushionFL', label: '坐垫前左', side: 'left'},
-  {key: 'cushionRL', label: '坐垫后左', side: 'left'},
-  // 右侧标签（靠背右 + 坐垫右）
-  {key: 'shoulderR', label: '肩部右', side: 'right'},
-  {key: 'sideWingR', label: '侧翼右', side: 'right'},
-  {key: 'lumbarDown', label: '腰部下', side: 'right'},
-  {key: 'cushionFR', label: '坐垫前右', side: 'right'},
-  {key: 'cushionRR', label: '坐垫后右', side: 'right'},
+  // 左侧标签
+  {key: 'shoulder', label: '肩部气囊', side: 'left'},
+  {key: 'lumbar', label: '腰托气囊', side: 'left'},
+  {key: 'legRest', label: '腿托气囊', side: 'left'},
+  // 右侧标签
+  {key: 'sideWing', label: '侧翼气囊', side: 'right'},
+  {key: 'hipFirm', label: '臀部软硬度气囊', side: 'right'},
 ];
 
 /** 气囊区域中文名 */
 const ZONE_LABELS: Record<string, string> = {
-  shoulderL: '肩部左',
-  shoulderR: '肩部右',
-  sideWingL: '侧翼左',
-  sideWingR: '侧翼右',
-  lumbarUp: '腰部上',
-  lumbarDown: '腰部下',
-  cushionFL: '坐垫前左',
-  cushionFR: '坐垫前右',
-  cushionRL: '坐垫后左',
-  cushionRR: '坐垫后右',
+  shoulder: '肩部气囊',
+  sideWing: '侧翼气囊',
+  lumbar: '腰托气囊',
+  hipFirm: '臀部软硬度气囊',
+  legRest: '腿托气囊',
 };
 
 const MAX_VALUE = 10;
@@ -87,19 +77,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   adaptiveEnabled = true,
 }) => {
   const [connectionStatus] = useState<ConnectionStatus>('connected');
-  const [selectedZone, setSelectedZone] = useState<AirbagZone>('lumbarUp');
+  const [selectedZone, setSelectedZone] = useState<AirbagZone>('lumbar');
   const [airbagValues, setAirbagValues] = useState<AirbagValues>(
     initialValues || {
-      shoulderL: 3,
-      shoulderR: 3,
-      sideWingL: 4,
-      sideWingR: 4,
-      lumbarUp: 5,
-      lumbarDown: 5,
-      cushionFL: 2,
-      cushionFR: 2,
-      cushionRL: 3,
-      cushionRR: 3,
+      shoulder: 3,
+      sideWing: 4,
+      lumbar: 5,
+      hipFirm: 3,
+      legRest: 3,
     },
   );
   const [modalType, setModalType] = useState<ModalType>(null);
@@ -115,11 +100,11 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // 每个气囊的累计操作次数（充气 +1，放气 -1）
   const [cmdCounts, setCmdCounts] = useState<Record<AirbagZone, number>>({
-    shoulderL: 0, shoulderR: 0,
-    sideWingL: 0, sideWingR: 0,
-    lumbarUp: 0, lumbarDown: 0,
-    cushionFL: 0, cushionFR: 0,
-    cushionRL: 0, cushionRR: 0,
+    shoulder: 0,
+    sideWing: 0,
+    lumbar: 0,
+    hipFirm: 0,
+    legRest: 0,
   });
 
   const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -286,14 +271,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const handleConfirmRestore = useCallback(() => {
     setModalType(null);
     setAirbagValues({...DEFAULT_AIRBAG_VALUES});
-    setSelectedZone('lumbarUp');
+    setSelectedZone('lumbar');
     // 清空操作次数
     setCmdCounts({
-      shoulderL: 0, shoulderR: 0,
-      sideWingL: 0, sideWingR: 0,
-      lumbarUp: 0, lumbarDown: 0,
-      cushionFL: 0, cushionFR: 0,
-      cushionRL: 0, cushionRR: 0,
+      shoulder: 0,
+      sideWing: 0,
+      lumbar: 0,
+      hipFirm: 0,
+      legRest: 0,
     });
     // 发送停止指令给所有气囊
     AIRBAG_ZONES.forEach(z => sendAirbagCmd(z.key, 'stop'));
@@ -374,7 +359,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
               />
             </View>
 
-            {/* 左侧标签 */}
+            {/* 左侧标签（肩部、腰托、腿托） */}
             <View style={styles.leftLabels}>
               {leftZones.map(zone => (
                 <AirbagLabel
@@ -398,7 +383,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
               />
             </View>
 
-            {/* 右侧标签 */}
+            {/* 右侧标签（侧翼、臀部软硬度） */}
             <View style={styles.rightLabels}>
               {rightZones.map(zone => (
                 <AirbagLabel
@@ -615,12 +600,12 @@ const styles = StyleSheet.create({
   },
   leftLabels: {
     justifyContent: 'space-around',
-    height: 320,
+    height: 280,
     paddingRight: Spacing.sm,
   },
   rightLabels: {
     justifyContent: 'space-around',
-    height: 320,
+    height: 200,
     paddingLeft: Spacing.sm,
   },
   seatContainer: {
@@ -698,7 +683,7 @@ const styles = StyleSheet.create({
   logZone: {
     fontSize: 11,
     color: '#C9D1D9',
-    width: 50,
+    width: 70,
   },
   logHex: {
     fontSize: 10,

@@ -1,45 +1,38 @@
 /**
- * Airbag zone type - 10 个独立气囊
+ * Airbag zone type - 5 组气囊（每组控制 2 个物理气囊）
  *
- * 靠背区域:
- *   1: shoulderL  - 肩部左
- *   2: shoulderR  - 肩部右
- *   3: sideWingL  - 腰部侧翼左
- *   4: sideWingR  - 腰部侧翼右
- *   5: lumbarUp   - 腰部中间上
- *   6: lumbarDown - 腰部中间下
- *
- * 坐垫区域:
- *   7: cushionFL  - 坐垫前左
- *   8: cushionFR  - 坐垫前右
- *   9: cushionRL  - 坐垫后左
- *  10: cushionRR  - 坐垫后右
+ * 肩部气囊:    shoulder   → 物理气囊 1, 2
+ * 侧翼气囊:    sideWing   → 物理气囊 3, 4
+ * 腰托气囊:    lumbar     → 物理气囊 5, 6
+ * 臀部软硬度:  hipFirm    → 物理气囊 7, 8
+ * 腿托气囊:    legRest    → 物理气囊 9, 10
  */
 export type AirbagZone =
-  | 'shoulderL'
-  | 'shoulderR'
-  | 'sideWingL'
-  | 'sideWingR'
-  | 'lumbarUp'
-  | 'lumbarDown'
-  | 'cushionFL'
-  | 'cushionFR'
-  | 'cushionRL'
-  | 'cushionRR';
+  | 'shoulder'
+  | 'sideWing'
+  | 'lumbar'
+  | 'hipFirm'
+  | 'legRest';
 
-/** 所有气囊 zone 的有序列表（1-10） */
+/** 所有气囊 zone 的有序列表（5 组） */
 export const ALL_AIRBAG_ZONES: AirbagZone[] = [
-  'shoulderL',
-  'shoulderR',
-  'sideWingL',
-  'sideWingR',
-  'lumbarUp',
-  'lumbarDown',
-  'cushionFL',
-  'cushionFR',
-  'cushionRL',
-  'cushionRR',
+  'shoulder',
+  'sideWing',
+  'lumbar',
+  'hipFirm',
+  'legRest',
 ];
+
+/**
+ * 每个 zone 对应的物理气囊 ID 列表
+ */
+export const ZONE_TO_AIRBAG_IDS: Record<AirbagZone, number[]> = {
+  shoulder: [1, 2],
+  sideWing: [3, 4],
+  lumbar: [5, 6],
+  hipFirm: [7, 8],
+  legRest: [9, 10],
+};
 
 /**
  * Airbag zone config
@@ -57,16 +50,11 @@ export type AirbagValues = Record<AirbagZone, number>;
 
 /** 默认气囊值（全部为 0） */
 export const DEFAULT_AIRBAG_VALUES: AirbagValues = {
-  shoulderL: 0,
-  shoulderR: 0,
-  sideWingL: 0,
-  sideWingR: 0,
-  lumbarUp: 0,
-  lumbarDown: 0,
-  cushionFL: 0,
-  cushionFR: 0,
-  cushionRL: 0,
-  cushionRR: 0,
+  shoulder: 0,
+  sideWing: 0,
+  lumbar: 0,
+  hipFirm: 0,
+  legRest: 0,
 };
 
 /**
@@ -77,21 +65,16 @@ export const DEFAULT_AIRBAG_VALUES: AirbagValues = {
  */
 export type AirbagCommandState = 0 | 3 | 4;
 
-/** 10 个气囊的指令状态 */
+/** 5 组气囊的指令状态 */
 export type AirbagCommandStates = Record<AirbagZone, AirbagCommandState>;
 
 /** 默认气囊指令状态（全部空闲） */
 export const DEFAULT_AIRBAG_COMMAND_STATES: AirbagCommandStates = {
-  shoulderL: 0,
-  shoulderR: 0,
-  sideWingL: 0,
-  sideWingR: 0,
-  lumbarUp: 0,
-  lumbarDown: 0,
-  cushionFL: 0,
-  cushionFR: 0,
-  cushionRL: 0,
-  cushionRR: 0,
+  shoulder: 0,
+  sideWing: 0,
+  lumbar: 0,
+  hipFirm: 0,
+  legRest: 0,
 };
 
 /**
@@ -102,13 +85,7 @@ export const DEFAULT_AIRBAG_COMMAND_STATES: AirbagCommandStates = {
  *   [1..48]  : 24 组 [索引, 指令] 交替排列
  *   [49..54] : 校验/尾部（忽略）
  *
- * 前 10 组 [索引, 指令] 对应页面上的 10 个气囊。
- * 索引从 1 开始，与 ALL_AIRBAG_ZONES 的顺序一一对应。
- *
- * 指令值：
- *   0 = 空闲
- *   3 = 充气
- *   4 = 放气
+ * 每组气囊取其中第一个物理气囊的指令状态作为该组的状态。
  */
 export function parseAirbagCommand(
   command: number[] | null | undefined,
@@ -119,14 +96,14 @@ export function parseAirbagCommand(
     return states;
   }
 
-  // 跳过帧头 [0]，从 [1] 开始，每 2 个元素为一组 [索引, 指令]
-  for (let i = 0; i < 10; i++) {
-    const offset = 1 + i * 2; // 帧头后偏移
-    // const index = command[offset];     // 索引（1-10）
+  // 遍历每个 zone，取第一个物理气囊 ID 的指令
+  for (const zone of ALL_AIRBAG_ZONES) {
+    const airbagIds = ZONE_TO_AIRBAG_IDS[zone];
+    const firstId = airbagIds[0]; // 物理气囊 ID（1-based）
+    const offset = 1 + (firstId - 1) * 2; // 帧头后偏移
     const cmd = command[offset + 1]; // 指令值
 
-    const zone = ALL_AIRBAG_ZONES[i];
-    if (zone && (cmd === 0 || cmd === 3 || cmd === 4)) {
+    if (cmd === 0 || cmd === 3 || cmd === 4) {
       states[zone] = cmd as AirbagCommandState;
     }
   }

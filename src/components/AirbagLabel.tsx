@@ -5,19 +5,14 @@ import IconFont from './IconFont';
 import type {AirbagZone} from '../types';
 
 /**
- * 气囊区域对应的 iconfont 图标名称映射
+ * 气囊区域对应的 iconfont 图标名称映射（5 组）
  */
 const ZONE_ICON_MAP: Record<AirbagZone, string> = {
-  shoulderL: 'a-zu1175',
-  shoulderR: 'a-zu1175',
-  sideWingL: 'a-zu1216',
-  sideWingR: 'a-zu1216',
-  lumbarUp: 'a-zu1202',
-  lumbarDown: 'a-zu1202',
-  cushionFL: 'zu',
-  cushionFR: 'zu',
-  cushionRL: 'a-zu1215',
-  cushionRR: 'a-zu1215',
+  shoulder: 'a-zu1175',    // 肩部气囊
+  sideWing: 'a-zu1216',    // 侧翼气囊
+  lumbar: 'a-zu1202',      // 腰托气囊
+  hipFirm: 'zu',           // 臀部软硬度气囊
+  legRest: 'a-zu1215',     // 腿托气囊
 };
 
 interface AirbagLabelProps {
