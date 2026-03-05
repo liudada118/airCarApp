@@ -78,7 +78,7 @@ interface CmdLog {
 
 interface CustomAirbagScreenProps {
   onClose: () => void;
-  onSaveSuccess: () => void;
+  onSaveSuccess: (values: CustomAirbagValues) => void;
   initialValues?: CustomAirbagValues;
   adaptiveEnabled?: boolean;
 }
@@ -185,14 +185,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     onClose();
   }, [adaptiveEnabled, onClose]);
 
-  // 保存成功时也恢复算法模式
+  // 保存成功时也恢复算法模式，并将当前气囊值回传给 App 层持久化
   const handleSaveAndRestore = useCallback(() => {
     if (adaptiveEnabled) {
       sm?.setAlgoMode?.(true);
       console.log('[AlgoMode] 保存成功，自适应已开启，恢复算法模式');
     }
-    onSaveSuccess();
-  }, [adaptiveEnabled, onSaveSuccess]);
+    onSaveSuccess(airbagValues);
+  }, [adaptiveEnabled, onSaveSuccess, airbagValues]);
 
   // 监听 Native 端发送的气囊指令事件
   useEffect(() => {
@@ -285,7 +285,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     }
     setAirbagValues(prev => ({
       ...prev,
-      [selectedZone]: Math.min(prev[selectedZone] + 1, MAX_VALUE),
+      [selectedZone]: prev[selectedZone] + 1,
     }));
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] + 1}));
     // 发送充气指令
@@ -301,7 +301,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     }
     setAirbagValues(prev => ({
       ...prev,
-      [selectedZone]: Math.max(prev[selectedZone] - 1, MIN_VALUE),
+      [selectedZone]: prev[selectedZone] - 1,
     }));
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] - 1}));
     // 发送放气指令
@@ -442,19 +442,18 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
               </View>
             </TouchableOpacity>
           </View>
+          {/* 锁定进度条（绝对定位在标题栏底部，不占空间） */}
+          {isLocked && (
+            <View style={styles.lockProgressBar}>
+              <Animated.View
+                style={[
+                  styles.lockProgressFill,
+                  {width: lockProgressWidth},
+                ]}
+              />
+            </View>
+          )}
         </View>
-
-        {/* 锁定进度条 */}
-        {isLocked && (
-          <View style={styles.lockProgressBar}>
-            <Animated.View
-              style={[
-                styles.lockProgressFill,
-                {width: lockProgressWidth},
-              ]}
-            />
-          </View>
-        )}
 
         {/* 主体内容 */}
         <View style={styles.bodyWrapper}>
@@ -464,8 +463,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
               <AdjustButtons
                 onIncrease={handleIncrease}
                 onDecrease={handleDecrease}
-                canIncrease={currentValue < MAX_VALUE}
-                canDecrease={currentValue > MIN_VALUE}
+                canIncrease={true}
+                canDecrease={true}
                 disabled={!selectedZone || isLocked}
               />
               {/* 锁定遮罩层提示 */}
@@ -726,6 +725,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.sm,
+    position: 'relative',
   },
   titleLeft: {
     flexDirection: 'row',
@@ -764,18 +764,21 @@ const styles = StyleSheet.create({
     color: '#58A6FF',
     fontWeight: '600',
   },
-  // ─── 锁定进度条 ───
+  // ─── 锁定进度条（绝对定位在标题栏底部，不占空间） ───
   lockProgressBar: {
-    height: 3,
+    position: 'absolute',
+    bottom: -2,
+    left: 0,
+    right: 0,
+    height: 2,
     backgroundColor: 'rgba(88, 166, 255, 0.15)',
-    borderRadius: 2,
-    marginBottom: Spacing.sm,
+    borderRadius: 1,
     overflow: 'hidden',
   },
   lockProgressFill: {
     height: '100%',
     backgroundColor: '#58A6FF',
-    borderRadius: 2,
+    borderRadius: 1,
   },
   // ─── 锁定遮罩 ───
   lockOverlay: {

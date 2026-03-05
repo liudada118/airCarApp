@@ -455,9 +455,34 @@ class SerialModule(
         }
     }
 
-    // ─── 3D 点图配置持久化（SharedPreferences） ───────────────────────
+      // ─── 3D 点图配置持久化（SharedPreferences） ───────────────────
     private val prefs by lazy {
         reactContext.getSharedPreferences("point_settings", Context.MODE_PRIVATE)
+    }
+
+    // ─── 气囊设置持久化（SharedPreferences） ───────────────────
+    private val airbagPrefs by lazy {
+        reactContext.getSharedPreferences("airbag_settings", Context.MODE_PRIVATE)
+    }
+
+    @ReactMethod
+    fun saveAirbagSettings(jsonStr: String, promise: Promise) {
+        try {
+            airbagPrefs.edit().putString("custom_airbag_values", jsonStr).apply()
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("SAVE_ERROR", e.message ?: "save airbag settings failed")
+        }
+    }
+
+    @ReactMethod
+    fun loadAirbagSettings(promise: Promise) {
+        try {
+            val json = airbagPrefs.getString("custom_airbag_values", null)
+            promise.resolve(json)
+        } catch (e: Exception) {
+            promise.reject("LOAD_ERROR", e.message ?: "load airbag settings failed")
+        }
     }
 
     @ReactMethod
