@@ -131,4 +131,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CustomAirbagLabel;
+export default React.memo(CustomAirbagLabel);
