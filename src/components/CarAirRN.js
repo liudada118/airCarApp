@@ -808,6 +808,18 @@ function CarAirRNInner({data = [], style}, ref) {
     isBaselineActive() {
       return !!stateRef.current.baseline;
     },
+    /** 算法判断离座时调用：立即清零 3D 图所有点位数据 */
+    resetToZero() {
+      const fs = stateRef.current;
+      // 重置平滑缓冲区
+      fs.rawSmoothInited = false;
+      fs.smoothBig = createSmoothBig();
+      // 重置零帧计数
+      fs._zeroFrameCount = 0;
+      // 强制重新渲染
+      fs.lastDataHash = -1;
+      fs.dirty = true;
+    },
   }));
 
   // ─── 调节面板状态 ──────────────────────────────────────────────────
@@ -1201,8 +1213,11 @@ function CarAirRNInner({data = [], style}, ref) {
             hash += (currentData[si] || 0);
           }
         }
+        // 全 0 帧时 hash=0，如果上一帧也是 0 会被跳过，需要特殊处理
+        // 当存在未完成的零帧计数时，强制更新
+        const hasZeroPending = (frameState._zeroFrameCount || 0) > 0 && hash === 0;
 
-        if (hash !== frameState.lastDataHash || !frameState.lastSeatUpdate) {
+        if (hash !== frameState.lastDataHash || !frameState.lastSeatUpdate || hasZeroPending) {
           frameState.lastDataHash = hash;
           const seatData = normalizeSeatData(currentData);
 
@@ -1213,19 +1228,35 @@ function CarAirRNInner({data = [], style}, ref) {
             }
           }
 
-          // 干扰帧检测：气囊动作时传感器可能返回全 0 或异常低值数据
+          // 全 0 帧检测：气囊动作时传感器可能返回全 0 或异常低值数据
           const _dynSettings = pointSettingsRef.current;
           const zeroThreshold = _dynSettings.zeroFrameThreshold || 10;
           let frameSum = 0;
           for (let zi = 0; zi < 144; zi++) {
             frameSum += seatData[zi];
           }
+          const isZeroFrame = frameSum < zeroThreshold;
 
-          // 检测1：帧总和低于阈值，视为全0干扰帧
-          if (frameSum < zeroThreshold && frameState.rawSmoothInited) {
-            frameState.lastSeatUpdate = now;
-            frameRef.current = requestAnimationFrame(animate);
-            return;
+          if (isZeroFrame) {
+            // 全 0 帧：可能是离座或气囊动作干扰
+            if (!frameState._zeroFrameCount) {
+              frameState._zeroFrameCount = 0;
+            }
+            frameState._zeroFrameCount++;
+
+            if (frameState._zeroFrameCount <= 3 && frameState.rawSmoothInited) {
+              // 连续 3 帧以内的全 0：可能是气囊动作干扰，跳过不更新
+              frameState.lastSeatUpdate = now;
+              frameRef.current = requestAnimationFrame(animate);
+              return;
+            }
+            // 连续超过 3 帧全 0：真正离座，清零 3D 图
+            // 重置平滑缓冲区，让 3D 图归零
+            frameState.rawSmoothInited = false;
+            frameState.smoothBig = createSmoothBig();
+          } else {
+            // 非零帧，重置计数器
+            frameState._zeroFrameCount = 0;
           }
 
 
