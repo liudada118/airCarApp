@@ -513,9 +513,17 @@ class SerialModule(
     @ReactMethod
     fun saveAirbagSettings(jsonStr: String, promise: Promise) {
         try {
-            airbagPrefs.edit().putString("custom_airbag_values", jsonStr).apply()
-            promise.resolve(true)
+            // 使用 commit() 同步写入磁盘，确保数据持久化完成后再返回
+            val success = airbagPrefs.edit().putString("custom_airbag_values", jsonStr).commit()
+            if (success) {
+                Log.i(logTag, "[AirbagStorage] SharedPreferences commit 成功: $jsonStr")
+                promise.resolve(true)
+            } else {
+                Log.w(logTag, "[AirbagStorage] SharedPreferences commit 返回 false")
+                promise.reject("SAVE_ERROR", "SharedPreferences commit returned false")
+            }
         } catch (e: Exception) {
+            Log.e(logTag, "[AirbagStorage] SharedPreferences 保存异常", e)
             promise.reject("SAVE_ERROR", e.message ?: "save airbag settings failed")
         }
     }
