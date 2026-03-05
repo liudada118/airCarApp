@@ -228,6 +228,8 @@ function parseAlgoResult(resultJson: string): {
     const bodyShapeInfo: AlgoBodyShapeInfo = parsed.body_shape_info ?? {
       ...DEFAULT_BODY_SHAPE_INFO,
     };
+    // 调试：打印离座状态
+    console.log('[SeatStatus] seat_status:', JSON.stringify(parsed.seat_status), 'seat_state:', parsed.seat_state, '=> is_off_seat:', algoSeatStatus.is_off_seat, 'state:', algoSeatStatus.state);
     // 调试：打印 body_shape_info
     console.log('[BodyShape] raw:', JSON.stringify(parsed.body_shape_info), 'state:', bodyShapeInfo.body_shape_state, 'shape:', bodyShapeInfo.body_shape);
 
@@ -463,6 +465,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     if (parsed.algoSeatStatus.is_off_seat) {
       sensorDataRef.current = INITIAL_SENSOR_FRAME;
       // 直接调用 CarAirRN 的 resetToZero，立即清零 3D 点位数据
+      const hasRef = !!carAirRef.current;
+      const hasMethod = !!carAirRef.current?.resetToZero;
+      console.log('[3D清零] 离座触发清零! carAirRef存在:', hasRef, 'resetToZero存在:', hasMethod);
       carAirRef.current?.resetToZero?.();
     }
     // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
