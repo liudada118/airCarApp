@@ -1,6 +1,6 @@
 # 架构文档
 
-> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 18:45
+> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 22:30
 
 ## 1. 项目概述
 
@@ -176,6 +176,7 @@ graph TD
 | 2026-03-05 18:10 | 依赖维护 | 执行 npm install @react-native-async-storage/async-storage，校准锁文件中的包来源并同步平台相关依赖条目 |
 | 2026-03-05 18:31 | 依赖修复 | 补充安装 expo-file-system 依赖，修复 CarAirRN 页面运行时 Metro 无法解析模块导致的 500 报错 |
 | 2026-03-05 18:45 | 构建修复 | 修复 Android 构建链路中的仓库解析问题：为 AsyncStorage 补充本地 Maven 仓库并扩展仓库补丁脚本，解决 TLS 握手失败后续的依赖解析失败 |
+| 2026-03-05 22:30 | baocun v2 | 自定义气囊加载逻辑重构 | CustomAirbagScreen 不再依赖 App 层 initialValues，挂载时始终主动从存储中读取；SharedPreferences > AsyncStorage > initialValues > 默认值；增加保存后回读验证；添加全链路调试日志 |
 
 ## 7. 更新日志
 
@@ -200,6 +201,7 @@ graph TD
 | 2026-03-05 18:10 | 依赖升级 | 安装并确认 @react-native-async-storage/async-storage 依赖可用，更新 package-lock.json 与 yarn.lock 锁定信息 |
 | 2026-03-05 18:31 | 修复缺陷 | 修复 `UnableToResolveError: expo-file-system`：为项目补充 `expo-file-system@~19.0.21` 依赖并更新锁文件 |
 | 2026-03-05 18:45 | 配置变更 | 修复 Gradle 依赖仓库配置：将 `@react-native-async-storage` 模块纳入仓库补丁覆盖，并在 `android/settings.gradle` 增加其 `local_repo`，恢复 `npm run android` 构建安装链路 |
+| 2026-03-05 22:30 | 修复缺陷 | 重构加载逻辑：CustomAirbagScreen 挂载时始终主动从存储读取，不依赖 App 层 props 传值；增加保存后回读验证；添加全链路调试日志 |
 
 ---
 
