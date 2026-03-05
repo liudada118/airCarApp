@@ -664,6 +664,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       },
     );
 
+    const modeSub = emitter.addListener('onSerialMode', (event: {data?: string; modeValue?: number; manual?: boolean; auto?: boolean}) => {
+      const isAuto = event.auto === true;
+      const isManual = event.manual === true;
+      if (isAuto) {
+        // 模式帧指示自动模式 → 开启自适应调节
+        onAdaptiveChange(true);
+        console.log('[ModeFrame] 收到自动模式帧，自适应调节已开启');
+      } else if (isManual) {
+        // 模式帧指示手动模式 → 关闭自适应调节，气囊全灰
+        onAdaptiveChange(false);
+        setAlgoState(prev => ({
+          ...prev,
+          commandStates: DEFAULT_AIRBAG_COMMAND_STATES as AirbagCommandStates,
+          rawCommand: null,
+        }));
+        console.log('[ModeFrame] 收到手动模式帧，自适应调节已关闭，气囊状态已清空');
+      }
+    });
+
     const nonStdSub = emitter.addListener('onNonStandardFrame', (event: {data?: string; hex?: string; length?: number; timestamp?: number}) => {
       const entry = {
         hex: event.hex ?? '',
@@ -680,9 +699,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     return () => {
       dataSub.remove();
       resultSub.remove();
+      modeSub.remove();
       nonStdSub.remove();
     };
-  }, [handleAlgoResult]);
+  }, [handleAlgoResult, onAdaptiveChange]);
 
   // ─── 解构 algoState，避免大量代码修改 ────────────────────────
   const {seatStatus, algoSeatStatus, bodyShapeInfo, commandStates, rawCommand, livingStatus, bodyType, realtimeData} = algoState;
@@ -847,57 +867,40 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
         {/* ─── 右侧面板 ─── */}
         <View style={styles.rightPanel}>
-          {/* 自适应调节开关 */}
+          {/* 自适应调节状态（由模式帧控制） */}
           <View style={styles.adaptiveSection}>
             <View style={styles.sectionHeader}>
               <IconFont name="bianji" size={14} color={Colors.textGray} />
               <Text style={styles.sectionTitle}>自适应调节</Text>
+              <Text style={{fontSize: 10, color: Colors.textLightGray, marginLeft: 4}}>(模式帧控制)</Text>
             </View>
             <View style={styles.toggleContainer}>
-              <TouchableOpacity
+              <View
                 style={[
                   styles.toggleButton,
                   adaptiveEnabled && styles.toggleButtonActive,
-                ]}
-                onPress={() => {
-                  onAdaptiveChange(true);
-                  SerialModule?.setAlgoMode?.(true);
-                  console.log('[AlgoMode] 自适应调节开启，算法模式已启动');
-                }}
-                activeOpacity={0.7}>
+                ]}>
                 <Text
                   style={[
                     styles.toggleText,
                     adaptiveEnabled && styles.toggleTextActive,
                   ]}>
-                  开启
+                  自动
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </View>
+              <View
                 style={[
                   styles.toggleButton,
                   !adaptiveEnabled && styles.toggleButtonInactive,
-                ]}
-                onPress={() => {
-                  onAdaptiveChange(false);
-                  SerialModule?.setAlgoMode?.(false);
-                  // 清空气囊状态
-                  setAlgoState(prev => ({
-                    ...prev,
-                    commandStates: DEFAULT_AIRBAG_COMMAND_STATES as AirbagCommandStates,
-                    rawCommand: null,
-                  }));
-                  console.log('[AlgoMode] 自适应调节关闭，算法模式已停止，气囊状态已清空');
-                }}
-                activeOpacity={0.7}>
+                ]}>
                 <Text
                   style={[
                     styles.toggleText,
                     !adaptiveEnabled && styles.toggleTextInactive,
                   ]}>
-                  关闭
+                  手动
                 </Text>
-              </TouchableOpacity>
+              </View>
             </View>
           </View>
 
