@@ -124,11 +124,21 @@ class BodyShapeClassifier:
         self.classification_count = 0
 
         # 推理后端
-        self._backend = None  # 'onnx' 或 'pkl'
+        self._backend = None  # 'onnx', 'pkl' 或 'json'
         self._onnx_session = None
         self._onnx_input_name = None
-        self._feature_columns_order = None  # ONNX模式下的特征列顺序
+        self._feature_columns_order = None  # ONNX/JSON模式下的特征列顺序
         self._single_frame_feature_names = None  # 单帧特征名列表
+
+        # json 后端（纯 numpy KNN 推理，无需 sklearn/onnxruntime）
+        self._json_scaler_mean = None
+        self._json_scaler_scale = None
+        self._json_selector_mask = None
+        self._json_knn_X_train = None
+        self._json_knn_y_train = None
+        self._json_knn_n_neighbors = None
+        self._json_knn_weights = None
+        self._json_knn_classes = None
 
         # pkl fallback
         self.model = None
@@ -145,13 +155,26 @@ class BodyShapeClassifier:
 
     def _load_model(self, model_path: Optional[str] = None):
         """
-        加载模型，优先尝试 ONNX，回退到 pkl
+        加载模型，优先尝试 JSON（纯numpy），然后 ONNX，最后回退到 pkl
+
+        加载优先级：
+        1. JSON 后端（纯 numpy KNN，无外部依赖，最适合 Android/Chaquopy）
+        2. ONNX 后端（需要 onnxruntime）
+        3. PKL 后端（需要 scikit-learn，Chaquopy 下可能因 AssetFinder 问题失败）
 
         Args:
             model_path: 模型文件路径（.onnx 或 .pkl），None 则自动查找
         """
         base_dir = os.path.dirname(os.path.abspath(__file__))
         model_dir = os.path.join(base_dir, 'model')
+
+        # 始终优先尝试 JSON 后端（纯 numpy，无外部依赖）
+        params_path = os.path.join(model_dir, 'model_params.json')
+        if os.path.exists(params_path):
+            self._try_load_json(params_path)
+
+        if self._backend is not None:
+            return
 
         # 确定模型文件路径
         if model_path is not None:
@@ -163,7 +186,7 @@ class BodyShapeClassifier:
             else:
                 print(f"[体型三分类器] 不支持的模型格式: {model_path}")
         else:
-            # 自动查找：优先 ONNX
+            # 自动查找：ONNX -> PKL
             onnx_path = os.path.join(model_dir, 'body_shape_model.onnx')
             pkl_path = os.path.join(model_dir, 'body_shape_model.pkl')
 
@@ -174,9 +197,53 @@ class BodyShapeClassifier:
                 self._try_load_pkl(pkl_path)
 
             if self._backend is None:
-                print(f"[体型三分类器] 未找到模型文件")
+                print(f"[体型三分类器] 未找到可用模型")
+                print(f"  查找路径: {params_path}")
                 print(f"  查找路径: {onnx_path}")
                 print(f"  查找路径: {pkl_path}")
+
+    def _try_load_json(self, params_path: str):
+        """尝试加载 JSON 后端（纯 numpy KNN 推理，无需 sklearn/onnxruntime）"""
+        try:
+            with open(params_path, 'r', encoding='utf-8') as f:
+                params = json.load(f)
+
+            # 检查是否包含 KNN 训练数据
+            required_keys = ['knn_X_train', 'knn_y_train', 'knn_n_neighbors',
+                             'scaler_mean', 'scaler_scale', 'selector_mask',
+                             'feature_columns_order']
+            missing = [k for k in required_keys if k not in params]
+            if missing:
+                print(f"[体型三分类器] JSON参数文件缺少字段: {missing}，跳过JSON后端")
+                return
+
+            # 加载特征工程参数
+            self._feature_columns_order = params['feature_columns_order']
+            self._single_frame_feature_names = params.get('single_frame_feature_names')
+            self._json_scaler_mean = np.array(params['scaler_mean'], dtype=np.float64)
+            self._json_scaler_scale = np.array(params['scaler_scale'], dtype=np.float64)
+            # 防止除零
+            self._json_scaler_scale[self._json_scaler_scale == 0] = 1.0
+            self._json_selector_mask = np.array(params['selector_mask'], dtype=bool)
+
+            # 加载 KNN 参数
+            self._json_knn_X_train = np.array(params['knn_X_train'], dtype=np.float64)
+            self._json_knn_y_train = np.array(params['knn_y_train'], dtype=np.int64)
+            self._json_knn_n_neighbors = params['knn_n_neighbors']
+            self._json_knn_weights = params.get('knn_weights', 'distance')
+            self._json_knn_classes = np.array(params.get('knn_classes', [0, 1, 2]), dtype=np.int64)
+
+            self._backend = 'json'
+            print(f"[体型三分类器] JSON模型已加载（纯numpy KNN）: {params_path}")
+            print(f"  - 特征维度: {params['n_features_in']} -> 选择{params['n_features_selected']}")
+            print(f"  - KNN训练样本: {self._json_knn_X_train.shape[0]}")
+            print(f"  - KNN邻居数: {self._json_knn_n_neighbors}")
+            print(f"  - 模型版本: {params.get('version', '未知')}")
+
+        except Exception as e:
+            print(f"[体型三分类器] JSON后端加载失败: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _try_load_onnx(self, onnx_path: str, model_dir: str):
         """尝试加载 ONNX 模型"""
@@ -665,7 +732,9 @@ class BodyShapeClassifier:
             # 解析所有缓冲帧
             parsed_frames = [self._parse_sensor_data(raw) for raw in self.frame_buffer]
 
-            if self._backend == 'onnx':
+            if self._backend == 'json':
+                proba = self._classify_json(parsed_frames)
+            elif self._backend == 'onnx':
                 proba = self._classify_onnx(parsed_frames)
             elif self._backend == 'pkl':
                 proba = self._classify_pkl(parsed_frames)
@@ -742,6 +811,83 @@ class BodyShapeClassifier:
         # 输出: [labels, probabilities]
         proba = results[1][0]  # shape=(3,)
         return np.array(proba, dtype=np.float64)
+
+    def _classify_json(self, parsed_frames: List[Dict]) -> np.ndarray:
+        """
+        JSON 后端推理：纯 numpy 实现的 KNN 分类
+
+        流程：
+        1. 提取286维特征（复用 _extract_features_onnx）
+        2. StandardScaler 标准化
+        3. SelectKBest 特征选择
+        4. KNN 距离加权投票
+
+        Args:
+            parsed_frames: 解析后的帧数据列表
+
+        Returns:
+            概率数组 shape=(3,)
+        """
+        # 1. 特征提取（286维）
+        X_raw = self._extract_features_onnx(parsed_frames)  # shape=(1, 286), float32
+        X = X_raw.astype(np.float64).flatten()  # shape=(286,)
+
+        # 2. StandardScaler 标准化
+        X_scaled = (X - self._json_scaler_mean) / self._json_scaler_scale
+
+        # 3. SelectKBest 特征选择
+        X_selected = X_scaled[self._json_selector_mask]  # shape=(n_selected,)
+
+        # 4. KNN 推理
+        return self._knn_predict_proba(X_selected)
+
+    def _knn_predict_proba(self, x: np.ndarray) -> np.ndarray:
+        """
+        纯 numpy 实现的 KNN 概率预测（distance 加权）
+
+        与 sklearn KNeighborsClassifier(weights='distance', metric='minkowski', p=2) 一致
+
+        Args:
+            x: 单个样本特征向量 shape=(n_features,)
+
+        Returns:
+            概率数组 shape=(n_classes,)
+        """
+        # 计算欧氏距离（minkowski p=2）
+        diffs = self._json_knn_X_train - x  # shape=(n_train, n_features)
+        distances = np.sqrt(np.sum(diffs ** 2, axis=1))  # shape=(n_train,)
+
+        # 找到 k 个最近邻
+        k = self._json_knn_n_neighbors
+        nn_indices = np.argsort(distances)[:k]
+        nn_distances = distances[nn_indices]
+        nn_labels = self._json_knn_y_train[nn_indices]
+
+        n_classes = len(self._json_knn_classes)
+        proba = np.zeros(n_classes, dtype=np.float64)
+
+        if self._json_knn_weights == 'distance':
+            # 距离加权：权重 = 1/distance，距离为0时该邻居权重为1其余为0
+            if np.any(nn_distances == 0):
+                # 有完全匹配的点
+                zero_mask = nn_distances == 0
+                for label in nn_labels[zero_mask]:
+                    proba[label] += 1.0
+            else:
+                weights = 1.0 / nn_distances
+                for label, w in zip(nn_labels, weights):
+                    proba[label] += w
+        else:
+            # uniform 权重
+            for label in nn_labels:
+                proba[label] += 1.0
+
+        # 归一化为概率
+        total = np.sum(proba)
+        if total > 0:
+            proba /= total
+
+        return proba
 
     def _classify_pkl(self, parsed_frames: List[Dict]) -> np.ndarray:
         """
