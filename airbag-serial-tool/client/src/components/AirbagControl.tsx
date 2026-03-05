@@ -36,22 +36,22 @@ const SEAT_IMG =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663390129888/Q9sJLLGbMLYzkLTt6EE66b/seat-diagram-cku5rB2r5MCmzkjcBahZYF.webp";
 
 /**
- * SVG overlay positions calibrated to the seat-diagram image.
+ * SVG overlay positions calibrated to the seat-diagram image via pixel analysis.
  * The image is 1792×2400 (aspect 0.747). The viewBox uses 100×134 to match.
- * Coordinates are tuned so each clickable rectangle sits on top of the
- * corresponding numbered zone in the generated seat image.
+ * Coordinates were derived by detecting cyan regions in the source image and
+ * converting pixel bounding-boxes to viewBox units.
  */
 const ZONE_RECTS: Record<number, { x: number; y: number; w: number; h: number }> = {
-  1:  { x: 27, y: 19, w: 20, h: 12 },
-  2:  { x: 53, y: 19, w: 20, h: 12 },
-  3:  { x: 18, y: 48, w: 14, h: 22 },
-  4:  { x: 68, y: 48, w: 14, h: 22 },
-  5:  { x: 35, y: 48, w: 30, h: 10 },
-  6:  { x: 35, y: 60, w: 30, h: 10 },
-  7:  { x: 30, y: 82, w: 18, h: 12 },
-  8:  { x: 52, y: 82, w: 18, h: 12 },
-  9:  { x: 25, y: 97, w: 22, h: 12 },
-  10: { x: 53, y: 97, w: 22, h: 12 },
+  1:  { x: 33, y: 37, w: 15, h: 7 },   // 左肩
+  2:  { x: 51, y: 37, w: 15, h: 7 },   // 右肩
+  3:  { x: 30, y: 63, w: 6,  h: 18 },  // 左侧翼
+  4:  { x: 64, y: 63, w: 6,  h: 18 },  // 右侧翼
+  5:  { x: 40, y: 63, w: 20, h: 9 },   // 上腰部
+  6:  { x: 40, y: 72, w: 20, h: 9 },   // 下腰部
+  7:  { x: 32, y: 90, w: 18, h: 11 },  // 左大腿
+  8:  { x: 50, y: 90, w: 18, h: 11 },  // 右大腿
+  9:  { x: 31, y: 103, w: 17, h: 6 },  // 左前坐垫
+  10: { x: 52, y: 103, w: 17, h: 6 },  // 右前坐垫
 };
 
 export default function AirbagControl() {
