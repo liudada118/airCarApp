@@ -82,4 +82,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AdjustButtons;
+export default React.memo(AdjustButtons);

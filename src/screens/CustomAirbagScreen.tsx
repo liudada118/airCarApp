@@ -1,4 +1,4 @@
-import React, {useState, useCallback, useRef, useEffect} from 'react';
+import React, {useState, useCallback, useRef, useEffect, useMemo} from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ import {DEFAULT_CUSTOM_AIRBAG_VALUES, ALL_CUSTOM_AIRBAG_ZONES} from '../types';
 const ASYNC_STORAGE_KEY = 'custom_airbag_values';
 
 const sm = NativeModules.SerialModule;
+const serialEmitter = sm ? new NativeEventEmitter(sm as never) : null;
 
 /** 气囊区域配置 - 5 组气囊 */
 const AIRBAG_ZONES: CustomAirbagZoneConfig[] = [
@@ -98,7 +99,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // ━━━ 同步初始化：用 initialValues 作为初始值，确保首次渲染就有正确的值 ━━━
   const initValues = initialValues || DEFAULT_CUSTOM_AIRBAG_VALUES;
-  console.log('[CustomAirbag] 同步初始化 initValues:', JSON.stringify(initValues));
 
   const [airbagValues, setAirbagValues] = useState<CustomAirbagValues>(initValues);
   const [storageLoaded, setStorageLoaded] = useState(false);
@@ -106,7 +106,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   // 异步兑底：从存储中读取，如果存储中的值与 initValues 不同则更新
   useEffect(() => {
     const loadSavedValues = async () => {
-      console.log('[CustomAirbag] 开始异步加载已保存的气囊值...');
+      if (__DEV__) console.log('[CustomAirbag] 异步加载气囊值...');
 
       // 加载成功后同时更新 airbagValues 和 cmdCounts
       const applyLoadedValues = (values: CustomAirbagValues) => {
@@ -118,25 +118,25 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
           hipFirm: values.hipFirm,
           legRest: values.legRest,
         });
-        console.log('[CustomAirbag] 异步加载已同步 cmdCounts:', JSON.stringify(values));
+
       };
 
       // 1. 尝试从 SharedPreferences 读取
       if (sm?.loadAirbagSettings) {
         try {
           const json = await sm.loadAirbagSettings();
-          console.log('[CustomAirbag] SharedPreferences 返回:', json);
+
           if (json) {
             const parsed = JSON.parse(json) as CustomAirbagValues;
             const hasNonZero = Object.values(parsed).some(v => v !== 0);
-            console.log('[CustomAirbag] SharedPreferences 解析结果:', JSON.stringify(parsed), '有非零值:', hasNonZero);
+
             applyLoadedValues(parsed);
             AsyncStorage.setItem(ASYNC_STORAGE_KEY, json).catch(() => {});
             setStorageLoaded(true);
             return;
           }
         } catch (e: any) {
-          console.warn('[CustomAirbag] SharedPreferences 加载失败:', e?.message || e);
+          if (__DEV__) console.warn('[CustomAirbag] SP加载失败:', e?.message || e);
         }
       }
 
@@ -145,7 +145,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         const json = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
         if (json) {
           const parsed = JSON.parse(json) as CustomAirbagValues;
-          console.log('[CustomAirbag] AsyncStorage 解析结果:', JSON.stringify(parsed));
+
           applyLoadedValues(parsed);
           if (sm?.saveAirbagSettings) {
             sm.saveAirbagSettings(json).catch(() => {});
@@ -154,10 +154,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
           return;
         }
       } catch (e: any) {
-        console.warn('[CustomAirbag] AsyncStorage 加载失败:', e?.message || e);
+          if (__DEV__) console.warn('[CustomAirbag] AS加载失败:', e?.message || e);
       }
 
-      console.log('[CustomAirbag] 存储中无数据，使用同步初始化的值');
+
       setStorageLoaded(true);
     };
 
@@ -237,9 +237,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         }
         return newLogs;
       });
-      setTimeout(() => {
-        logScrollRef.current?.scrollToEnd({animated: true});
-      }, 50);
+      // 使用 requestAnimationFrame 代替 setTimeout 减少滚动开销
+      requestAnimationFrame(() => {
+        logScrollRef.current?.scrollToEnd({animated: false});
+      });
     },
     [],
   );
@@ -248,9 +249,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const handleClose = useCallback(() => {
     if (adaptiveEnabled) {
       sm?.setAlgoMode?.(true);
-      console.log('[AlgoMode] 退出自定义气囊调节，自适应已开启，恢复算法模式');
-    } else {
-      console.log('[AlgoMode] 退出自定义气囊调节，自适应已关闭，保持算法模式关闭');
     }
     onClose();
   }, [adaptiveEnabled, onClose]);
@@ -260,13 +258,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const handleSaveAndRestore = useCallback(async () => {
     if (adaptiveEnabled) {
       sm?.setAlgoMode?.(true);
-      console.log('[AlgoMode] 保存成功，自适应已开启，恢复算法模式');
+
     }
     const latestValues = airbagValuesRef.current;
     const jsonStr = JSON.stringify(latestValues);
-    console.log('[AirbagStorage] ===== 开始保存 =====');
-    console.log('[AirbagStorage] airbagValuesRef.current:', jsonStr);
-    console.log('[AirbagStorage] 各区域值: 肩部=' + latestValues.shoulder + ' 侧翼=' + latestValues.sideWing + ' 腰托=' + latestValues.lumbar + ' 臀部=' + latestValues.hipFirm + ' 腿托=' + latestValues.legRest);
 
     // 并行写入 SharedPreferences + AsyncStorage，等待两者都完成
     const saveResults: {sp: boolean; as: boolean} = {sp: false, as: false};
@@ -276,41 +271,20 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       try {
         await sm.saveAirbagSettings(jsonStr);
         saveResults.sp = true;
-        console.log('[AirbagStorage] SharedPreferences 保存成功');
       } catch (e: any) {
-        console.warn('[AirbagStorage] SharedPreferences 保存失败:', e?.message || e);
+        if (__DEV__) console.warn('[AirbagStorage] SP保存失败:', e?.message || e);
       }
-    } else {
-      console.warn('[AirbagStorage] sm.saveAirbagSettings 不可用!');
     }
 
-    // 2. 写入 AsyncStorage（JS 层兜底）
+    // 2. 写入 AsyncStorage（JS 层兑底）
     try {
       await AsyncStorage.setItem(ASYNC_STORAGE_KEY, jsonStr);
       saveResults.as = true;
-      console.log('[AirbagStorage] AsyncStorage 保存成功');
     } catch (e: any) {
-      console.warn('[AirbagStorage] AsyncStorage 保存失败:', e?.message || e);
+      if (__DEV__) console.warn('[AirbagStorage] AS保存失败:', e?.message || e);
     }
 
-    // 3. 保存后立即回读验证
-    if (sm?.loadAirbagSettings) {
-      try {
-        const verifyJson = await sm.loadAirbagSettings();
-        console.log('[AirbagStorage] 保存后回读验证 SharedPreferences:', verifyJson);
-      } catch (e: any) {
-        console.warn('[AirbagStorage] 回读验证失败:', e?.message || e);
-      }
-    }
-    try {
-      const verifyAsync = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
-      console.log('[AirbagStorage] 保存后回读验证 AsyncStorage:', verifyAsync);
-    } catch (e: any) {
-      console.warn('[AirbagStorage] AsyncStorage 回读验证失败:', e?.message || e);
-    }
-
-    console.log('[AirbagStorage] 保存结果: SP=' + saveResults.sp + ' AS=' + saveResults.as);
-    console.log('[AirbagStorage] ===== 保存完成，回传 App 层 =====');
+    // 保存后回读验证已移除（性能优化，减少不必要的 IO 操作）
 
     // 回传给 App 层（更新内存状态 + 返回首页）
     onSaveSuccess(latestValues);
@@ -318,11 +292,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // 监听 Native 端发送的气囊指令事件
   useEffect(() => {
-    if (!sm) {
+    if (!sm || !serialEmitter) {
       return;
     }
-    const emitter = new NativeEventEmitter(sm as never);
-    const sub = emitter.addListener('onAirbagCommandSent', (event: any) => {
+    const sub = serialEmitter.addListener('onAirbagCommandSent', (event: any) => {
       addLog(
         event.zone || '',
         event.action || '',
@@ -337,14 +310,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const sendAirbagCmd = useCallback(
     async (zone: CustomAirbagZone, action: 'inflate' | 'deflate' | 'stop') => {
       if (!sm?.sendAirbagCommand) {
-        console.warn('[AirbagCmd] sendAirbagCommand not available');
+        if (__DEV__) console.warn('[AirbagCmd] sendAirbagCommand not available');
         addLog(zone, action, 'N/A (模块不可用)', 0);
         return;
       }
       try {
         await sm.sendAirbagCommand(zone, action);
       } catch (e: any) {
-        console.warn('[AirbagCmd] Error:', e?.message || e);
+        if (__DEV__) console.warn('[AirbagCmd] Error:', e?.message || e);
         addLog(zone, `${action}(失败)`, e?.message || 'error', 0);
       }
     },
@@ -379,7 +352,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         const targetZone = lastCmdZoneRef.current;
         if (targetZone) {
           sendAirbagCmd(targetZone, 'stop');
-          console.log(`[AirbagCmd] 1s保压: zone=${targetZone} action=stop`);
+
         }
         setIsLocked(false);
         lockTimerRef.current = null;
@@ -407,7 +380,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     }
     setAirbagValues(prev => {
       const newVal = prev[selectedZone] + 1;
-      console.log('[AirbagValues] ' + selectedZone + ' +1 => ' + newVal);
+
       return {...prev, [selectedZone]: newVal};
     });
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] + 1}));
@@ -424,7 +397,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     }
     setAirbagValues(prev => {
       const newVal = prev[selectedZone] - 1;
-      console.log('[AirbagValues] ' + selectedZone + ' -1 => ' + newVal);
+
       return {...prev, [selectedZone]: newVal};
     });
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] - 1}));
@@ -444,24 +417,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setModalType('saving');
 
     // 调用 Python 的 trigger_preference_recording，让算法采集当前压力数据并记录品味
-    if (sm?.triggerPreferenceRecording) {
-      sm.triggerPreferenceRecording(null)
-        .then((resultJson: string) => {
-          try {
-            const result = JSON.parse(resultJson);
-            if (result.success) {
-              console.log('[Preference] 品味记录已触发:', result);
-            } else {
-              console.warn('[Preference] 品味记录触发失败:', result.message || result.error);
-            }
-          } catch (e) {
-            console.warn('[Preference] 解析品味记录结果失败:', e);
-          }
-        })
-        .catch((e: any) => {
-          console.warn('[Preference] 调用 triggerPreferenceRecording 失败:', e?.message || e);
-        });
-    }
+    sm?.triggerPreferenceRecording?.(null)?.catch?.(() => {});
 
     savingTimerRef.current = setTimeout(() => {
       setModalType(null);
@@ -485,7 +441,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // 确认恢复默认
   const handleConfirmRestore = useCallback(() => {
-    console.log('[AirbagStorage] 恢复默认值');
+
     setModalType(null);
     setAirbagValues({...DEFAULT_CUSTOM_AIRBAG_VALUES});
     setSelectedZone('lumbar');
@@ -516,7 +472,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // 确认归零：将所有气囊值重置为 0，清除本地缓存，发送停止指令
   const handleConfirmReset = useCallback(async () => {
-    console.log('[AirbagStorage] 归零操作');
+
     setModalType(null);
 
     // 1. 重置 UI 状态
@@ -536,20 +492,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
     // 3. 清除本地缓存（同时写入全零值到存储）
     const zeroJson = JSON.stringify(zeroValues);
-    try {
-      await AsyncStorage.setItem(ASYNC_STORAGE_KEY, zeroJson);
-      console.log('[AirbagStorage] 归零 AsyncStorage 写入成功');
-    } catch (e: any) {
-      console.warn('[AirbagStorage] 归零 AsyncStorage 写入失败:', e?.message || e);
-    }
-    if (sm?.saveAirbagSettings) {
-      try {
-        await sm.saveAirbagSettings(zeroJson);
-        console.log('[AirbagStorage] 归零 SharedPreferences 写入成功');
-      } catch (e: any) {
-        console.warn('[AirbagStorage] 归零 SharedPreferences 写入失败:', e?.message || e);
-      }
-    }
+    await AsyncStorage.setItem(ASYNC_STORAGE_KEY, zeroJson).catch(() => {});
+    sm?.saveAirbagSettings?.(zeroJson)?.catch?.(() => {});
 
     setToast({
       visible: true,
@@ -579,15 +523,15 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     });
   }, []);
 
-  // 计算总操作数
-  const totalOps = ALL_CUSTOM_AIRBAG_ZONES.reduce(
-    (sum, z) => sum + Math.abs(cmdCounts[z]),
-    0,
+  // 计算总操作数（useMemo 避免每次渲染重新计算）
+  const totalOps = useMemo(
+    () => ALL_CUSTOM_AIRBAG_ZONES.reduce((sum, z) => sum + Math.abs(cmdCounts[z]), 0),
+    [cmdCounts],
   );
 
-  // 获取左侧和右侧的气囊区域
-  const leftZones = AIRBAG_ZONES.filter(z => z.side === 'left');
-  const rightZones = AIRBAG_ZONES.filter(z => z.side === 'right');
+  // 获取左侧和右侧的气囊区域（静态数据，useMemo 缓存）
+  const leftZones = useMemo(() => AIRBAG_ZONES.filter(z => z.side === 'left'), []);
+  const rightZones = useMemo(() => AIRBAG_ZONES.filter(z => z.side === 'right'), []);
 
   const currentValue = selectedZone ? airbagValues[selectedZone] : 0;
 

@@ -1,7 +1,6 @@
 import React from 'react';
 import {View, Image, StyleSheet} from 'react-native';
 import type {CustomAirbagZone, CustomAirbagValues} from '../types';
-import type {AirbagCommandState} from '../types';
 
 // 座椅背景图
 const SEAT_BG = require('../assets/images/seat_bg.png');
@@ -13,46 +12,6 @@ interface CustomSeatDiagramProps {
   /** 各气囊的数值，用于判断是否激活 */
   values?: Partial<CustomAirbagValues>;
 }
-
-/**
- * 箭头指示器（三角形）
- */
-const ArrowIndicator: React.FC<{
-  direction: 'up' | 'down';
-  size?: number;
-}> = ({direction, size = 10}) => {
-  return (
-    <View style={[arrowStyles.container, {width: size, height: size}]}>
-      <View
-        style={[
-          arrowStyles.arrow,
-          {
-            borderLeftWidth: size * 0.4,
-            borderRightWidth: size * 0.4,
-            borderBottomWidth: size * 0.6,
-            borderBottomColor: 'rgba(255,255,255,0.85)',
-            transform: [{rotate: direction === 'up' ? '0deg' : '180deg'}],
-          },
-        ]}
-      />
-    </View>
-  );
-};
-
-const arrowStyles = StyleSheet.create({
-  container: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  arrow: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-});
 
 /**
  * 根据是否选中获取气囊区域的样式
@@ -315,4 +274,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CustomSeatDiagram;
+export default React.memo(CustomSeatDiagram);
