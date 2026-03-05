@@ -85,6 +85,9 @@ class SerialModule(
     /** autoWrite 连续失败阈值，超过后通知 JS 层连接异常 */
     private val autoWriteFailThreshold = 3
 
+    /** 体型三分类是否已在第 100 帧触发（每次连接只触发一次） */
+    @Volatile private var bodyShapeTriggeredAt100 = false
+
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != permissionAction) return
@@ -301,6 +304,7 @@ class SerialModule(
     @ReactMethod
     fun close() {
         stopAutoWrite()
+        bodyShapeTriggeredAt100 = false
         try {
             closeActiveManager()
         } catch (e: Exception) {
@@ -674,9 +678,24 @@ class SerialModule(
                 emitSerialResult(data, resultJson, null)
                 // 始终更新 autoWrite 缓存，确保开启自适应时能立即发送最新指令
                 updateAutoWritePayloadFromResult(resultJson)
-                // 调试：打印体型三分类信息
+                // 解析算法返回的 frame_count，到第 100 帧时触发体型三分类
                 try {
                     val json = org.json.JSONObject(resultJson)
+                    val frameCount = json.optInt("frame_count", 0)
+
+                    // 第 100 帧时自动触发体型三分类（仅触发一次）
+                    if (frameCount >= 100 && !bodyShapeTriggeredAt100) {
+                        bodyShapeTriggeredAt100 = true
+                        Log.i(logTag, "[BodyShape] frame_count=$frameCount, 触发体型三分类识别")
+                        try {
+                            val triggerResult = module.callAttr("trigger_body_shape_classification").toString()
+                            Log.i(logTag, "[BodyShape] trigger_body_shape_classification 结果: $triggerResult")
+                        } catch (te: Exception) {
+                            Log.e(logTag, "[BodyShape] trigger_body_shape_classification 调用失败", te)
+                        }
+                    }
+
+                    // 调试：打印体型三分类信息
                     if (json.has("body_shape_info")) {
                         val bsi = json.getJSONObject("body_shape_info")
                         val state = bsi.optString("body_shape_state", "N/A")

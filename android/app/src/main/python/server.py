@@ -265,6 +265,33 @@ def get_preference_status():
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+# ─── 体型三分类接口（供 Chaquopy / Native 桥接调用） ─────────────
+
+def trigger_body_shape_classification():
+    """
+    触发体型三分类识别。
+
+    外部调用此方法启动体型识别流程：
+    1. 开始缓冲传感器数据
+    2. 采集指定帧数后自动分类
+    3. 通过 process_frame 返回值中的 body_shape_info 获取结果
+
+    Returns:
+        JSON 字符串 - 触发状态信息
+    """
+    try:
+        result = _system.trigger_body_shape_classification()
+        return json.dumps(_to_builtin(result), ensure_ascii=False)
+    except Exception as e:
+        import traceback
+        err_detail = traceback.format_exc()
+        return json.dumps({
+            "success": False,
+            "error": str(e),
+            "traceback": err_detail
+        }, ensure_ascii=False)
+
+
 def main():
     return
 
