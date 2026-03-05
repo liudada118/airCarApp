@@ -566,10 +566,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
     const removeDataListener = mockSerial.addDataListener(event => {
       if (event.data) {
-        // 离座时不更新 3D 数据，保持清空状态
-        if (seatStatusRef.current === 'away') return;
         const parsed = parseSerialFrame(event.data);
         if (parsed) {
+          // 检测传感器数据是否全为0（离座）：立即清零3D图
+          let frameSum = 0;
+          for (let i = 0; i < parsed.length; i++) { frameSum += parsed[i]; }
+          if (frameSum === 0) {
+            sensorDataRef.current = INITIAL_SENSOR_FRAME;
+            carAirRef.current?.resetToZero?.();
+            return;
+          }
+          // 离座状态时不更新 3D 数据，保持清空状态
+          if (seatStatusRef.current === 'away') return;
           sensorDataRef.current = parsed;
         }
       }
@@ -681,10 +689,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       const payload =
         event && typeof event.data === 'string' ? event.data : '';
       if (!payload) return;
-      // 离座时不更新 3D 数据，保持清空状态
-      if (seatStatusRef.current === 'away') return;
       const parsed = parseSerialFrame(payload);
       if (parsed) {
+        // 检测传感器数据是否全为0（离座）：立即清零3D图
+        let frameSum = 0;
+        for (let i = 0; i < parsed.length; i++) { frameSum += parsed[i]; }
+        if (frameSum === 0) {
+          sensorDataRef.current = INITIAL_SENSOR_FRAME;
+          carAirRef.current?.resetToZero?.();
+          return;
+        }
+        // 离座状态时不更新 3D 数据，保持清空状态
+        if (seatStatusRef.current === 'away') return;
         sensorDataRef.current = parsed;
         // 仅当矩阵弹窗打开时触发渲染更新
         if (showMatrixRef.current) {
