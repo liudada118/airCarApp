@@ -95,23 +95,22 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 }) => {
   const [connectionStatus] = useState<ConnectionStatus>('connected');
   const [selectedZone, setSelectedZone] = useState<CustomAirbagZone>('lumbar');
-  const [airbagValues, setAirbagValues] = useState<CustomAirbagValues>(
-    DEFAULT_CUSTOM_AIRBAG_VALUES,
-  );
+
+  // ━━━ 同步初始化：用 initialValues 作为初始值，确保首次渲染就有正确的值 ━━━
+  const initValues = initialValues || DEFAULT_CUSTOM_AIRBAG_VALUES;
+  console.log('[CustomAirbag] 同步初始化 initValues:', JSON.stringify(initValues));
+
+  const [airbagValues, setAirbagValues] = useState<CustomAirbagValues>(initValues);
   const [storageLoaded, setStorageLoaded] = useState(false);
 
-  // 组件挂载时始终主动从存储中读取最新值
-  // 不依赖 App 层传入的 initialValues，确保数据来源可靠
-  // 优先级：SharedPreferences(Native) > AsyncStorage(JS层) > initialValues(App层) > 默认值
+  // 异步兑底：从存储中读取，如果存储中的值与 initValues 不同则更新
   useEffect(() => {
     const loadSavedValues = async () => {
-      console.log('[CustomAirbag] 开始加载已保存的气囊值...');
-      console.log('[CustomAirbag] initialValues:', JSON.stringify(initialValues));
+      console.log('[CustomAirbag] 开始异步加载已保存的气囊值...');
 
       // 加载成功后同时更新 airbagValues 和 cmdCounts
       const applyLoadedValues = (values: CustomAirbagValues) => {
         setAirbagValues(values);
-        // 用已保存的值初始化 cmdCounts，让操作总和面板和气囊标签显示已保存的累计值
         setCmdCounts({
           shoulder: values.shoulder,
           sideWing: values.sideWing,
@@ -119,7 +118,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
           hipFirm: values.hipFirm,
           legRest: values.legRest,
         });
-        console.log('[CustomAirbag] 已同步 cmdCounts:', JSON.stringify(values));
+        console.log('[CustomAirbag] 异步加载已同步 cmdCounts:', JSON.stringify(values));
       };
 
       // 1. 尝试从 SharedPreferences 读取
@@ -132,7 +131,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             const hasNonZero = Object.values(parsed).some(v => v !== 0);
             console.log('[CustomAirbag] SharedPreferences 解析结果:', JSON.stringify(parsed), '有非零值:', hasNonZero);
             applyLoadedValues(parsed);
-            // 同步到 AsyncStorage
             AsyncStorage.setItem(ASYNC_STORAGE_KEY, json).catch(() => {});
             setStorageLoaded(true);
             return;
@@ -140,19 +138,15 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         } catch (e: any) {
           console.warn('[CustomAirbag] SharedPreferences 加载失败:', e?.message || e);
         }
-      } else {
-        console.warn('[CustomAirbag] sm.loadAirbagSettings 不可用');
       }
 
       // 2. 尝试从 AsyncStorage 读取
       try {
         const json = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
-        console.log('[CustomAirbag] AsyncStorage 返回:', json);
         if (json) {
           const parsed = JSON.parse(json) as CustomAirbagValues;
           console.log('[CustomAirbag] AsyncStorage 解析结果:', JSON.stringify(parsed));
           applyLoadedValues(parsed);
-          // 同步回 SharedPreferences
           if (sm?.saveAirbagSettings) {
             sm.saveAirbagSettings(json).catch(() => {});
           }
@@ -163,15 +157,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         console.warn('[CustomAirbag] AsyncStorage 加载失败:', e?.message || e);
       }
 
-      // 3. 存储中都没有，使用 App 层传入的 initialValues
-      if (initialValues) {
-        console.log('[CustomAirbag] 使用 App 层传入的 initialValues:', JSON.stringify(initialValues));
-        applyLoadedValues(initialValues);
-        setStorageLoaded(true);
-        return;
-      }
-
-      console.log('[CustomAirbag] 无已保存的气囊值，使用默认值');
+      console.log('[CustomAirbag] 存储中无数据，使用同步初始化的值');
       setStorageLoaded(true);
     };
 
@@ -196,12 +182,13 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const lastCmdZoneRef = useRef<CustomAirbagZone | null>(null);
 
   // 每个气囊的累计操作次数（充气 +1，放气 -1）
+  // ━━━ 同步初始化：用 initValues 作为初始值，确保首次渲染就显示上次保存的值 ━━━
   const [cmdCounts, setCmdCounts] = useState<Record<CustomAirbagZone, number>>({
-    shoulder: 0,
-    sideWing: 0,
-    lumbar: 0,
-    hipFirm: 0,
-    legRest: 0,
+    shoulder: initValues.shoulder,
+    sideWing: initValues.sideWing,
+    lumbar: initValues.lumbar,
+    hipFirm: initValues.hipFirm,
+    legRest: initValues.legRest,
   });
 
   const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -1,6 +1,6 @@
 # 架构文档
 
-> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 23:00
+> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 23:30
 
 ## 1. 项目概述
 
@@ -175,6 +175,7 @@ graph TD
 | 2026-03-05 21:00 | baocun | 自定义气囊调节本地缓存修复 | 修复保存后未缓存到本地的问题：增加 AsyncStorage 双重保障、SharedPreferences 改用 commit() 同步写入、保存时序优化 |
 | 2026-03-05 22:30 | baocun v2 | 自定义气囊加载逻辑重构 | CustomAirbagScreen 不再依赖 App 层 initialValues，挂载时始终主动从存储中读取；SharedPreferences > AsyncStorage > initialValues > 默认值；增加保存后回读验证；添加全链路调试日志 |
 | 2026-03-05 23:00 | baocun v3 | 操作总和面板显示已保存值 | 加载已保存值时同步初始化 cmdCounts，让操作总和面板和气囊标签显示已保存的累计值（如 +16、+30） |
+| 2026-03-05 23:30 | baocun v4 | 同步初始化修复 UI 不更新 | 根本原因：useState 初始值为全零，useEffect 异步 setCmdCounts 未触发重渲染；修复：用 initialValues 同步初始化 airbagValues 和 cmdCounts 的 useState，确保首次渲染就有正确的值 |
 
 ## 7. 更新日志
 
@@ -198,6 +199,7 @@ graph TD
 | 2026-03-05 21:00 | 修复缺陷 | 修复自定义气囊调节保存后未缓存到本地的问题：增加 AsyncStorage 双重保障、SharedPreferences 改用 commit() 同步写入、保存时序优化确保先完成写入再切换页面 |
 | 2026-03-05 22:30 | 修复缺陷 | 重构加载逻辑：CustomAirbagScreen 挂载时始终主动从存储读取，不依赖 App 层 props 传值；增加保存后回读验证；添加全链路调试日志 |
 | 2026-03-05 23:00 | 修复缺陷 | 操作总和面板和气囊标签显示已保存的累计值：加载已保存值时同步初始化 cmdCounts，再次进入页面时显示 +N/-N 而不是 0 |
+| 2026-03-05 23:30 | 修复缺陷 | 同步初始化修复 UI 不更新：用 initialValues 同步初始化 useState 的 airbagValues 和 cmdCounts，不再依赖 useEffect 异步设置，确保组件首次渲染就显示正确的值 |
 
 ---
 
