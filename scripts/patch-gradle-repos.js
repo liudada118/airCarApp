@@ -9,6 +9,7 @@ const targets = [
   "node_modules/@react-native/gradle-plugin/settings.gradle.kts",
   "node_modules/@react-native/gradle-plugin/settings-plugin/build.gradle.kts",
   "node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/build.gradle.kts",
+  "node_modules/@react-native-async-storage/async-storage/android/build.gradle",
   "node_modules/expo-modules-autolinking/android/expo-gradle-plugin/settings.gradle.kts",
   "node_modules/expo-modules-autolinking/android/expo-gradle-plugin/expo-autolinking-settings-plugin/build.gradle.kts",
   "node_modules/expo-modules-autolinking/android/expo-gradle-plugin/expo-autolinking-plugin/build.gradle.kts",

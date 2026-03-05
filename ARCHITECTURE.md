@@ -1,6 +1,6 @@
 # 架构文档
 
-> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 21:00
+> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-05 18:45
 
 ## 1. 项目概述
 
@@ -14,9 +14,9 @@
 | **UI 渲染** | Expo GL, Three.js | 用于 3D 座椅模型渲染 |
 | **后端/算法** | Python (via Chaquopy) | 3.11 (在 Android 端运行) |
 | **编程语言** | TypeScript, Kotlin, Python | 分别用于前端、Android Native 和算法 |
-| **包管理器** | pnpm, Gradle | 分别用于 Node.js 和 Android |
+| **包管理器** | npm, yarn, pnpm, Gradle | 分别用于 Node.js 依赖管理和 Android 构建 |
 | **部署环境** | Android | 通过 Gradle 编译 APK |
-| **其他关键库**| `react-native-safe-area-context`, `ruamel.yaml` | UI 适配、Python 端配置管理 |
+| **其他关键库**| `react-native-safe-area-context`, `expo-file-system`, `ruamel.yaml` | UI 适配、3D 模型文件读取、Python 端配置管理 |
 
 ## 3. 目录结构
 
@@ -173,6 +173,9 @@ graph TD
 | 2026-03-05 16:00 | 自适应调节改为模式帧控制 | 监听 onSerialMode 事件，根据 51 字节模式帧自动切换自适应调节状态，开关改为只读状态显示 |
 | 2026-03-05 16:30 | 合并 lzk 分支 | 合并串口稳定性修复、重连按钮、保压逻辑、体型显示等功能 |
 | 2026-03-05 21:00 | baocun | 自定义气囊调节本地缓存修复 | 修复保存后未缓存到本地的问题：增加 AsyncStorage 双重保障、SharedPreferences 改用 commit() 同步写入、保存时序优化 |
+| 2026-03-05 18:10 | 依赖维护 | 执行 npm install @react-native-async-storage/async-storage，校准锁文件中的包来源并同步平台相关依赖条目 |
+| 2026-03-05 18:31 | 依赖修复 | 补充安装 expo-file-system 依赖，修复 CarAirRN 页面运行时 Metro 无法解析模块导致的 500 报错 |
+| 2026-03-05 18:45 | 构建修复 | 修复 Android 构建链路中的仓库解析问题：为 AsyncStorage 补充本地 Maven 仓库并扩展仓库补丁脚本，解决 TLS 握手失败后续的依赖解析失败 |
 
 ## 7. 更新日志
 
@@ -194,6 +197,9 @@ graph TD
 | 2026-03-05 16:00 | 新增功能 | 自适应调节改为根据模式帧控制，开关变为只读状态显示 |
 | 2026-03-05 16:30 | 合并分支 | 合并 lzk 分支到 manus，解决所有冲突 |
 | 2026-03-05 21:00 | 修复缺陷 | 修复自定义气囊调节保存后未缓存到本地的问题：增加 AsyncStorage 双重保障、SharedPreferences 改用 commit() 同步写入、保存时序优化确保先完成写入再切换页面 |
+| 2026-03-05 18:10 | 依赖升级 | 安装并确认 @react-native-async-storage/async-storage 依赖可用，更新 package-lock.json 与 yarn.lock 锁定信息 |
+| 2026-03-05 18:31 | 修复缺陷 | 修复 `UnableToResolveError: expo-file-system`：为项目补充 `expo-file-system@~19.0.21` 依赖并更新锁文件 |
+| 2026-03-05 18:45 | 配置变更 | 修复 Gradle 依赖仓库配置：将 `@react-native-async-storage` 模块纳入仓库补丁覆盖，并在 `android/settings.gradle` 增加其 `local_repo`，恢复 `npm run android` 构建安装链路 |
 
 ---
 

@@ -17,6 +17,7 @@ dependencyResolutionManagement {
         maven { url "https://maven.aliyun.com/repository/central" }
         maven { url "https://jitpack.io" }
         mavenCentral()
+        maven { url "$rootDir/../node_modules/@react-native-async-storage/async-storage/android/local_repo" }
         maven { url "$rootDir/../node_modules/react-native/android" }
         maven { url "$rootDir/../node_modules/jsc-android/dist" }
     }
