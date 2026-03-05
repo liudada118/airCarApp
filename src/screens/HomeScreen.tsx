@@ -844,7 +844,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               <Text style={styles.airbagStatusText}>
                 {adaptiveEnabled
                   ? (bodyShapeInfo.body_shape
-                      ? `当前为${getBodyShapeLabel(bodyShapeInfo.body_shape)}自适应调节状态`
+                      ? `当前为\u201C${getBodyShapeLabel(bodyShapeInfo.body_shape)}\u201D体型自适应调节`
                       : '当前为自适应调节状态')
                   : '自适应调节已关闭'}
               </Text>

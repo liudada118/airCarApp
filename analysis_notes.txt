@@ -1,0 +1,32 @@
+体型分类数据流分析
+==================
+
+1. Python算法回传的 body_type 字段值：
+   - "大人" / "小孩" / "静物" / "未判断"
+   这是活体/体型二分类，不是体型三分类
+
+2. 体型三分类来自 body_shape_info.body_shape 字段：
+   - "瘦小" (Slim, label=0, ~45-48kg) → 轻盈型
+   - "中等" (Medium, label=1, ~60-72kg) → 均衡型
+   - "高大" (Large, label=2, ~90-92kg) → 稳健型
+
+3. 当前 HomeScreen 第844-849行已经有展示逻辑：
+   adaptiveEnabled
+     ? bodyShapeInfo.body_shape
+       ? `当前为${getBodyShapeLabel(bodyShapeInfo.body_shape)}自适应调节状态`
+       : '当前为自适应调节状态'
+     : '自适应调节已关闭'
+
+4. getBodyShapeLabel 函数已存在（第294-308行）：
+   '瘦小' → '轻盈型'
+   '中等' → '均衡型'  
+   '高大' → '稳健型'
+
+5. body_shape_info 结构：
+   - body_shape: '' | '瘦小' | '中等' | '高大'
+   - body_shape_state: 'IDLE' | 'COLLECTING' | 'CLASSIFYING' | 'COMPLETED' | 'DISABLED'
+   - confidence: 0.0-1.0
+   - probabilities: {瘦小: x, 中等: y, 高大: z}
+
+结论：体型三分类展示逻辑已经存在，但可能 body_shape_classification 功能默认是 disabled 的。
+需要确认配置中 body_shape_classification.enabled 的值。
