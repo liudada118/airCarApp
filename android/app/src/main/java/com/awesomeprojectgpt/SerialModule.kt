@@ -666,6 +666,21 @@ class SerialModule(
                 emitSerialResult(data, resultJson, null)
                 // 始终更新 autoWrite 缓存，确保开启自适应时能立即发送最新指令
                 updateAutoWritePayloadFromResult(resultJson)
+                // 调试：打印体型三分类信息
+                try {
+                    val json = org.json.JSONObject(resultJson)
+                    if (json.has("body_shape_info")) {
+                        val bsi = json.getJSONObject("body_shape_info")
+                        val state = bsi.optString("body_shape_state", "N/A")
+                        val shape = bsi.optString("body_shape", "")
+                        val confidence = bsi.optDouble("confidence", 0.0)
+                        Log.d(logTag, "[BodyShape] state=$state shape=$shape confidence=$confidence")
+                    } else {
+                        Log.d(logTag, "[BodyShape] body_shape_info 字段不存在")
+                    }
+                } catch (e: Exception) {
+                    Log.d(logTag, "[BodyShape] 解析失败: ${e.message}")
+                }
             } catch (e: Exception) {
                 Log.e(logTag, "python server call failed", e)
                 // Python 算法错误仅作为算法错误上报，不影响连接状态
