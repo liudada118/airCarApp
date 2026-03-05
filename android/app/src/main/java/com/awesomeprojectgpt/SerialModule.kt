@@ -658,22 +658,10 @@ class SerialModule(
 
     private fun handleModeFrame(values: List<Int>, data: String) {
         val modeValue = values.getOrNull(49) ?: -1
+        Log.i(logTag, "[ModeFrame] modeValue=$modeValue (0=auto, 1=manual)")
+        // 只发送事件通知 JS 端，不控制 autoWrite
+        // autoWrite 的启停由 JS 端通过 setAlgoMode 控制
         emitSerialMode(data, modeValue)
-        when (modeValue) {
-            0 -> {
-                if (!isAutoMode) {
-                    isAutoMode = true
-                    startAutoWrite()
-                }
-            }
-            1 -> {
-                if (isAutoMode) {
-                    isAutoMode = false
-                    stopAutoWrite()
-                }
-            }
-            else -> Log.w(logTag, "unknown mode value: $modeValue")
-        }
     }
 
     private fun parseCsvToIntList(data: String): List<Int>? {

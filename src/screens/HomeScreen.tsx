@@ -696,22 +696,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     );
 
     const modeSub = emitter.addListener('onSerialMode', (event: {data?: string; modeValue?: number; manual?: boolean; auto?: boolean}) => {
-      const isAuto = event.auto === true;
-      const isManual = event.manual === true;
-      if (isAuto) {
-        // 模式帧指示自动模式 → 开启自适应调节
-        onAdaptiveChange(true);
-        console.log('[ModeFrame] 收到自动模式帧，自适应调节已开启');
-      } else if (isManual) {
-        // 模式帧指示手动模式 → 关闭自适应调节，气囊全灰
-        onAdaptiveChange(false);
-        setAlgoState(prev => ({
-          ...prev,
-          commandStates: DEFAULT_AIRBAG_COMMAND_STATES as AirbagCommandStates,
-          rawCommand: null,
-        }));
-        console.log('[ModeFrame] 收到手动模式帧，自适应调节已关闭，气囊状态已清空');
-      }
+      // 模式帧仅记录日志，不控制自适应调节（自适应由用户手动开关控制）
+      console.log('[ModeFrame] modeValue=', event.modeValue, 'auto=', event.auto, 'manual=', event.manual);
     });
 
     const nonStdSub = emitter.addListener('onNonStandardFrame', (event: {data?: string; hex?: string; length?: number; timestamp?: number}) => {
@@ -921,41 +907,57 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
         {/* ─── 右侧面板 ─── */}
         <View style={styles.rightPanel}>
-          {/* 自适应调节状态（由模式帧控制） */}
+          {/* 自适应调节开关 */}
           <View style={styles.adaptiveSection}>
             <View style={styles.sectionHeader}>
               <IconFont name="bianji" size={14} color={Colors.textGray} />
               <Text style={styles.sectionTitle}>自适应调节</Text>
-              <Text style={{fontSize: 10, color: Colors.textLightGray, marginLeft: 4}}>(模式帧控制)</Text>
             </View>
             <View style={styles.toggleContainer}>
-              <View
+              <TouchableOpacity
                 style={[
                   styles.toggleButton,
                   adaptiveEnabled && styles.toggleButtonActive,
-                ]}>
+                ]}
+                onPress={() => {
+                  onAdaptiveChange(true);
+                  SerialModule?.setAlgoMode?.(true);
+                  console.log('[AlgoMode] 自适应调节已开启');
+                }}
+                activeOpacity={0.7}>
                 <Text
                   style={[
                     styles.toggleText,
                     adaptiveEnabled && styles.toggleTextActive,
                   ]}>
-                  自动
+                  开启
                 </Text>
-              </View>
-              <View
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[
                   styles.toggleButton,
                   !adaptiveEnabled && styles.toggleButtonInactive,
-                ]}>
-
+                ]}
+                onPress={() => {
+                  onAdaptiveChange(false);
+                  SerialModule?.setAlgoMode?.(false);
+                  // 发送全停保压帧
+                  SerialModule?.sendStopAllFrame?.().then(() => {
+                    console.log('[AlgoMode] 自适应调节关闭，已发送全停保压帧');
+                  }).catch((e: any) => {
+                    console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
+                  });
+                  console.log('[AlgoMode] 自适应调节已关闭');
+                }}
+                activeOpacity={0.7}>
                 <Text
                   style={[
                     styles.toggleText,
                     !adaptiveEnabled && styles.toggleTextInactive,
                   ]}>
-                  手动
+                  关闭
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
