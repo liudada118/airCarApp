@@ -426,6 +426,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     cushionRR: 3,
   });
 
+  // 用 ref 追踪离座状态，供 onSerialData 回调中判断（避免闭包陷阱）
+  const seatStatusRef = useRef<SeatStatus>('away');
   // sensorData 用 useRef 存储，3D 组件通过 data prop 读取，避免每帧 setState 触发重渲染
   const sensorDataRef = useRef<number[]>(INITIAL_SENSOR_FRAME);
   const [sensorDataVersion, setSensorDataVersion] = useState(0); // 仅矩阵弹窗需要时触发更新
@@ -444,8 +446,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const handleAlgoResult = useCallback((resultJson: string) => {
     const parsed = parseAlgoResult(resultJson);
     if (!parsed) return;
+    // 更新离座状态 ref
+    seatStatusRef.current = parsed.seatStatus;
     // 离座时清空 3D 压力云图数据
-    if (parsed.algoSeatStatus.is_off_seat) {
+    if (parsed.seatStatus === 'away') {
       sensorDataRef.current = INITIAL_SENSOR_FRAME;
     }
     // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
@@ -542,6 +546,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
     const removeDataListener = mockSerial.addDataListener(event => {
       if (event.data) {
+        // 离座时不更新 3D 数据，保持清空状态
+        if (seatStatusRef.current === 'away') return;
         const parsed = parseSerialFrame(event.data);
         if (parsed) {
           sensorDataRef.current = parsed;
@@ -655,6 +661,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       const payload =
         event && typeof event.data === 'string' ? event.data : '';
       if (!payload) return;
+      // 离座时不更新 3D 数据，保持清空状态
+      if (seatStatusRef.current === 'away') return;
       const parsed = parseSerialFrame(payload);
       if (parsed) {
         sensorDataRef.current = parsed;
