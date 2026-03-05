@@ -228,6 +228,8 @@ function parseAlgoResult(resultJson: string): {
     const bodyShapeInfo: AlgoBodyShapeInfo = parsed.body_shape_info ?? {
       ...DEFAULT_BODY_SHAPE_INFO,
     };
+    // 调试：打印 body_shape_info
+    console.log('[BodyShape] raw:', JSON.stringify(parsed.body_shape_info), 'state:', bodyShapeInfo.body_shape_state, 'shape:', bodyShapeInfo.body_shape);
 
     // 映射到简化的 SeatStatus
     const seatStatus: SeatStatus = algoSeatStatus.is_seated
