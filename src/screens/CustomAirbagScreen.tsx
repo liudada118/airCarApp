@@ -7,6 +7,7 @@ import {
   NativeModules,
   NativeEventEmitter,
   ScrollView,
+  Animated,
 } from 'react-native';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 import {
@@ -26,7 +27,7 @@ import type {
   ModalType,
   ConnectionStatus,
 } from '../types';
-import {DEFAULT_AIRBAG_VALUES} from '../types';
+import {DEFAULT_AIRBAG_VALUES, ALL_AIRBAG_ZONES} from '../types';
 
 const sm = NativeModules.SerialModule;
 
@@ -50,9 +51,21 @@ const ZONE_LABELS: Record<string, string> = {
   legRest: '腿托气囊',
 };
 
+/** 气囊区域简短名 */
+const ZONE_SHORT_LABELS: Record<string, string> = {
+  shoulder: '肩部',
+  sideWing: '侧翼',
+  lumbar: '腰托',
+  hipFirm: '臀部',
+  legRest: '腿托',
+};
+
 const MAX_VALUE = 10;
 const MIN_VALUE = 0;
 const MAX_LOG_LINES = 50;
+
+/** 锁定持续时间（毫秒） */
+const LOCK_DURATION_MS = 1000;
 
 interface CmdLog {
   id: number;
@@ -98,6 +111,13 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const logIdRef = useRef(0);
   const logScrollRef = useRef<ScrollView>(null);
 
+  // ─── 1秒锁定机制 ───
+  const [isLocked, setIsLocked] = useState(false);
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lockProgressAnim = useRef(new Animated.Value(0)).current;
+  // 记录锁定时操作的 zone，用于1秒后发送保压指令
+  const lastCmdZoneRef = useRef<AirbagZone | null>(null);
+
   // 每个气囊的累计操作次数（充气 +1，放气 -1）
   const [cmdCounts, setCmdCounts] = useState<Record<AirbagZone, number>>({
     shoulder: 0,
@@ -108,6 +128,15 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   });
 
   const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 清理锁定定时器
+  useEffect(() => {
+    return () => {
+      if (lockTimerRef.current) {
+        clearTimeout(lockTimerRef.current);
+      }
+    };
+  }, []);
 
   // 添加指令日志
   const addLog = useCallback(
@@ -133,13 +162,11 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             bytes,
           },
         ];
-        // 限制最大行数
         if (newLogs.length > MAX_LOG_LINES) {
           return newLogs.slice(-MAX_LOG_LINES);
         }
         return newLogs;
       });
-      // 自动滚动到底部
       setTimeout(() => {
         logScrollRef.current?.scrollToEnd({animated: true});
       }, 50);
@@ -202,40 +229,86 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     [addLog],
   );
 
+  // ─── 锁定按钮 + 1秒后保压 ───
+  const startLockAndHoldPressure = useCallback(
+    (zone: AirbagZone) => {
+      // 清除之前的定时器
+      if (lockTimerRef.current) {
+        clearTimeout(lockTimerRef.current);
+        lockTimerRef.current = null;
+      }
+
+      // 记录当前操作的 zone
+      lastCmdZoneRef.current = zone;
+
+      // 锁定所有按钮
+      setIsLocked(true);
+
+      // 启动进度条动画（0 → 1，持续 LOCK_DURATION_MS）
+      lockProgressAnim.setValue(0);
+      Animated.timing(lockProgressAnim, {
+        toValue: 1,
+        duration: LOCK_DURATION_MS,
+        useNativeDriver: false,
+      }).start();
+
+      // 1秒后发送保压（stop）指令并解锁
+      lockTimerRef.current = setTimeout(() => {
+        const targetZone = lastCmdZoneRef.current;
+        if (targetZone) {
+          sendAirbagCmd(targetZone, 'stop');
+          console.log(`[AirbagCmd] 1s保压: zone=${targetZone} action=stop`);
+        }
+        setIsLocked(false);
+        lockTimerRef.current = null;
+        lastCmdZoneRef.current = null;
+      }, LOCK_DURATION_MS);
+    },
+    [sendAirbagCmd, lockProgressAnim],
+  );
+
   // 选择气囊区域
-  const handleSelectZone = useCallback((zone: AirbagZone) => {
-    setSelectedZone(zone);
-  }, []);
+  const handleSelectZone = useCallback(
+    (zone: AirbagZone) => {
+      if (isLocked) {
+        return; // 锁定期间不允许切换
+      }
+      setSelectedZone(zone);
+    },
+    [isLocked],
+  );
 
   // 增加气囊值（充气）
   const handleIncrease = useCallback(() => {
-    if (!selectedZone) {
+    if (!selectedZone || isLocked) {
       return;
     }
     setAirbagValues(prev => ({
       ...prev,
       [selectedZone]: Math.min(prev[selectedZone] + 1, MAX_VALUE),
     }));
-    // 记录操作次数
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] + 1}));
     // 发送充气指令
     sendAirbagCmd(selectedZone, 'inflate');
-  }, [selectedZone, sendAirbagCmd]);
+    // 启动1秒锁定
+    startLockAndHoldPressure(selectedZone);
+  }, [selectedZone, isLocked, sendAirbagCmd, startLockAndHoldPressure]);
 
   // 减少气囊值（放气）
   const handleDecrease = useCallback(() => {
-    if (!selectedZone) {
+    if (!selectedZone || isLocked) {
       return;
     }
     setAirbagValues(prev => ({
       ...prev,
       [selectedZone]: Math.max(prev[selectedZone] - 1, MIN_VALUE),
     }));
-    // 记录操作次数
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] - 1}));
     // 发送放气指令
     sendAirbagCmd(selectedZone, 'deflate');
-  }, [selectedZone, sendAirbagCmd]);
+    // 启动1秒锁定
+    startLockAndHoldPressure(selectedZone);
+  }, [selectedZone, isLocked, sendAirbagCmd, startLockAndHoldPressure]);
 
   // 点击保存按钮
   const handleSavePress = useCallback(() => {
@@ -245,8 +318,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   // 确认保存
   const handleConfirmSave = useCallback(() => {
     setModalType('saving');
-
-    // 模拟保存过程（5秒）
     savingTimerRef.current = setTimeout(() => {
       setModalType(null);
       handleSaveAndRestore();
@@ -267,12 +338,11 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setModalType('confirmRestore');
   }, []);
 
-  // 确认恢复默认 — 同时发送全部停止指令
+  // 确认恢复默认
   const handleConfirmRestore = useCallback(() => {
     setModalType(null);
     setAirbagValues({...DEFAULT_AIRBAG_VALUES});
     setSelectedZone('lumbar');
-    // 清空操作次数
     setCmdCounts({
       shoulder: 0,
       sideWing: 0,
@@ -280,7 +350,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       hipFirm: 0,
       legRest: 0,
     });
-    // 发送停止指令给所有气囊
     AIRBAG_ZONES.forEach(z => sendAirbagCmd(z.key, 'stop'));
     setToast({
       visible: true,
@@ -299,11 +368,34 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setCmdLogs([]);
   }, []);
 
+  // 清空操作总和
+  const resetCounts = useCallback(() => {
+    setCmdCounts({
+      shoulder: 0,
+      sideWing: 0,
+      lumbar: 0,
+      hipFirm: 0,
+      legRest: 0,
+    });
+  }, []);
+
+  // 计算总操作数
+  const totalOps = ALL_AIRBAG_ZONES.reduce(
+    (sum, z) => sum + Math.abs(cmdCounts[z]),
+    0,
+  );
+
   // 获取左侧和右侧的气囊区域
   const leftZones = AIRBAG_ZONES.filter(z => z.side === 'left');
   const rightZones = AIRBAG_ZONES.filter(z => z.side === 'right');
 
   const currentValue = selectedZone ? airbagValues[selectedZone] : 0;
+
+  // 锁定进度条宽度插值
+  const lockProgressWidth = lockProgressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   return (
     <View style={styles.container}>
@@ -319,6 +411,13 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
               color={Colors.textWhite}
             />
             <Text style={styles.title}>自定义气囊调节</Text>
+            {/* 锁定状态指示 */}
+            {isLocked && (
+              <View style={styles.lockBadge}>
+                <View style={styles.lockDot} />
+                <Text style={styles.lockText}>保压中...</Text>
+              </View>
+            )}
           </View>
           <View style={styles.titleRight}>
             <TouchableOpacity
@@ -345,6 +444,18 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
           </View>
         </View>
 
+        {/* 锁定进度条 */}
+        {isLocked && (
+          <View style={styles.lockProgressBar}>
+            <Animated.View
+              style={[
+                styles.lockProgressFill,
+                {width: lockProgressWidth},
+              ]}
+            />
+          </View>
+        )}
+
         {/* 主体内容 */}
         <View style={styles.bodyWrapper}>
           <View style={styles.body}>
@@ -355,8 +466,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
                 onDecrease={handleDecrease}
                 canIncrease={currentValue < MAX_VALUE}
                 canDecrease={currentValue > MIN_VALUE}
-                disabled={!selectedZone}
+                disabled={!selectedZone || isLocked}
               />
+              {/* 锁定遮罩层提示 */}
+              {isLocked && (
+                <View style={styles.lockOverlay}>
+                  <Text style={styles.lockOverlayText}>1s</Text>
+                </View>
+              )}
             </View>
 
             {/* 左侧标签（肩部、腰托、腿托） */}
@@ -399,52 +516,138 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             </View>
           </View>
 
-          {/* 右侧日志面板 */}
+          {/* 右侧面板区域 */}
           {showLog && (
-            <View style={styles.logPanel}>
-              <View style={styles.logHeader}>
-                <Text style={styles.logTitle}>串口指令日志</Text>
-                <TouchableOpacity onPress={clearLogs} activeOpacity={0.7}>
-                  <Text style={styles.logClearText}>清空</Text>
-                </TouchableOpacity>
+            <View style={styles.rightPanel}>
+              {/* ─── 操作总和面板 ─── */}
+              <View style={styles.summaryPanel}>
+                <View style={styles.summaryHeader}>
+                  <Text style={styles.summaryTitle}>操作总和</Text>
+                  <TouchableOpacity onPress={resetCounts} activeOpacity={0.7}>
+                    <Text style={styles.summaryClearText}>清零</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.summaryBody}>
+                  {ALL_AIRBAG_ZONES.map(zone => {
+                    const count = cmdCounts[zone];
+                    const isPositive = count > 0;
+                    const isNegative = count < 0;
+                    const isZero = count === 0;
+                    const barWidth = Math.min(Math.abs(count), 10);
+                    const barPercent = (barWidth / 10) * 100;
+                    const barColor = isPositive
+                      ? '#58A6FF'
+                      : isNegative
+                      ? '#F0883E'
+                      : 'transparent';
+
+                    return (
+                      <View key={zone} style={styles.summaryRow}>
+                        <Text
+                          style={[
+                            styles.summaryZone,
+                            selectedZone === zone && styles.summaryZoneActive,
+                          ]}>
+                          {ZONE_SHORT_LABELS[zone]}
+                        </Text>
+                        {/* 柱状图 */}
+                        <View style={styles.summaryBarBg}>
+                          {/* 中线 */}
+                          <View style={styles.summaryBarCenter} />
+                          {/* 正向条（向右） */}
+                          {isPositive && (
+                            <View
+                              style={[
+                                styles.summaryBarFill,
+                                styles.summaryBarRight,
+                                {
+                                  width: `${barPercent / 2}%`,
+                                  backgroundColor: barColor,
+                                },
+                              ]}
+                            />
+                          )}
+                          {/* 负向条（向左） */}
+                          {isNegative && (
+                            <View
+                              style={[
+                                styles.summaryBarFill,
+                                styles.summaryBarLeft,
+                                {
+                                  width: `${barPercent / 2}%`,
+                                  backgroundColor: barColor,
+                                },
+                              ]}
+                            />
+                          )}
+                        </View>
+                        {/* 数值 */}
+                        <Text
+                          style={[
+                            styles.summaryValue,
+                            isPositive && styles.summaryValuePositive,
+                            isNegative && styles.summaryValueNegative,
+                            isZero && styles.summaryValueZero,
+                          ]}>
+                          {isPositive ? `+${count}` : count}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                  {/* 总操作数 */}
+                  <View style={styles.summaryTotalRow}>
+                    <Text style={styles.summaryTotalLabel}>总操作</Text>
+                    <Text style={styles.summaryTotalValue}>{totalOps} 次</Text>
+                  </View>
+                </View>
               </View>
-              <ScrollView
-                ref={logScrollRef}
-                style={styles.logScroll}
-                showsVerticalScrollIndicator={true}>
-                {cmdLogs.length === 0 ? (
-                  <Text style={styles.logEmpty}>暂无指令记录</Text>
-                ) : (
-                  cmdLogs.map(log => (
-                    <View key={log.id} style={styles.logItem}>
-                      <Text style={styles.logTime}>{log.time}</Text>
-                      <Text
-                        style={[
-                          styles.logAction,
-                          log.action === 'inflate'
-                            ? styles.logInflate
+
+              {/* ─── 日志面板 ─── */}
+              <View style={styles.logPanel}>
+                <View style={styles.logHeader}>
+                  <Text style={styles.logTitle}>串口指令日志</Text>
+                  <TouchableOpacity onPress={clearLogs} activeOpacity={0.7}>
+                    <Text style={styles.logClearText}>清空</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView
+                  ref={logScrollRef}
+                  style={styles.logScroll}
+                  showsVerticalScrollIndicator={true}>
+                  {cmdLogs.length === 0 ? (
+                    <Text style={styles.logEmpty}>暂无指令记录</Text>
+                  ) : (
+                    cmdLogs.map(log => (
+                      <View key={log.id} style={styles.logItem}>
+                        <Text style={styles.logTime}>{log.time}</Text>
+                        <Text
+                          style={[
+                            styles.logAction,
+                            log.action === 'inflate'
+                              ? styles.logInflate
+                              : log.action === 'deflate'
+                              ? styles.logDeflate
+                              : log.action === 'stop'
+                              ? styles.logStop
+                              : styles.logError,
+                          ]}>
+                          {log.action === 'inflate'
+                            ? '充气'
                             : log.action === 'deflate'
-                            ? styles.logDeflate
+                            ? '放气'
                             : log.action === 'stop'
-                            ? styles.logStop
-                            : styles.logError,
-                        ]}>
-                        {log.action === 'inflate'
-                          ? '充气'
-                          : log.action === 'deflate'
-                          ? '放气'
-                          : log.action === 'stop'
-                          ? '停止'
-                          : log.action}
-                      </Text>
-                      <Text style={styles.logZone}>{log.zone}</Text>
-                      <Text style={styles.logHex} numberOfLines={1}>
-                        {log.hex}
-                      </Text>
-                    </View>
-                  ))
-                )}
-              </ScrollView>
+                            ? '保压'
+                            : log.action}
+                        </Text>
+                        <Text style={styles.logZone}>{log.zone}</Text>
+                        <Text style={styles.logHex} numberOfLines={1}>
+                          {log.hex}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
             </View>
           )}
         </View>
@@ -522,7 +725,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.sm,
   },
   titleLeft: {
     flexDirection: 'row',
@@ -538,6 +741,54 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xxl,
     fontWeight: '700',
     color: Colors.textWhite,
+  },
+  // ─── 锁定状态指示 ───
+  lockBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(88, 166, 255, 0.15)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginLeft: 8,
+    gap: 5,
+  },
+  lockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#58A6FF',
+  },
+  lockText: {
+    fontSize: 12,
+    color: '#58A6FF',
+    fontWeight: '600',
+  },
+  // ─── 锁定进度条 ───
+  lockProgressBar: {
+    height: 3,
+    backgroundColor: 'rgba(88, 166, 255, 0.15)',
+    borderRadius: 2,
+    marginBottom: Spacing.sm,
+    overflow: 'hidden',
+  },
+  lockProgressFill: {
+    height: '100%',
+    backgroundColor: '#58A6FF',
+    borderRadius: 2,
+  },
+  // ─── 锁定遮罩 ───
+  lockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: BorderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lockOverlayText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   logToggle: {
     paddingHorizontal: Spacing.md,
@@ -597,6 +848,7 @@ const styles = StyleSheet.create({
   },
   adjustButtonsContainer: {
     paddingRight: Spacing.xl,
+    position: 'relative',
   },
   leftLabels: {
     justifyContent: 'space-around',
@@ -613,14 +865,127 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.md,
   },
-  // ─── 日志面板 ───
-  logPanel: {
+  // ─── 右侧面板 ───
+  rightPanel: {
     width: 320,
+    marginLeft: Spacing.lg,
+    gap: Spacing.md,
+  },
+  // ─── 操作总和面板 ───
+  summaryPanel: {
     backgroundColor: '#0D1117',
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.borderGray,
-    marginLeft: Spacing.lg,
+    padding: Spacing.md,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    paddingBottom: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderGray,
+  },
+  summaryTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '600',
+    color: Colors.textWhite,
+  },
+  summaryClearText: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+  },
+  summaryBody: {
+    gap: 6,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryZone: {
+    fontSize: 12,
+    color: '#8B949E',
+    width: 36,
+    fontWeight: '500',
+  },
+  summaryZoneActive: {
+    color: '#58A6FF',
+    fontWeight: '700',
+  },
+  summaryBarBg: {
+    flex: 1,
+    height: 14,
+    backgroundColor: 'rgba(100, 120, 160, 0.12)',
+    borderRadius: 4,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  summaryBarCenter: {
+    position: 'absolute',
+    left: '50%',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: 'rgba(150, 160, 180, 0.3)',
+  },
+  summaryBarFill: {
+    position: 'absolute',
+    top: 1,
+    bottom: 1,
+    borderRadius: 3,
+  },
+  summaryBarRight: {
+    left: '50%',
+  },
+  summaryBarLeft: {
+    right: '50%',
+  },
+  summaryValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    width: 36,
+    textAlign: 'right',
+    fontFamily: 'monospace',
+  },
+  summaryValuePositive: {
+    color: '#58A6FF',
+  },
+  summaryValueNegative: {
+    color: '#F0883E',
+  },
+  summaryValueZero: {
+    color: '#484F58',
+  },
+  summaryTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(150, 160, 180, 0.15)',
+  },
+  summaryTotalLabel: {
+    fontSize: 11,
+    color: '#6E7681',
+    fontWeight: '500',
+  },
+  summaryTotalValue: {
+    fontSize: 12,
+    color: '#C9D1D9',
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
+  // ─── 日志面板 ───
+  logPanel: {
+    flex: 1,
+    backgroundColor: '#0D1117',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.borderGray,
     padding: Spacing.md,
   },
   logHeader: {
