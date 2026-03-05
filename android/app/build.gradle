@@ -96,6 +96,9 @@ android {
                 install "scikit-learn"
                 install "pandas"
             }
+            // 将包解压为真实文件，解决 Chaquopy 14.x AssetFinder 的 extract_packages bug
+            // 使 pickle.load 能正常反序列化 sklearn 模型
+            extractPackages "sklearn", "scipy", "release_package"
         }
     }
     signingConfigs {
