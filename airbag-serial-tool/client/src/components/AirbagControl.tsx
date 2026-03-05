@@ -30,7 +30,7 @@ import {
   type FrameData,
 } from "@/lib/protocol";
 import { cn } from "@/lib/utils";
-import { Send, Save, RotateCcw, Zap } from "lucide-react";
+import { Send, Save, RotateCcw, Zap, Wind } from "lucide-react";
 
 const SEAT_IMG =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663390129888/Q9sJLLGbMLYzkLTt6EE66b/seat-diagram-cku5rB2r5MCmzkjcBahZYF.webp";
@@ -234,6 +234,102 @@ export default function AirbagControl() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* ── Quick Actions ─────────────────────────────── */}
+            <div className="mt-5 pt-4 border-t border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-[Space_Grotesk] font-semibold text-muted-foreground tracking-wide uppercase">快速操作</span>
+              </div>
+
+              {/* Row 1: Preset buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                  onClick={() => {
+                    setAllGear(GearLevel.Gear1);
+                    toast.info("已设置全部1档充气");
+                  }}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  全部1档充气
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300"
+                  onClick={() => {
+                    setAllGear(GearLevel.Gear2);
+                    toast.info("已设置全部2档充气");
+                  }}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  全部2档充气
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                  onClick={() => {
+                    setAllGear(GearLevel.Gear3);
+                    toast.info("已设置全部3档充气");
+                  }}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  全部3档充气
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  onClick={() => {
+                    setAllGear(GearLevel.Gear0);
+                    toast.info("已设置全部放气");
+                  }}
+                >
+                  <Wind className="w-3.5 h-3.5" />
+                  全部放气
+                </Button>
+              </div>
+
+              {/* Row 2: Reset + Send */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 h-9 text-xs gap-1.5"
+                  onClick={handleReset}
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  全部保压
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSend}
+                  disabled={!isConnected}
+                  className="flex-1 h-9 text-xs gap-1.5 bg-primary hover:bg-primary/90 shadow-[0_0_12px_-4px] shadow-primary/40"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  发送当前指令
+                </Button>
+              </div>
+
+              {/* Row 3: Save */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={commandName}
+                  onChange={(e) => setCommandName(e.target.value)}
+                  placeholder="指令名称（可选）"
+                  className="flex-1 h-8 px-3 text-xs rounded-md border border-border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <Button variant="outline" size="sm" onClick={handleSave} className="h-8 text-xs gap-1.5">
+                  <Save className="w-3.5 h-3.5" />
+                  保存
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

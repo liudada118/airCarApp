@@ -84,9 +84,19 @@ export function useSerial(): UseSerialReturn {
   const readingRef = useRef(false);
   const bufferRef = useRef<number[]>([]);
 
+  // ── Helpers ───────────────────────────────────────────────
+  /** Check whether Web Serial API is actually usable (not just present) */
+  const isSerialAvailable = useCallback((): boolean => {
+    try {
+      return "serial" in navigator && !!(navigator as any).serial;
+    } catch {
+      return false;
+    }
+  }, []);
+
   // ── Port enumeration ──────────────────────────────────────
   const refreshPorts = useCallback(async () => {
-    if (!("serial" in navigator)) return;
+    if (!isSerialAvailable()) return;
     try {
       const rawPorts: any[] = await (navigator as any).serial.getPorts();
       const entries: PortEntry[] = rawPorts.map((p, i) => ({
@@ -106,13 +116,16 @@ export function useSerial(): UseSerialReturn {
         setSelectedPortIndex(entries.length > 0 ? 0 : -1);
       }
     } catch (err: any) {
-      console.error("Failed to enumerate ports:", err);
+      // Silently ignore permission-policy errors (e.g. inside iframes)
+      if (!err?.message?.includes("permissions policy")) {
+        console.error("Failed to enumerate ports:", err);
+      }
     }
-  }, [selectedPortIndex]);
+  }, [selectedPortIndex, isSerialAvailable]);
 
   /** Request a brand-new port via the browser permission dialog */
   const requestNewPort = useCallback(async () => {
-    if (!("serial" in navigator)) {
+    if (!isSerialAvailable()) {
       setError("当前浏览器不支持 Web Serial API，请使用 Chrome/Edge 浏览器");
       return;
     }
@@ -125,27 +138,41 @@ export function useSerial(): UseSerialReturn {
         setError(`请求串口失败: ${err.message}`);
       }
     }
-  }, [refreshPorts]);
+  }, [refreshPorts, isSerialAvailable]);
 
   // Listen for connect / disconnect events
   useEffect(() => {
-    if (!("serial" in navigator)) return;
-    const serial = (navigator as any).serial;
+    if (!isSerialAvailable()) return;
+
+    let serial: any;
+    try {
+      serial = (navigator as any).serial;
+    } catch {
+      return; // permissions policy blocks access
+    }
 
     const onConnect = () => { refreshPorts(); };
     const onDisconnect = () => { refreshPorts(); };
 
-    serial.addEventListener("connect", onConnect);
-    serial.addEventListener("disconnect", onDisconnect);
-
-    // Initial enumeration
-    refreshPorts();
+    try {
+      serial.addEventListener("connect", onConnect);
+      serial.addEventListener("disconnect", onDisconnect);
+      // Initial enumeration
+      refreshPorts();
+    } catch {
+      // Silently fail in restricted environments
+      return;
+    }
 
     return () => {
-      serial.removeEventListener("connect", onConnect);
-      serial.removeEventListener("disconnect", onDisconnect);
+      try {
+        serial.removeEventListener("connect", onConnect);
+        serial.removeEventListener("disconnect", onDisconnect);
+      } catch {
+        // ignore
+      }
     };
-  }, [refreshPorts]);
+  }, [refreshPorts, isSerialAvailable]);
 
   // ── Logging ───────────────────────────────────────────────
   const addLog = useCallback((entry: Omit<LogEntry, "id" | "timestamp">) => {
