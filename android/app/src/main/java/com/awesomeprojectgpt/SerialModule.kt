@@ -645,18 +645,20 @@ class SerialModule(
             return
         }
 
-        // 标准帧 → 正常处理
-        emitSerialData(data)
         val values = parseCsvToIntList(data)
         if (values == null) {
-            // PARSE_ERROR 是数据解析问题，不是连接错误，仅记录日志不上报为连接异常
             Log.w(logTag, "[Frame] PARSE_ERROR: $data")
             return
         }
+
+        // 51 字节模式帧 → 只走模式处理，不发送 onSerialData（避免影响 3D 图渲染）
         if (values.size == 51) {
             handleModeFrame(values, data)
             return
         }
+
+        // 144 字节标准帧 → 发送串口数据 + 算法处理
+        emitSerialData(data)
         pythonExecutor.execute {
             try {
                 val module = Python.getInstance().getModule("server")
