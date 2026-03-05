@@ -442,6 +442,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const seatStatusRef = useRef<SeatStatus>('away');
   // sensorData 用 useRef 存储，3D 组件通过 data prop 读取，避免每帧 setState 触发重渲染
   const carAirRef = useRef<any>(null);
+  // 清零防抖：记录最后一次清零的时间戳，防止离座/在座状态快速切换导致闪烁
+  const lastResetTimeRef = useRef<number>(0);
+  const frozenRef = useRef<boolean>(false);
   const sensorDataRef = useRef<number[]>(INITIAL_SENSOR_FRAME);
   const [sensorDataVersion, setSensorDataVersion] = useState(0); // 仅矩阵弹窗需要时触发更新
   const [showMatrix, setShowMatrix] = useState(false);
@@ -466,13 +469,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     //   - OFF_SEAT: 完全离座
     //   - RESETTING: 人已离开，气囊正在复位（等待130帧才到OFF_SEAT太慢）
     const shouldClear3D = parsed.algoSeatStatus.is_off_seat || parsed.algoSeatStatus.is_resetting;
+    const now = Date.now();
     if (shouldClear3D) {
       sensorDataRef.current = INITIAL_SENSOR_FRAME;
       // 立即清零 3D 点位数据并冻结，阻止传感器残留数据重新填充
-      console.log('[3D清零] 触发清零+冻结! state:', parsed.algoSeatStatus.state);
+      if (!frozenRef.current) {
+        console.log('[3D清零] 首次触发清零+冻结! state:', parsed.algoSeatStatus.state, 'carAirRef:', !!carAirRef.current);
+      }
+      lastResetTimeRef.current = now;
+      frozenRef.current = true;
       carAirRef.current?.resetToZero?.();
     } else {
       // 非离座状态（入座/自适应）：解冻3D图数据更新
+      // 防抖：清零后至少保持2秒冻结，防止状态快速切换导致闪烁
+      const timeSinceReset = now - lastResetTimeRef.current;
+      if (frozenRef.current && timeSinceReset < 2000) {
+        console.log('[3D清零] 防抖中, 距上次清零:', timeSinceReset, 'ms, 忽略解冻');
+        // 保持冻结，继续调用 resetToZero 确保清零状态
+        carAirRef.current?.resetToZero?.();
+        return; // 不更新 algoState，保持离座显示
+      }
+      if (frozenRef.current) {
+        console.log('[3D解冻] 解冻! state:', parsed.algoSeatStatus.state, 'timeSinceReset:', timeSinceReset, 'ms');
+        frozenRef.current = false;
+      }
       carAirRef.current?.unfreeze?.();
     }
     // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
