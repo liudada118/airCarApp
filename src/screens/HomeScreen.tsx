@@ -427,6 +427,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   });
 
   // sensorData 用 useRef 存储，3D 组件通过 data prop 读取，避免每帧 setState 触发重渲染
+  const carAirRef = useRef<any>(null);
   const sensorDataRef = useRef<number[]>(INITIAL_SENSOR_FRAME);
   const [sensorDataVersion, setSensorDataVersion] = useState(0); // 仅矩阵弹窗需要时触发更新
   const [showMatrix, setShowMatrix] = useState(false);
@@ -444,9 +445,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const handleAlgoResult = useCallback((resultJson: string) => {
     const parsed = parseAlgoResult(resultJson);
     if (!parsed) return;
-    // 离座时清空 3D 压力云图数据
+    // 算法判断离座时：清空传感器数据 + 立即清零 3D 图
     if (parsed.algoSeatStatus.is_off_seat) {
       sensorDataRef.current = INITIAL_SENSOR_FRAME;
+      // 直接调用 CarAirRN 的 resetToZero，立即清零 3D 点位数据
+      carAirRef.current?.resetToZero?.();
     }
     // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
     const isAdaptive = adaptiveEnabledRef.current;
@@ -964,6 +967,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           {/* 3D 座椅模型 */}
           <View style={styles.seat3DContainer}>
             <CarAirRN
+              ref={carAirRef}
               data={sensorData as unknown as never[]}
               style={styles.carAir3D}
             />

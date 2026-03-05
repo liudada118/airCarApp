@@ -808,6 +808,18 @@ function CarAirRNInner({data = [], style}, ref) {
     isBaselineActive() {
       return !!stateRef.current.baseline;
     },
+    /** 算法判断离座时调用：立即清零 3D 图所有点位数据 */
+    resetToZero() {
+      const fs = stateRef.current;
+      // 重置平滑缓冲区
+      fs.rawSmoothInited = false;
+      fs.smoothBig = createSmoothBig();
+      // 重置零帧计数
+      fs._zeroFrameCount = 0;
+      // 强制重新渲染
+      fs.lastDataHash = -1;
+      fs.dirty = true;
+    },
   }));
 
   // ─── 调节面板状态 ──────────────────────────────────────────────────
