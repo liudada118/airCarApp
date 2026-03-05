@@ -1184,6 +1184,7 @@ function CarAirRNInner({data = [], style}, ref) {
       lastDataHash: 0,
       baseline: null, // 清零基线：144 元素数组，null 表示未清零
       _gaussKernel: GAUSS_KERNEL, // 动态高斯核
+      lastFrameSum: 0, // 上一帧总和，用于帧间突降检测
     };
 
     const animate = () => {
@@ -1213,19 +1214,32 @@ function CarAirRNInner({data = [], style}, ref) {
             }
           }
 
-          // 全 0 帧检测：气囊动作时传感器可能返回全 0 数据，直接跳过该帧
+          // 干扰帧检测：气囊动作时传感器可能返回全 0 或异常低值数据
           const _dynSettings = pointSettingsRef.current;
           const zeroThreshold = _dynSettings.zeroFrameThreshold || 10;
           let frameSum = 0;
           for (let zi = 0; zi < 144; zi++) {
             frameSum += seatData[zi];
           }
+
+          // 检测1：帧总和低于阈值，视为全0干扰帧
           if (frameSum < zeroThreshold && frameState.rawSmoothInited) {
-            // 全 0 帧（气囊动作干扰），跳过不更新渲染数据
             frameState.lastSeatUpdate = now;
             frameRef.current = requestAnimationFrame(animate);
             return;
           }
+
+          // 检测2：帧间突降检测 — 如果当前帧总和相比上一帧突然下降超过 70%，视为干扰帧
+          if (frameState.rawSmoothInited && frameState.lastFrameSum > 0) {
+            const dropRatio = frameSum / frameState.lastFrameSum;
+            if (dropRatio < 0.3) {
+              // 突降帧，跳过不更新，避免3D图抖动
+              frameState.lastSeatUpdate = now;
+              frameRef.current = requestAnimationFrame(animate);
+              return;
+            }
+          }
+          frameState.lastFrameSum = frameSum;
 
           // 第一层平滑：原始 144 字节数据帧间混合（在插值放大之前）
           const rawBuf = frameState.rawSmoothBuf;
