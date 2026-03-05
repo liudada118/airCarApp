@@ -26,10 +26,40 @@ for _name in (
     if _mod and _mod_file and not os.path.abspath(_mod_file).startswith(_release_prefix):
         del sys.modules[_name]
 
+# ─── 依赖检查（调试用）─────────────────────────────────────────
+def _check_dependencies():
+    """检查体型三分类所需的依赖是否可用"""
+    deps = ['sklearn', 'pandas', 'scipy', 'numpy', 'pickle']
+    for dep in deps:
+        try:
+            __import__(dep)
+            print(f"[server.py] 依赖检查 OK: {dep}")
+        except ImportError as e:
+            print(f"[server.py] 依赖检查 FAIL: {dep} -> {e}")
+
+_check_dependencies()
+
 from integrated_system import IntegratedSeatSystem
 
 _config_path = os.path.join(_release_dir, "sensor_config.yaml")
-_system = IntegratedSeatSystem(_config_path)
+print(f"[server.py] 配置文件路径: {_config_path}")
+print(f"[server.py] 配置文件存在: {os.path.exists(_config_path)}")
+
+try:
+    _system = IntegratedSeatSystem(_config_path)
+    # 打印体型三分类器状态
+    if hasattr(_system, 'body_shape_classifier') and _system.body_shape_classifier is not None:
+        print(f"[server.py] 体型三分类器: 已初始化")
+        print(f"[server.py]   模型已加载: {_system.body_shape_classifier.model is not None}")
+        print(f"[server.py]   自动触发: {_system.auto_trigger_body_shape}")
+    else:
+        print(f"[server.py] 体型三分类器: 未初始化（body_shape_classifier is None）")
+        print(f"[server.py]   enabled配置: {_system.config.get('body_shape_classification.enabled', 'NOT_FOUND')}")
+except Exception as e:
+    import traceback
+    print(f"[server.py] IntegratedSeatSystem 初始化失败: {e}")
+    traceback.print_exc()
+    raise
 
 
 def _to_builtin(value):

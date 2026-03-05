@@ -93,7 +93,8 @@ android {
                 install "PyYAML"
                 install "ruamel.yaml"
                 install "scipy"
-                install "ruamel.yaml"
+                install "scikit-learn"
+                install "pandas"
             }
         }
     }

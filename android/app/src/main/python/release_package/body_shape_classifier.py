@@ -139,7 +139,9 @@ class BodyShapeClassifier:
                 print(f"[体型三分类器] 模型已加载: {model_path}")
                 print(f"  - 模型类型: {self.model.best_model_name}")
             except Exception as e:
+                import traceback
                 print(f"[体型三分类器] 模型加载失败: {e}")
+                traceback.print_exc()
                 self.model = None
                 self.feature_engineer = None
         else:

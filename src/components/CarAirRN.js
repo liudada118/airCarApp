@@ -811,11 +811,24 @@ function CarAirRNInner({data = [], style}, ref) {
     /** 算法判断离座时调用：立即清零 3D 图所有点位数据 */
     resetToZero() {
       const fs = stateRef.current;
-      // 重置平滑缓冲区
-      fs.rawSmoothInited = false;
-      fs.smoothBig = createSmoothBig();
-      // 重置零帧计数
-      fs._zeroFrameCount = 0;
+      // 将 smoothBig 所有区域填 0（而非 createSmoothBig 的默认值 1），
+      // 这样下一帧渲染时 3D 点位高度和颜色立即归零
+      if (fs.smoothBig) {
+        Object.keys(fs.smoothBig).forEach(key => {
+          const arr = fs.smoothBig[key];
+          if (Array.isArray(arr)) {
+            arr.fill(0);
+          }
+        });
+      }
+      // 清零第一层平滑缓冲区
+      if (fs.rawSmoothBuf) {
+        fs.rawSmoothBuf.fill(0);
+      }
+      // 标记平滑已初始化（值为全 0），避免下一帧跳过平滑直接拷贝
+      fs.rawSmoothInited = true;
+      // 重置零帧计数，让后续全零帧不被 <=3 的保护逻辑跳过
+      fs._zeroFrameCount = 99;
       // 强制重新渲染
       fs.lastDataHash = -1;
       fs.dirty = true;

@@ -72,11 +72,15 @@ class IntegratedSeatSystem:
         # 初始化体型三分类器
         if self.config.get('body_shape_classification.enabled', False):
             model_path = self.config.get('body_shape_classification.model_path', None)
+            print(f"[集成系统] 体型三分类配置: enabled=True, model_path(raw)={model_path}")
             if model_path and not os.path.isabs(model_path):
                 # 相对路径转为绝对路径（相对于配置文件所在目录）
                 model_path = os.path.join(os.path.dirname(os.path.abspath(config_path)), model_path)
+            print(f"[集成系统] 体型三分类模型路径(abs): {model_path}")
+            print(f"[集成系统] 模型文件存在: {os.path.exists(model_path)}")
             self.body_shape_classifier = BodyShapeClassifier(self.config, model_path)
         else:
+            print(f"[集成系统] 体型三分类未启用 (enabled={self.config.get('body_shape_classification.enabled', 'NOT_FOUND')})")
             self.body_shape_classifier = None
 
         # 体型三分类自动触发配置（方案C：自动触发+外部触发双模式）
@@ -682,14 +686,26 @@ class IntegratedSeatSystem:
         Args:
             trigger_source: 触发来源描述（用于日志）
         """
+        print(f"[集成系统] _try_auto_trigger_body_shape(来源={trigger_source}): "
+              f"auto_trigger={self.auto_trigger_body_shape}, "
+              f"classifier={'OK' if self.body_shape_classifier is not None else 'None'}, "
+              f"model={'OK' if (self.body_shape_classifier and self.body_shape_classifier.model) else 'None'}, "
+              f"already_triggered={self._body_shape_auto_triggered}, "
+              f"state={self.body_shape_classifier.state.name if self.body_shape_classifier else 'N/A'}")
         if (self.auto_trigger_body_shape
                 and self.body_shape_classifier is not None
                 and not self._body_shape_auto_triggered
                 and self.body_shape_classifier.state == ClassifierState.IDLE):
             result = self.body_shape_classifier.trigger()
+            print(f"[集成系统] 体型三分类 trigger() 结果: {result}")
             if result.get('success'):
                 self._body_shape_auto_triggered = True
-                print(f"[集成系统] 自动触发体型三分类（{trigger_source}，帧{self.frame_count}）")
+                print(f"[集成系统] 自动触发体型三分类成功（{trigger_source}，帧{self.frame_count}）")
+            else:
+                print(f"[集成系统] 自动触发体型三分类失败: {result.get('message', 'unknown')}")
+        else:
+            # 条件不满足时不打印（避免日志刷屏）
+            pass
 
     def _reset_body_shape_auto_trigger(self):
         """重置自动触发标志（离座时调用，下次入座可重新触发）"""
