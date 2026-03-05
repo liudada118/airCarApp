@@ -38,7 +38,8 @@ class SerialManager(private val context: Context) {
         vendorId: Int,
         productId: Int,
         baudRate: Int,
-        onFrame: (FrameResult) -> Unit
+        onFrame: (FrameResult) -> Unit,
+        onDisconnect: (() -> Unit)? = null
     ): OpenResult {
         close()
         val device = usbManager.deviceList.values.find {
@@ -84,7 +85,7 @@ class SerialManager(private val context: Context) {
                 }
                 port!!.dtr = true
                 port!!.rts = true
-                readThread = SerialReadThread(port!!, onFrame)
+                readThread = SerialReadThread(port!!, onFrame, onDisconnect)
                 readThread!!.start()
                 return OpenResult.Ok
             } catch (e: Exception) {

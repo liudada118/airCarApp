@@ -24,6 +24,7 @@ import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class SerialModule(
     private val reactContext: ReactApplicationContext
@@ -79,24 +80,37 @@ class SerialModule(
     @Volatile private var lastAutoWriteHex: String? = null
     private val logTag = "SerialModule"
 
+    /** autoWrite 连续写入失败计数器 */
+    private val autoWriteFailCount = AtomicInteger(0)
+    /** autoWrite 连续失败阈值，超过后通知 JS 层连接异常 */
+    private val autoWriteFailThreshold = 3
+
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != permissionAction) return
+            
             val device =
                 intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE) ?: return
+            
             val granted =
                 intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+            
             val pending = pendingOpen
+            
             if (pending == null || device.deviceId != pending.device.deviceId) return
+            
             pendingOpen = null
             clearPendingTimeout()
+            
             if (!granted) {
                 pending.promise.reject("NO_PERMISSION", "usb permission denied")
                 return
             }
-            val result = manager.open(pending.vendorId, pending.productId, pending.baudRate) { frameResult ->
-                handleFrame(frameResult)
-            }
+            val result = manager.open(pending.vendorId, pending.productId, pending.baudRate,
+                onFrame = { frameResult -> handleFrame(frameResult) },
+                onDisconnect = { handleReadThreadDisconnect() }
+            )
+            
             when (result) {
                 is SerialManager.OpenResult.Ok -> {
                     if (isAutoMode) {
@@ -145,9 +159,10 @@ class SerialModule(
             clearPendingTimeout()
         }
         if (usbManager.hasPermission(device)) {
-            val result = manager.open(vendorId, productId, 1000000) { frameResult ->
-                handleFrame(frameResult)
-            }
+            val result = manager.open(vendorId, productId, 1000000,
+                onFrame = { frameResult -> handleFrame(frameResult) },
+                onDisconnect = { handleReadThreadDisconnect() }
+            )
             when (result) {
                 is SerialManager.OpenResult.Ok -> {
                     if (isAutoMode) {
@@ -185,9 +200,10 @@ class SerialModule(
             clearPendingTimeout()
         }
         if (usbManager.hasPermission(device)) {
-            val result = manager.open(vendorId, productId, baudRate) { frameResult ->
-                handleFrame(frameResult)
-            }
+            val result = manager.open(vendorId, productId, baudRate,
+                onFrame = { frameResult -> handleFrame(frameResult) },
+                onDisconnect = { handleReadThreadDisconnect() }
+            )
             when (result) {
                 is SerialManager.OpenResult.Ok -> {
                     if (isAutoMode) {
@@ -225,6 +241,7 @@ class SerialModule(
     /**
      * JS 端主动控制算法模式（自动写入）
      * @param enabled true=开启算法自动写入, false=关闭算法自动写入
+     * @param sendStopFrame true=关闭时发送全停保压帧
      */
     @ReactMethod
     fun setAlgoMode(enabled: Boolean) {
@@ -239,6 +256,35 @@ class SerialModule(
             autoWriteText = null
             autoWriteBytes = null
             Log.i(logTag, "[AlgoMode] Algorithm mode DISABLED, autoWrite stopped")
+        }
+    }
+
+    /**
+     * JS 端调用：发送全部保压帧（所有气囊档位=0x00）
+     * 用于自适应关闭或进入自定义调节时让所有气囊进入保压状态
+     */
+    @ReactMethod
+    fun sendStopAllFrame(promise: Promise) {
+        try {
+            // 构建保压帧：所有气囊档位为 GEAR_STOP (0x00)
+            val frame = buildProtocolFrame(emptyMap())
+            val hexStr = frame.joinToString("") { "%02X".format(it) }
+
+            Log.i(logTag, "[StopAll] Sending stop-all frame: $hexStr (${frame.size} bytes)")
+
+            when (val result = manager.writeBytes(frame)) {
+                is SerialManager.OpenResult.Ok -> {
+                    Log.i(logTag, "[StopAll] Sent successfully")
+                    promise.resolve(hexStr)
+                }
+                is SerialManager.OpenResult.Fail -> {
+                    Log.e(logTag, "[StopAll] Send failed: ${result.code} ${result.message}")
+                    promise.reject(result.code, result.message)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(logTag, "[StopAll] Error", e)
+            promise.reject("STOP_ALL_ERROR", e.message ?: "sendStopAllFrame failed")
         }
     }
 
@@ -481,6 +527,30 @@ class SerialModule(
         pendingTimeout = null
     }
 
+    /**
+     * 读取线程检测到连续读取失败后的回调，通知 JS 层连接已断开
+     */
+    private fun handleReadThreadDisconnect() {
+        Log.e(logTag, "[Disconnect] Read thread detected serial disconnection")
+        stopAutoWrite()
+        emitConnectionLost("串口读取线程检测到连接断开")
+    }
+
+    /**
+     * 发送连接断开事件到 JS 层
+     */
+    private fun emitConnectionLost(reason: String) {
+        try {
+            val map = Arguments.createMap()
+            map.putString("reason", reason)
+            reactContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit("onSerialDisconnect", map)
+        } catch (e: Exception) {
+            Log.e(logTag, "emitConnectionLost failed", e)
+        }
+    }
+
     private fun handleFrame(frameResult: FrameResult) {
         val data = frameResult.csv
         val frameLen = frameResult.length
@@ -500,7 +570,8 @@ class SerialModule(
         emitSerialData(data)
         val values = parseCsvToIntList(data)
         if (values == null) {
-            emitSerialResult(data, null, "PARSE_ERROR")
+            // PARSE_ERROR 是数据解析问题，不是连接错误，仅记录日志不上报为连接异常
+            Log.w(logTag, "[Frame] PARSE_ERROR: $data")
             return
         }
         if (values.size == 51) {
@@ -512,10 +583,12 @@ class SerialModule(
                 val module = Python.getInstance().getModule("server")
                 val resultJson = module.callAttr("server", values).toString()
                 emitSerialResult(data, resultJson, null)
+                // 始终更新 autoWrite 缓存，确保开启自适应时能立即发送最新指令
                 updateAutoWritePayloadFromResult(resultJson)
             } catch (e: Exception) {
                 Log.e(logTag, "python server call failed", e)
-                emitSerialResult(data, null, e.message ?: "PY_ERROR")
+                // Python 算法错误仅作为算法错误上报，不影响连接状态
+                emitAlgoError(e.message ?: "PY_ERROR")
             }
         }
     }
@@ -540,6 +613,17 @@ class SerialModule(
         reactContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit("onSerialResult", map)
+    }
+
+    /**
+     * 发送算法处理错误事件（与连接错误区分开）
+     */
+    private fun emitAlgoError(message: String) {
+        val map = Arguments.createMap()
+        map.putString("error", message)
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onAlgoError", map)
     }
 
     private fun emitSerialMode(data: String, modeValue: Int) {
@@ -647,6 +731,7 @@ class SerialModule(
         }
     }
 
+    /** 将 hex 字符串解码为二进制 ByteArray */
     private fun hexStringToByteArray(hex: String): ByteArray {
         val len = hex.length
         val data = ByteArray(len / 2)
@@ -676,16 +761,22 @@ class SerialModule(
                 Log.w(logTag, "auto write scheduler is shutdown")
                 return
             }
+            autoWriteFailCount.set(0)
             autoWriteTask = autoWriteScheduler.scheduleAtFixedRate({
                 try {
+                    // 优先使用二进制 ByteArray 发送
                     val bytes = autoWriteBytes
                     if (bytes != null && bytes.isNotEmpty()) {
                         val hex = autoWriteText ?: bytes.joinToString("") { "%02X".format(it) }
                         Log.i(logTag, "[SerialWrite] HEX: $hex (${bytes.size} bytes)")
                         when (val result = manager.writeBytes(bytes)) {
-                            is SerialManager.OpenResult.Fail ->
+                            is SerialManager.OpenResult.Fail -> {
                                 Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
-                            else -> {}
+                                handleAutoWriteFailure()
+                            }
+                            else -> {
+                                autoWriteFailCount.set(0) // 写入成功，重置失败计数
+                            }
                         }
                         return@scheduleAtFixedRate
                     }
@@ -693,9 +784,12 @@ class SerialModule(
                     if (payload.isNullOrEmpty()) return@scheduleAtFixedRate
                     val fallbackBytes = hexStringToByteArray(payload)
                     when (val result = manager.writeBytes(fallbackBytes)) {
-                        is SerialManager.OpenResult.Fail ->
+                        is SerialManager.OpenResult.Fail -> {
                             Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
+                            handleAutoWriteFailure()
+                        }
                         else -> {
+                            autoWriteFailCount.set(0)
                             Log.d(logTag, "auto write sent ${fallbackBytes.size} bytes (from hex)")
                         }
                     }
@@ -703,6 +797,18 @@ class SerialModule(
                     Log.e(logTag, "auto write task crashed", e)
                 }
             }, 0, 500, TimeUnit.MILLISECONDS)
+        }
+    }
+
+    /**
+     * autoWrite 写入失败时的处理：连续失败超过阈值则通知 JS 层连接异常
+     */
+    private fun handleAutoWriteFailure() {
+        val count = autoWriteFailCount.incrementAndGet()
+        if (count >= autoWriteFailThreshold) {
+            Log.e(logTag, "[AutoWrite] $count consecutive write failures, notifying JS of disconnection")
+            // 不停止 autoWrite，让硬件 mode frame 能继续控制；仅通知 JS 层
+            emitConnectionLost("串口写入连续失败 $count 次")
         }
     }
 

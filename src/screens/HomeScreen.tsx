@@ -44,6 +44,8 @@ interface HomeScreenProps {
   onNavigateToCustomize: () => void;
   adaptiveEnabled: boolean;
   onAdaptiveChange: (enabled: boolean) => void;
+  connectionStatus: ConnectionStatus;
+  onConnectionStatusChange: (status: ConnectionStatus) => void;
 }
 
 interface SerialDevice {
@@ -64,6 +66,7 @@ interface SerialModuleType {
   close?: () => void;
   setAlgoMode?: (enabled: boolean) => void;
   sendAirbagCommand?: (zone: string, action: string) => Promise<string>;
+  sendStopAllFrame?: () => Promise<string>;
 }
 
 interface SerialResultEvent {
@@ -292,7 +295,16 @@ function getBodyShapeLabel(shape: BodyShape): string {
   if (!shape) {
     return '未识别';
   }
-  return shape;
+  switch (shape) {
+    case '瘦小':
+      return '轻盈型';
+    case '中等':
+      return '均衡型';
+    case '高大':
+      return '稳健型';
+    default:
+      return shape;
+  }
 }
 
 function getBodyShapeColor(shape: BodyShape): string {
@@ -372,7 +384,7 @@ function matrixCellColor(val: number): string {
 
 // ─── 组件 ────────────────────────────────────────────────────────────
 
-const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange}) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange}) => {
   // 合并所有算法结果为单个状态对象，减少 setState 调用（8→1），大幅降低重渲染次数
   const [algoState, setAlgoState] = useState({
     seatStatus: 'away' as SeatStatus,
@@ -392,8 +404,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     } as RealtimeAlgoData,
   });
 
-  const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>('disconnected');
+  // connectionStatus 由 App 层管理，通过 props 传入，避免页面切换时状态丢失
+  const setConnectionStatus = onConnectionStatusChange;
   const [connecting, setConnecting] = useState(false);
   // adaptiveEnabled 和 onAdaptiveChange 从 props 传入，由 App 统一管理
   const adaptiveEnabledRef = useRef(adaptiveEnabled);
@@ -432,6 +444,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const handleAlgoResult = useCallback((resultJson: string) => {
     const parsed = parseAlgoResult(resultJson);
     if (!parsed) return;
+    // 离座时清空 3D 压力云图数据
+    if (parsed.algoSeatStatus.is_off_seat) {
+      sensorDataRef.current = INITIAL_SENSOR_FRAME;
+    }
     // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
     const isAdaptive = adaptiveEnabledRef.current;
     setAlgoState({
@@ -655,12 +671,27 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         if (typeof event.result === 'string' && event.result) {
           handleAlgoResult(event.result);
         }
+        // 注意：不再将 event.error 当作连接错误处理
+        // Python 算法错误通过 onAlgoError 事件单独上报，不影响连接状态
+      },
+    );
 
-        if (typeof event.error === 'string' && event.error) {
-          setConnectionStatus('error');
-          setConnectionErrorMessage(event.error);
-          setShowConnectionError(true);
-        }
+    // 监听真正的串口断线事件（由 Native 层读取线程或写入连续失败触发）
+    const disconnectSub = emitter.addListener(
+      'onSerialDisconnect',
+      (event: {reason?: string}) => {
+        console.warn('[Serial] Disconnected:', event.reason);
+        setConnectionStatus('error');
+        setConnectionErrorMessage(event.reason || '串口连接已断开');
+        setShowConnectionError(true);
+      },
+    );
+
+    // 监听算法处理错误（仅记录日志，不影响连接状态）
+    const algoErrorSub = emitter.addListener(
+      'onAlgoError',
+      (event: {error?: string}) => {
+        console.warn('[AlgoError]', event.error);
       },
     );
 
@@ -699,6 +730,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     return () => {
       dataSub.remove();
       resultSub.remove();
+      disconnectSub.remove();
+      algoErrorSub.remove();
       modeSub.remove();
       nonStdSub.remove();
     };
@@ -739,7 +772,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
   return (
     <View style={styles.container}>
-      <TopBar connectionStatus={connectionStatus} />
+      <TopBar
+        connectionStatus={connectionStatus}
+        onRetry={() => {
+          hasTriedAutoConnect = false;
+          setShowConnectionError(false);
+          setConnectionErrorMessage('');
+          setConnectionStatus('disconnected');
+          setTimeout(() => {
+            autoConnectSensor().catch(() => undefined);
+          }, 100);
+        }}
+      />
 
       <View style={styles.content}>
         {/* ─── 左侧面板 ─── */}
@@ -804,7 +848,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             </View>
             <View style={styles.airbagStatusCard}>
               <Text style={styles.airbagStatusText}>
-                {adaptiveEnabled ? '当前为自适应调节状态' : '自适应调节已关闭'}
+                {adaptiveEnabled
+                  ? (bodyShapeInfo.body_shape
+                      ? `当前为${getBodyShapeLabel(bodyShapeInfo.body_shape)}自适应调节状态`
+                      : '当前为自适应调节状态')
+                  : '自适应调节已关闭'}
               </Text>
               <View style={styles.seatThumbnail}>
                 <SeatDiagram
@@ -816,8 +864,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               <View style={styles.divider} />
               <TouchableOpacity
                 onPress={() => {
-                  // 进入自定义气囊调节前，关闭算法模式
+                  // 进入自定义气囊调节前，关闭算法模式（停止透传算法指令）
                   SerialModule?.setAlgoMode?.(false);
+                  // 发送全停保压帧，让所有气囊进入保压状态
+                  SerialModule?.sendStopAllFrame?.().then(() => {
+                    console.log('[AlgoMode] 进入自定义气囊调节，已发送全停保压帧');
+                  }).catch((e: any) => {
+                    console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
+                  });
                   console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
                   onNavigateToCustomize();
                 }}
@@ -893,6 +947,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   styles.toggleButton,
                   !adaptiveEnabled && styles.toggleButtonInactive,
                 ]}>
+
                 <Text
                   style={[
                     styles.toggleText,
@@ -1553,6 +1608,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             setConnectionStatus('disconnected');
           }
         }}
+        onRetry={() => {
+          hasTriedAutoConnect = false;
+          setShowConnectionError(false);
+          setConnectionErrorMessage('');
+          setConnectionStatus('disconnected');
+          setTimeout(() => {
+            autoConnectSensor().catch(() => undefined);
+          }, 100);
+        }}
+        retrying={connecting}
       />
 
       {showConnectionError && connectionErrorMessage ? (

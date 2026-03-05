@@ -1,0 +1,8 @@
+SerialModule.kt 冲突点：
+1. 行91-115: permissionReceiver 中的空行差异 → 保留 lzk 格式 + manus 的 FrameResult
+2. 行120-131: manager.open 调用 → 合并：FrameResult + onDisconnect
+3. 行180-189: open() 中 manager.open → 合并
+4. 行227-236: openWithOptions() 中 manager.open → 合并
+5. 行560-603: handleFrame 方法 → 合并：manus 的 FrameResult+非标准帧逻辑 + lzk 的断线检测方法
+6. 行768-771: hexStringToByteArray 注释 → 保留 lzk 的简短注释
+7. 行804-807: startAutoWrite 注释 → 保留 lzk 的注释

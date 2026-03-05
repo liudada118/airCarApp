@@ -1,14 +1,21 @@
-﻿import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Colors, FontSize, Spacing } from '../theme';
+import React from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
+import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 import IconFont from './IconFont';
-import type { ConnectionStatus } from '../types';
+import type {ConnectionStatus} from '../types';
 
 interface TopBarProps {
   connectionStatus: ConnectionStatus;
+  onRetry?: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ connectionStatus }) => {
+const TopBar: React.FC<TopBarProps> = ({connectionStatus, onRetry}) => {
   const statusText =
     connectionStatus === 'connected'
       ? '已连接'
@@ -27,14 +34,33 @@ const TopBar: React.FC<TopBarProps> = ({ connectionStatus }) => {
       ? Colors.error
       : Colors.textGray;
 
+  const showRetry =
+    onRetry &&
+    (connectionStatus === 'disconnected' || connectionStatus === 'error');
+
   return (
     <View style={styles.container}>
       <Text style={styles.logo}>SHROOM</Text>
       <View style={styles.statusContainer}>
         <IconFont name="lujing2" size={18} color={statusColor} />
-        <Text style={[styles.statusText, { color: statusColor }]}>
+        <Text style={[styles.statusText, {color: statusColor}]}>
           {statusText}
         </Text>
+        {connectionStatus === 'connecting' && (
+          <ActivityIndicator
+            size="small"
+            color={Colors.warning}
+            style={styles.spinner}
+          />
+        )}
+        {showRetry && (
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={onRetry}
+            activeOpacity={0.7}>
+            <Text style={styles.retryText}>重新连接</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -64,6 +90,21 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: FontSize.md,
     fontWeight: '500',
+  },
+  spinner: {
+    marginLeft: Spacing.xs,
+  },
+  retryBtn: {
+    marginLeft: Spacing.sm,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs + 1,
+  },
+  retryText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.textWhite,
   },
 });
 

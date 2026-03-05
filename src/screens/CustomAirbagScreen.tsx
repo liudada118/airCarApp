@@ -113,6 +113,15 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const logIdRef = useRef(0);
   const logScrollRef = useRef<ScrollView>(null);
 
+  // 每个气囊的累计操作次数（充气 +1，放气 -1）
+  const [cmdCounts, setCmdCounts] = useState<Record<AirbagZone, number>>({
+    shoulderL: 0, shoulderR: 0,
+    sideWingL: 0, sideWingR: 0,
+    lumbarUp: 0, lumbarDown: 0,
+    cushionFL: 0, cushionFR: 0,
+    cushionRL: 0, cushionRR: 0,
+  });
+
   const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 添加指令日志
@@ -222,6 +231,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       ...prev,
       [selectedZone]: Math.min(prev[selectedZone] + 1, MAX_VALUE),
     }));
+    // 记录操作次数
+    setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] + 1}));
     // 发送充气指令
     sendAirbagCmd(selectedZone, 'inflate');
   }, [selectedZone, sendAirbagCmd]);
@@ -235,6 +246,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       ...prev,
       [selectedZone]: Math.max(prev[selectedZone] - 1, MIN_VALUE),
     }));
+    // 记录操作次数
+    setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] - 1}));
     // 发送放气指令
     sendAirbagCmd(selectedZone, 'deflate');
   }, [selectedZone, sendAirbagCmd]);
@@ -274,6 +287,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setModalType(null);
     setAirbagValues({...DEFAULT_AIRBAG_VALUES});
     setSelectedZone('lumbarUp');
+    // 清空操作次数
+    setCmdCounts({
+      shoulderL: 0, shoulderR: 0,
+      sideWingL: 0, sideWingR: 0,
+      lumbarUp: 0, lumbarDown: 0,
+      cushionFL: 0, cushionFR: 0,
+      cushionRL: 0, cushionRR: 0,
+    });
     // 发送停止指令给所有气囊
     AIRBAG_ZONES.forEach(z => sendAirbagCmd(z.key, 'stop'));
     setToast({
@@ -363,6 +384,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
                   isActive={selectedZone === zone.key}
                   onPress={handleSelectZone}
                   lineDirection="left"
+                  cmdCount={cmdCounts[zone.key]}
                 />
               ))}
             </View>
@@ -386,6 +408,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
                   isActive={selectedZone === zone.key}
                   onPress={handleSelectZone}
                   lineDirection="right"
+                  cmdCount={cmdCounts[zone.key]}
                 />
               ))}
             </View>
