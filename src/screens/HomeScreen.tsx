@@ -462,12 +462,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     // 更新离座状态 ref
     seatStatusRef.current = parsed.seatStatus;
     // 算法判断离座时：清空传感器数据 + 立即清零 3D 图
-    if (parsed.algoSeatStatus.is_off_seat) {
+    // OFF_SEAT 或 RESETTING 状态都应该清零：
+    //   - OFF_SEAT: 完全离座
+    //   - RESETTING: 人已离开，气囊正在复位（等待130帧才到OFF_SEAT太慢）
+    const shouldClear3D = parsed.algoSeatStatus.is_off_seat || parsed.algoSeatStatus.is_resetting;
+    if (shouldClear3D) {
       sensorDataRef.current = INITIAL_SENSOR_FRAME;
       // 直接调用 CarAirRN 的 resetToZero，立即清零 3D 点位数据
-      const hasRef = !!carAirRef.current;
-      const hasMethod = !!carAirRef.current?.resetToZero;
-      console.log('[3D清零] 离座触发清零! carAirRef存在:', hasRef, 'resetToZero存在:', hasMethod);
+      console.log('[3D清零] 触发清零! state:', parsed.algoSeatStatus.state, 'is_off_seat:', parsed.algoSeatStatus.is_off_seat, 'is_resetting:', parsed.algoSeatStatus.is_resetting);
       carAirRef.current?.resetToZero?.();
     }
     // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
