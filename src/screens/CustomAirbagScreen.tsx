@@ -129,6 +129,12 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 用 ref 始终保持最新的 airbagValues，避免闭包陈旧问题
+  const airbagValuesRef = useRef<CustomAirbagValues>(airbagValues);
+  useEffect(() => {
+    airbagValuesRef.current = airbagValues;
+  }, [airbagValues]);
+
   // 清理锁定定时器
   useEffect(() => {
     return () => {
@@ -186,13 +192,16 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   }, [adaptiveEnabled, onClose]);
 
   // 保存成功时也恢复算法模式，并将当前气囊值回传给 App 层持久化
+  // 使用 airbagValuesRef 确保始终获取最新值，避免 setTimeout 闭包捕获旧值
   const handleSaveAndRestore = useCallback(() => {
     if (adaptiveEnabled) {
       sm?.setAlgoMode?.(true);
       console.log('[AlgoMode] 保存成功，自适应已开启，恢复算法模式');
     }
-    onSaveSuccess(airbagValues);
-  }, [adaptiveEnabled, onSaveSuccess, airbagValues]);
+    const latestValues = airbagValuesRef.current;
+    console.log('[AirbagStorage] 保存的气囊值:', JSON.stringify(latestValues));
+    onSaveSuccess(latestValues);
+  }, [adaptiveEnabled, onSaveSuccess]);
 
   // 监听 Native 端发送的气囊指令事件
   useEffect(() => {
