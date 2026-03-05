@@ -1201,8 +1201,11 @@ function CarAirRNInner({data = [], style}, ref) {
             hash += (currentData[si] || 0);
           }
         }
+        // 全 0 帧时 hash=0，如果上一帧也是 0 会被跳过，需要特殊处理
+        // 当存在未完成的零帧计数时，强制更新
+        const hasZeroPending = (frameState._zeroFrameCount || 0) > 0 && hash === 0;
 
-        if (hash !== frameState.lastDataHash || !frameState.lastSeatUpdate) {
+        if (hash !== frameState.lastDataHash || !frameState.lastSeatUpdate || hasZeroPending) {
           frameState.lastDataHash = hash;
           const seatData = normalizeSeatData(currentData);
 
@@ -1213,18 +1216,35 @@ function CarAirRNInner({data = [], style}, ref) {
             }
           }
 
-          // 全 0 帧检测：气囊动作时传感器可能返回全 0 数据，直接跳过该帧
+          // 全 0 帧检测
           const _dynSettings = pointSettingsRef.current;
           const zeroThreshold = _dynSettings.zeroFrameThreshold || 10;
           let frameSum = 0;
           for (let zi = 0; zi < 144; zi++) {
             frameSum += seatData[zi];
           }
-          if (frameSum < zeroThreshold && frameState.rawSmoothInited) {
-            // 全 0 帧（气囊动作干扰），跳过不更新渲染数据
-            frameState.lastSeatUpdate = now;
-            frameRef.current = requestAnimationFrame(animate);
-            return;
+          const isZeroFrame = frameSum < zeroThreshold;
+
+          if (isZeroFrame) {
+            // 全 0 帧：可能是离座或气囊动作干扰
+            if (!frameState._zeroFrameCount) {
+              frameState._zeroFrameCount = 0;
+            }
+            frameState._zeroFrameCount++;
+
+            if (frameState._zeroFrameCount <= 3 && frameState.rawSmoothInited) {
+              // 连续 3 帧以内的全 0：可能是气囊动作干扰，跳过不更新
+              frameState.lastSeatUpdate = now;
+              frameRef.current = requestAnimationFrame(animate);
+              return;
+            }
+            // 连续超过 3 帧全 0：真正离座，清零 3D 图
+            // 重置平滑缓冲区，让 3D 图归零
+            frameState.rawSmoothInited = false;
+            frameState.smoothBig = createSmoothBig();
+          } else {
+            // 非零帧，重置计数器
+            frameState._zeroFrameCount = 0;
           }
 
           // 第一层平滑：原始 144 字节数据帧间混合（在插值放大之前）
