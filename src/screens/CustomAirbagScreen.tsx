@@ -12,8 +12,8 @@ import {
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 import {
   TopBar,
-  SeatDiagram,
-  AirbagLabel,
+  CustomSeatDiagram,
+  CustomAirbagLabel,
   AdjustButtons,
   ConfirmModal,
   SavingModal,
@@ -21,18 +21,18 @@ import {
 } from '../components';
 import IconFont from '../components/IconFont';
 import type {
-  AirbagZone,
-  AirbagValues,
-  AirbagZoneConfig,
+  CustomAirbagZone,
+  CustomAirbagValues,
+  CustomAirbagZoneConfig,
   ModalType,
   ConnectionStatus,
 } from '../types';
-import {DEFAULT_AIRBAG_VALUES, ALL_AIRBAG_ZONES} from '../types';
+import {DEFAULT_CUSTOM_AIRBAG_VALUES, ALL_CUSTOM_AIRBAG_ZONES} from '../types';
 
 const sm = NativeModules.SerialModule;
 
 /** 气囊区域配置 - 5 组气囊 */
-const AIRBAG_ZONES: AirbagZoneConfig[] = [
+const AIRBAG_ZONES: CustomAirbagZoneConfig[] = [
   // 左侧标签
   {key: 'shoulder', label: '肩部气囊', side: 'left'},
   {key: 'lumbar', label: '腰托气囊', side: 'left'},
@@ -79,7 +79,7 @@ interface CmdLog {
 interface CustomAirbagScreenProps {
   onClose: () => void;
   onSaveSuccess: () => void;
-  initialValues?: AirbagValues;
+  initialValues?: CustomAirbagValues;
   adaptiveEnabled?: boolean;
 }
 
@@ -90,8 +90,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   adaptiveEnabled = true,
 }) => {
   const [connectionStatus] = useState<ConnectionStatus>('connected');
-  const [selectedZone, setSelectedZone] = useState<AirbagZone>('lumbar');
-  const [airbagValues, setAirbagValues] = useState<AirbagValues>(
+  const [selectedZone, setSelectedZone] = useState<CustomAirbagZone>('lumbar');
+  const [airbagValues, setAirbagValues] = useState<CustomAirbagValues>(
     initialValues || {
       shoulder: 3,
       sideWing: 4,
@@ -116,10 +116,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lockProgressAnim = useRef(new Animated.Value(0)).current;
   // 记录锁定时操作的 zone，用于1秒后发送保压指令
-  const lastCmdZoneRef = useRef<AirbagZone | null>(null);
+  const lastCmdZoneRef = useRef<CustomAirbagZone | null>(null);
 
   // 每个气囊的累计操作次数（充气 +1，放气 -1）
-  const [cmdCounts, setCmdCounts] = useState<Record<AirbagZone, number>>({
+  const [cmdCounts, setCmdCounts] = useState<Record<CustomAirbagZone, number>>({
     shoulder: 0,
     sideWing: 0,
     lumbar: 0,
@@ -213,7 +213,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // 发送气囊控制指令
   const sendAirbagCmd = useCallback(
-    async (zone: AirbagZone, action: 'inflate' | 'deflate' | 'stop') => {
+    async (zone: CustomAirbagZone, action: 'inflate' | 'deflate' | 'stop') => {
       if (!sm?.sendAirbagCommand) {
         console.warn('[AirbagCmd] sendAirbagCommand not available');
         addLog(zone, action, 'N/A (模块不可用)', 0);
@@ -231,7 +231,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // ─── 锁定按钮 + 1秒后保压 ───
   const startLockAndHoldPressure = useCallback(
-    (zone: AirbagZone) => {
+    (zone: CustomAirbagZone) => {
       // 清除之前的定时器
       if (lockTimerRef.current) {
         clearTimeout(lockTimerRef.current);
@@ -269,7 +269,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   // 选择气囊区域
   const handleSelectZone = useCallback(
-    (zone: AirbagZone) => {
+    (zone: CustomAirbagZone) => {
       if (isLocked) {
         return; // 锁定期间不允许切换
       }
@@ -341,7 +341,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   // 确认恢复默认
   const handleConfirmRestore = useCallback(() => {
     setModalType(null);
-    setAirbagValues({...DEFAULT_AIRBAG_VALUES});
+    setAirbagValues({...DEFAULT_CUSTOM_AIRBAG_VALUES});
     setSelectedZone('lumbar');
     setCmdCounts({
       shoulder: 0,
@@ -380,7 +380,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   }, []);
 
   // 计算总操作数
-  const totalOps = ALL_AIRBAG_ZONES.reduce(
+  const totalOps = ALL_CUSTOM_AIRBAG_ZONES.reduce(
     (sum, z) => sum + Math.abs(cmdCounts[z]),
     0,
   );
@@ -479,7 +479,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             {/* 左侧标签（肩部、腰托、腿托） */}
             <View style={styles.leftLabels}>
               {leftZones.map(zone => (
-                <AirbagLabel
+                <CustomAirbagLabel
                   key={zone.key}
                   zone={zone.key}
                   label={zone.label}
@@ -493,7 +493,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
             {/* 中间座椅图 */}
             <View style={styles.seatContainer}>
-              <SeatDiagram
+              <CustomSeatDiagram
                 activeZone={selectedZone}
                 scale={0.85}
                 values={airbagValues}
@@ -503,7 +503,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             {/* 右侧标签（侧翼、臀部软硬度） */}
             <View style={styles.rightLabels}>
               {rightZones.map(zone => (
-                <AirbagLabel
+                <CustomAirbagLabel
                   key={zone.key}
                   zone={zone.key}
                   label={zone.label}
@@ -528,7 +528,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
                   </TouchableOpacity>
                 </View>
                 <View style={styles.summaryBody}>
-                  {ALL_AIRBAG_ZONES.map(zone => {
+                  {ALL_CUSTOM_AIRBAG_ZONES.map(zone => {
                     const count = cmdCounts[zone];
                     const isPositive = count > 0;
                     const isNegative = count < 0;

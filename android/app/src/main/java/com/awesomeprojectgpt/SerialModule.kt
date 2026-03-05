@@ -349,8 +349,22 @@ class SerialModule(
 
     // ─── 气囊手动控制 ─────────────────────────────────────────────────
 
-    /** AirbagZone → 协议气囊 ID 列表（5 组，每组 2 个物理气囊） */
+    /** AirbagZone → 协议气囊 ID 列表
+     *  同时支持主页 10 组旧名和自定义页面 5 组新名
+     */
     private val zoneToAirbagIds: Map<String, List<Int>> = mapOf(
+        // ─── 主页 10 组（算法自适应） ───
+        "sideWingL"  to listOf(2, 4),   // 左侧翼上、左侧翼下
+        "sideWingR"  to listOf(1, 3),   // 右侧翼上、右侧翼下
+        "lumbarUp"   to listOf(5),      // 腰托1
+        "lumbarDown"  to listOf(6),     // 腰托2
+        "shoulderL"  to listOf(7),      // 肩部左（预留）
+        "shoulderR"  to listOf(8),      // 肩部右（预留）
+        "cushionFL"  to listOf(11),     // 坐垫前左（预留）
+        "cushionFR"  to listOf(12),     // 坐垫前右（预留）
+        "cushionRL"  to listOf(9),      // 坐垫后左 → 腿托1
+        "cushionRR"  to listOf(10),     // 坐垫后右 → 腿托2
+        // ─── 自定义页面 5 组（每组控制 2 个物理气囊） ───
         "shoulder"   to listOf(1, 2),   // 肩部气囊
         "sideWing"   to listOf(3, 4),   // 侧翼气囊
         "lumbar"     to listOf(5, 6),   // 腰托气囊

@@ -336,13 +336,18 @@ function getSeatStateLabel(state: AlgoSeatStatus): string {
   return '未知';
 }
 
-// ─── 气囊 zone 中文标签（5 组） ────────────────────────────────────
+// ─── 气囊 zone 中文标签 ─────────────────────────────────────────
 const ZONE_CN_LABELS: Record<string, string> = {
-  shoulder: '肩部',
-  sideWing: '侧翼',
-  lumbar: '腰托',
-  hipFirm: '臀部',
-  legRest: '腿托',
+  shoulderL: '肩部左',
+  shoulderR: '肩部右',
+  sideWingL: '腰侧左',
+  sideWingR: '腰侧右',
+  lumbarUp: '腰中上',
+  lumbarDown: '腰中下',
+  cushionFL: '坐垫前左',
+  cushionFR: '坐垫前右',
+  cushionRL: '坐垫后左',
+  cushionRR: '坐垫后右',
 };
 
 // ─── 矩阵热力图颜色映射 ─────────────────────────────────────────────
@@ -409,11 +414,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [connectionErrorMessage, setConnectionErrorMessage] = useState('');
 
   const [airbagValues] = useState<AirbagValues>({
-    shoulder: 3,
-    sideWing: 4,
-    lumbar: 5,
-    hipFirm: 3,
-    legRest: 3,
+    shoulderL: 3,
+    shoulderR: 3,
+    sideWingL: 4,
+    sideWingR: 4,
+    lumbarUp: 5,
+    lumbarDown: 5,
+    cushionFL: 2,
+    cushionFR: 2,
+    cushionRL: 3,
+    cushionRR: 3,
   });
 
   // sensorData 用 useRef 存储，3D 组件通过 data prop 读取，避免每帧 setState 触发重渲染

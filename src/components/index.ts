@@ -6,4 +6,6 @@ export { default as Toast } from './Toast';
 export { default as SeatDiagram } from './SeatDiagram';
 export { default as AirbagLabel } from './AirbagLabel';
 export { default as AdjustButtons } from './AdjustButtons';
+export { default as CustomAirbagLabel } from './CustomAirbagLabel';
+export { default as CustomSeatDiagram } from './CustomSeatDiagram';
 export { default as IconFont } from './IconFont';
