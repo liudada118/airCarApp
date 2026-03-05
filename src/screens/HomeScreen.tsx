@@ -468,9 +468,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     const shouldClear3D = parsed.algoSeatStatus.is_off_seat || parsed.algoSeatStatus.is_resetting;
     if (shouldClear3D) {
       sensorDataRef.current = INITIAL_SENSOR_FRAME;
-      // 直接调用 CarAirRN 的 resetToZero，立即清零 3D 点位数据
-      console.log('[3D清零] 触发清零! state:', parsed.algoSeatStatus.state, 'is_off_seat:', parsed.algoSeatStatus.is_off_seat, 'is_resetting:', parsed.algoSeatStatus.is_resetting);
+      // 立即清零 3D 点位数据并冻结，阻止传感器残留数据重新填充
+      console.log('[3D清零] 触发清零+冻结! state:', parsed.algoSeatStatus.state);
       carAirRef.current?.resetToZero?.();
+    } else {
+      // 非离座状态（入座/自适应）：解冻3D图数据更新
+      carAirRef.current?.unfreeze?.();
     }
     // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
     const isAdaptive = adaptiveEnabledRef.current;
