@@ -81,7 +81,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xxl,
     paddingVertical: Spacing.md,
-    backgroundColor: Colors.background,
+    backgroundColor: 'transparent',
+    zIndex: 2,
   },
   logoImage: {
     width: 120,
