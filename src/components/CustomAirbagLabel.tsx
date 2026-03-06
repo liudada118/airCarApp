@@ -100,10 +100,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
   activeContainer: {
     backgroundColor: Colors.primary,
@@ -112,11 +112,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(100, 100, 120, 0.4)',
   },
   icon: {
-    width: 18,
-    height: 18,
+    width: 22,
+    height: 22,
   },
   label: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.md,
     fontWeight: '500',
   },
   activeLabel: {
@@ -133,8 +133,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   line: {
-    width: 40,
-    height: 1.5,
+    width: 60,
+    height: 2,
   },
 });
 

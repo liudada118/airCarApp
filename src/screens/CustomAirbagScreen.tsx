@@ -174,7 +174,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     type: 'success' as 'success' | 'info' | 'error',
   });
   const [cmdLogs, setCmdLogs] = useState<CmdLog[]>([]);
-  const [showLog, setShowLog] = useState(true);
+  const [showLog, setShowLog] = useState(false);
   const logIdRef = useRef(0);
   const logScrollRef = useRef<ScrollView>(null);
 
@@ -642,7 +642,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             <View style={styles.seatContainer}>
               <CustomSeatDiagram
                 activeZone={selectedZone}
-                scale={0.85}
+                scale={1.15}
                 values={airbagValues}
               />
             </View>
@@ -808,12 +808,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             <Text style={styles.restoreButtonText}>恢复默认</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.resetButton}
-            onPress={handleResetPress}
-            activeOpacity={0.7}>
-            <Text style={styles.resetButtonText}>归零</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={styles.saveButton}
             onPress={handleSavePress}
             activeOpacity={0.7}>
@@ -879,7 +873,7 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
-    backgroundColor: Colors.surfaceBackground,
+    backgroundColor: 'rgba(60, 60, 67, 0.85)',
     marginHorizontal: Spacing.xxl,
     marginBottom: Spacing.lg,
     borderRadius: BorderRadius.xl,
@@ -1020,18 +1014,18 @@ const styles = StyleSheet.create({
   },
   leftLabels: {
     justifyContent: 'space-around',
-    height: 280,
-    paddingRight: Spacing.sm,
+    height: 360,
+    paddingRight: Spacing.md,
   },
   rightLabels: {
     justifyContent: 'space-around',
-    height: 200,
-    paddingLeft: Spacing.sm,
+    height: 260,
+    paddingLeft: Spacing.md,
   },
   seatContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.lg,
   },
   // ─── 右侧面板 ───
   rightPanel: {
