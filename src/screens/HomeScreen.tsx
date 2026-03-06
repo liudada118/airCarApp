@@ -40,7 +40,7 @@ import type {
 import {parseAirbagCommand, DEFAULT_AIRBAG_COMMAND_STATES, ALL_AIRBAG_ZONES} from '../types';
 import {mockSerial} from '../mock/mockSerialData';
 
-const {width: SCREEN_WIDTH} = Dimensions.get('window');
+const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
 
 const DEFAULT_BAUD_RATE = 1000000;
 const INITIAL_SENSOR_FRAME: number[] = new Array(144).fill(0);
@@ -843,7 +843,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
       <View style={styles.content} pointerEvents="box-none">
         {/* ─── 左侧面板 ─── */}
-        <View style={styles.leftPanel}>
+        <ScrollView style={styles.leftPanel} showsVerticalScrollIndicator={false} contentContainerStyle={styles.leftPanelContent}>
           {/* 座椅状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -905,10 +905,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                       : '当前为自适应调节状态')
                   : '自适应调节已关闭'}
               </Text>
-              <View style={styles.seatThumbnail}>
+              <View style={styles.seatDiagramContainer}>
                 <SeatDiagram
                   activeZone={null}
-                  scale={0.75}
+                  scale={1.2}
                   commandStates={commandStates}
                 />
               </View>
@@ -938,7 +938,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </ScrollView>
 
         {/* ─── 右侧面板 ─── */}
         <View style={styles.rightPanel} pointerEvents="box-none">
@@ -1764,12 +1764,14 @@ const styles = StyleSheet.create({
   },
   // ─── 左侧面板 ───
   leftPanel: {
-    width: SCREEN_WIDTH * 0.3,
-    maxWidth: SCREEN_WIDTH * 0.3,
+    width: SCREEN_WIDTH * 0.4,
+    maxWidth: SCREEN_WIDTH * 0.4,
     flexShrink: 0,
     flexGrow: 0,
     paddingRight: Spacing.md,
-    overflow: 'hidden' as const,
+  },
+  leftPanelContent: {
+    paddingBottom: Spacing.xxl,
   },
   section: {
     marginBottom: Spacing.lg,
@@ -1805,7 +1807,7 @@ const styles = StyleSheet.create({
   },
   seatStatusCard: {
     flex: 1,
-    height: 120,
+    height: 100,
     backgroundColor: 'rgba(60, 60, 67, 0.45)',
     borderRadius: BorderRadius.lg,
     justifyContent: 'center',
@@ -1970,9 +1972,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: Spacing.md,
   },
-  seatThumbnail: {
+  seatDiagramContainer: {
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   divider: {
     height: 1,
