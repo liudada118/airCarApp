@@ -3,12 +3,16 @@ import {
   StyleSheet,
   Text,
   View,
+  Image,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
-import IconFont from './IconFont';
 import type {ConnectionStatus} from '../types';
+
+// icon 图片资源
+const iconLogo = require('../assets/icons/icon-logo.png');
+const iconConnection = require('../assets/icons/icon-connection.png');
 
 interface TopBarProps {
   connectionStatus: ConnectionStatus;
@@ -40,9 +44,13 @@ const TopBar: React.FC<TopBarProps> = ({connectionStatus, onRetry}) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>SHROOM</Text>
+      <Image source={iconLogo} style={styles.logoImage} resizeMode="contain" />
       <View style={styles.statusContainer}>
-        <IconFont name="lujing2" size={18} color={statusColor} />
+        <Image
+          source={iconConnection}
+          style={[styles.connectionIcon, {tintColor: statusColor}]}
+          resizeMode="contain"
+        />
         <Text style={[styles.statusText, {color: statusColor}]}>
           {statusText}
         </Text>
@@ -75,12 +83,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     backgroundColor: Colors.background,
   },
-  logo: {
-    fontSize: FontSize.xxl,
-    fontWeight: '800',
-    color: Colors.textWhite,
-    letterSpacing: 2,
-    fontStyle: 'italic',
+  logoImage: {
+    width: 120,
+    height: 30,
+  },
+  connectionIcon: {
+    width: 18,
+    height: 18,
   },
   statusContainer: {
     flexDirection: 'row',

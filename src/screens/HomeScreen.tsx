@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useMemo, useState, useRef} from 'react';
 import {
   Alert,
   Dimensions,
+  Image,
   Modal,
   NativeEventEmitter,
   NativeModules,
@@ -17,6 +18,14 @@ import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 import {TopBar, SeatDiagram, ConnectionErrorModal} from '../components';
 import IconFont from '../components/IconFont';
 import CarAirRN from '../components/CarAirRN';
+
+// icon 图片资源
+const iconSitStatus = require('../assets/icons/icon-sitStatus.png');
+const iconAirStatus = require('../assets/icons/icon-airStatus.png');
+const iconSetting = require('../assets/icons/icon-setting.png');
+const iconOnSeat = require('../assets/icons/icon-onSeat.png');
+const iconOutSeat = require('../assets/icons/icon-outSeat.png');
+const iconCustomAirbag = require('../assets/icons/icon-customAirbag.png');
 import type {
   SeatStatus,
   ConnectionStatus,
@@ -829,7 +838,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           {/* 座椅状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <IconFont name="bianji" size={14} color={Colors.primary} />
+              <Image source={iconSitStatus} style={styles.sectionIcon} resizeMode="contain" />
               <Text style={styles.sectionTitle}>座椅状态</Text>
             </View>
             <View style={styles.seatStatusRow}>
@@ -838,12 +847,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   styles.seatStatusCard,
                   seatStatus === 'seated' && styles.seatStatusCardActive,
                 ]}>
-                <IconFont
-                  name="zaizuo"
-                  size={48}
-                  color={
-                    seatStatus === 'seated' ? Colors.primary : Colors.textGray
-                  }
+                <Image
+                  source={iconOnSeat}
+                  style={[styles.seatIcon, {tintColor: seatStatus === 'seated' ? Colors.primary : Colors.textGray}]}
+                  resizeMode="contain"
                 />
                 <Text
                   style={[
@@ -859,12 +866,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   styles.seatStatusCard,
                   seatStatus === 'away' && styles.seatStatusCardActive,
                 ]}>
-                <IconFont
-                  name="lizuo"
-                  size={48}
-                  color={
-                    seatStatus === 'away' ? Colors.primary : Colors.textGray
-                  }
+                <Image
+                  source={iconOutSeat}
+                  style={[styles.seatIcon, {tintColor: seatStatus === 'away' ? Colors.primary : Colors.textGray}]}
+                  resizeMode="contain"
                 />
                 <Text
                   style={[
@@ -880,7 +885,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           {/* 气囊状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <IconFont name="bianji" size={14} color={Colors.primary} />
+              <Image source={iconAirStatus} style={styles.sectionIcon} resizeMode="contain" />
               <Text style={styles.sectionTitle}>气囊状态</Text>
             </View>
             <View style={styles.airbagStatusCard}>
@@ -914,10 +919,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 }}
                 activeOpacity={0.7}>
                 <View style={styles.customizeLinkRow}>
-                  <IconFont
-                    name="keshihuatiaojie"
-                    size={14}
-                    color={Colors.primary}
+                  <Image
+                    source={iconCustomAirbag}
+                    style={[styles.customizeLinkIcon, {tintColor: Colors.primary}]}
+                    resizeMode="contain"
                   />
                   <Text style={styles.customizeLink}>自定义气囊调节</Text>
                 </View>
@@ -931,7 +936,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           {/* 自适应调节开关 */}
           <View style={styles.adaptiveSection}>
             <View style={styles.sectionHeader}>
-              <IconFont name="bianji" size={14} color={Colors.primary} />
+              <Image source={iconSetting} style={styles.sectionIcon} resizeMode="contain" />
               <Text style={styles.sectionTitle}>自适应调节</Text>
             </View>
             <View style={styles.toggleContainer}>
@@ -1767,6 +1772,19 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     color: 'rgba(142, 142, 160, 0.9)',
     fontWeight: '500',
+  },
+  sectionIcon: {
+    width: 16,
+    height: 16,
+    tintColor: Colors.primary,
+  },
+  seatIcon: {
+    width: 48,
+    height: 48,
+  },
+  customizeLinkIcon: {
+    width: 14,
+    height: 14,
   },
   // ─── 座椅状态 ───
   seatStatusRow: {

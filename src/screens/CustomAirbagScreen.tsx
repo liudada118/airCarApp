@@ -2,6 +2,7 @@ import React, {useState, useCallback, useRef, useEffect, useMemo} from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   StyleSheet,
   NativeModules,
@@ -21,6 +22,9 @@ import {
   Toast,
 } from '../components';
 import IconFont from '../components/IconFont';
+
+// icon 图片资源
+const iconCustomAirbag = require('../assets/icons/icon-customAirbag.png');
 import type {
   CustomAirbagZone,
   CustomAirbagValues,
@@ -549,10 +553,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         {/* 标题栏 */}
         <View style={styles.titleBar}>
           <View style={styles.titleLeft}>
-            <IconFont
-              name="keshihuatiaojie"
-              size={20}
-              color={Colors.textWhite}
+            <Image
+              source={iconCustomAirbag}
+              style={{width: 20, height: 20, tintColor: Colors.textWhite}}
+              resizeMode="contain"
             />
             <Text style={styles.title}>自定义气囊调节</Text>
             {/* 锁定状态指示 */}
