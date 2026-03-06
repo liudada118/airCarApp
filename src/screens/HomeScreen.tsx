@@ -1810,12 +1810,12 @@ const styles = StyleSheet.create({
   seatStatusCard: {
     flex: 1,
     height: 120,
-    backgroundColor: Colors.cardBackground,
+    backgroundColor: 'transparent',
     borderRadius: BorderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.transparent,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   seatStatusCardActive: {
     borderColor: Colors.primary,
@@ -1964,7 +1964,7 @@ const styles = StyleSheet.create({
   },
   // ─── 气囊状态 ───
   airbagStatusCard: {
-    backgroundColor: Colors.cardBackground,
+    backgroundColor: 'transparent',
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
   },
@@ -2038,7 +2038,7 @@ const styles = StyleSheet.create({
   // ─── 悬浮按钮组 ───
   floatingBtnGroupWrapper: {
     position: 'absolute',
-    top: 8,
+    top: 50,
     right: 8,
     zIndex: 10,
   },
