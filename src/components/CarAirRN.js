@@ -1157,6 +1157,13 @@ function CarAirRNInner({data = [], style}, ref) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0f16);
 
+    // ─── 网格背景（设计图还原） ───
+    const gridHelper = new THREE.GridHelper(600, 30, 0x1a2030, 0x1a2030);
+    gridHelper.position.y = -120;
+    gridHelper.material.opacity = 0.4;
+    gridHelper.material.transparent = true;
+    scene.add(gridHelper);
+
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 3000);
     camera.position.set(0, 0, 300);
     camera.lookAt(0, 0, 0);

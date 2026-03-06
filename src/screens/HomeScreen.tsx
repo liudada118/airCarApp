@@ -452,6 +452,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showConfig, setShowConfig] = useState(false);
   const [showRealtimeData, setShowRealtimeData] = useState(false);
   const [showNonStdFrames, setShowNonStdFrames] = useState(false);
+  const [showCommandModal, setShowCommandModal] = useState(false);
   const nonStdFramesRef = useRef<{hex: string; length: number; timestamp: number; csv: string}[]>([]);
   const [nonStdFrameVersion, setNonStdFrameVersion] = useState(0);
   const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
@@ -825,7 +826,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       <View style={styles.content}>
         {/* ─── 左侧面板 ─── */}
         <View style={styles.leftPanel}>
-        <ScrollView showsVerticalScrollIndicator={false}>
           {/* 座椅状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -924,36 +924,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* 气囊控制指令 */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <IconFont name="bianji" size={14} color={Colors.textGray} />
-              <Text style={styles.sectionTitle}>控制指令</Text>
-            </View>
-            <View style={styles.cmdCard}>
-              {ALL_AIRBAG_ZONES.map((zone, i) => {
-                const cmd = commandStates[zone];
-                const label = ZONE_CN_LABELS[zone] || zone;
-                const cmdLabel = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
-                const cmdColor = cmd === 3 ? Colors.primary : cmd === 4 ? Colors.warning : Colors.textGray;
-                return (
-                  <View key={zone} style={styles.cmdRow}>
-                    <Text style={styles.cmdZoneText}>{i + 1}. {label}</Text>
-                    <Text style={[styles.cmdValueText, {color: cmdColor}]}>{cmdLabel}</Text>
-                  </View>
-                );
-              })}
-              {rawCommand && rawCommand.length > 0 && (
-                <View style={styles.cmdHexRow}>
-                  <Text style={styles.cmdHexText}>
-                    {rawCommand.map(v => v.toString(16).padStart(2, '0').toUpperCase()).join(' ')}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </ScrollView>
         </View>
 
         {/* ─── 右侧面板 ─── */}
@@ -1044,6 +1014,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 onPress={() => setShowNonStdFrames(true)}
                 activeOpacity={0.7}>
                 <Text style={styles.matrixToggleBtnText}>回传{nonStdFramesRef.current.length > 0 ? `(${nonStdFramesRef.current.length})` : ''}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.matrixToggleBtn, {marginLeft: 6}]}
+                onPress={() => setShowCommandModal(true)}
+                activeOpacity={0.7}>
+                <Text style={styles.matrixToggleBtnText}>指令</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1708,6 +1684,52 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           <Text style={styles.errorHintText}>{connectionErrorMessage}</Text>
         </View>
       ) : null}
+
+      {/* 控制指令弹窗 */}
+      {showCommandModal && (
+      <Modal
+        visible={showCommandModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCommandModal(false)}>
+        <View style={styles.matrixModalOverlay}>
+          <View style={[styles.matrixModalContent, {maxWidth: 400, maxHeight: '70%'}]}>
+            <View style={styles.matrixModalHeader}>
+              <Text style={styles.matrixModalTitle}>控制指令</Text>
+              <TouchableOpacity
+                onPress={() => setShowCommandModal(false)}
+                activeOpacity={0.7}
+                style={styles.matrixModalClose}>
+                <Text style={styles.matrixModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
+              {ALL_AIRBAG_ZONES.map((zone, i) => {
+                const cmd = commandStates[zone];
+                const label = ZONE_CN_LABELS[zone] || zone;
+                const cmdLabel = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
+                const cmdColor = cmd === 3 ? Colors.primary : cmd === 4 ? Colors.warning : Colors.textGray;
+                return (
+                  <View key={zone} style={styles.cfgRow}>
+                    <View style={{flex: 1}}>
+                      <Text style={styles.cfgKey}>{i + 1}. {label}</Text>
+                    </View>
+                    <Text style={[styles.cfgValueText, {color: cmdColor, fontWeight: '600'}]}>{cmdLabel}</Text>
+                  </View>
+                );
+              })}
+              {rawCommand && rawCommand.length > 0 && (
+                <View style={{paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)'}}>
+                  <Text style={{fontSize: 10, color: Colors.textGray, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 14}} selectable>
+                    {rawCommand.map(v => v.toString(16).padStart(2, '0').toUpperCase()).join(' ')}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      )}
     </View>
   );
 };
