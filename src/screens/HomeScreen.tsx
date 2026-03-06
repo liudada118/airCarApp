@@ -832,6 +832,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         }}
       />
 
+      {/* ─── 3D 座椅模型（全屏背景） ─── */}
+      <View style={styles.fullscreen3DBackground}>
+        <CarAirRN
+          ref={carAirRef}
+          data={sensorData as unknown as never[]}
+          style={styles.carAir3D}
+        />
+      </View>
+
       <View style={styles.content}>
         {/* ─── 左侧面板 ─── */}
         <View style={styles.leftPanel}>
@@ -987,14 +996,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             </View>
           </View>
 
-          {/* 3D 座椅模型 */}
-          <View style={styles.seat3DContainer}>
-            <CarAirRN
-              ref={carAirRef}
-              data={sensorData as unknown as never[]}
-              style={styles.carAir3D}
-            />
-            {/* 悬浮按钮组 - 3D 视图右上角 */}
+          {/* 悬浮按钮组 - 右上角 */}
+          <View style={styles.floatingBtnGroupWrapper}>
             <View style={styles.floatingBtnGroup}>
               <TouchableOpacity
                 style={styles.matrixToggleBtn}
@@ -1744,11 +1747,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  fullscreen3DBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
   content: {
     flex: 1,
     flexDirection: 'row',
     paddingHorizontal: Spacing.xxl,
     paddingBottom: Spacing.lg,
+    zIndex: 1,
   },
   // ─── 左侧面板 ───
   leftPanel: {
@@ -1757,7 +1769,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flexGrow: 0,
     paddingRight: Spacing.md,
+    paddingLeft: Spacing.md,
+    paddingTop: Spacing.md,
     overflow: 'hidden' as const,
+    backgroundColor: '#292D32',
+    borderRadius: BorderRadius.lg,
   },
   section: {
     marginBottom: Spacing.lg,
@@ -2016,21 +2032,18 @@ const styles = StyleSheet.create({
   toggleTextInactive: {
     color: Colors.textGray,
   },
-  seat3DContainer: {
-    flex: 1,
-    borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-  },
   carAir3D: {
     flex: 1,
   },
   // ─── 悬浮按钮组 ───
-  floatingBtnGroup: {
+  floatingBtnGroupWrapper: {
     position: 'absolute',
     top: 8,
     right: 8,
-    flexDirection: 'row',
     zIndex: 10,
+  },
+  floatingBtnGroup: {
+    flexDirection: 'row',
   },
   matrixToggleBtn: {
     backgroundColor: 'rgba(0,0,0,0.55)',
