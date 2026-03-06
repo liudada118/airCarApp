@@ -841,7 +841,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         />
       </View>
 
-      <View style={styles.content}>
+      <View style={styles.content} pointerEvents="box-none">
         {/* ─── 左侧面板 ─── */}
         <View style={styles.leftPanel}>
           {/* 座椅状态 */}
@@ -941,7 +941,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         </View>
 
         {/* ─── 右侧面板 ─── */}
-        <View style={styles.rightPanel}>
+        <View style={styles.rightPanel} pointerEvents="box-none">
           {/* 自适应调节开关 */}
           <View style={styles.adaptiveSection}>
             <View style={styles.sectionHeader}>
@@ -1769,11 +1769,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flexGrow: 0,
     paddingRight: Spacing.md,
-    paddingLeft: Spacing.md,
-    paddingTop: Spacing.md,
     overflow: 'hidden' as const,
-    backgroundColor: '#292D32',
-    borderRadius: BorderRadius.lg,
   },
   section: {
     marginBottom: Spacing.lg,
@@ -1810,16 +1806,16 @@ const styles = StyleSheet.create({
   seatStatusCard: {
     flex: 1,
     height: 120,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(60, 60, 67, 0.45)',
     borderRadius: BorderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   seatStatusCardActive: {
     borderColor: Colors.primary,
-    backgroundColor: 'rgba(0, 122, 255, 0.08)',
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
   },
   seatStatusText: {
     fontSize: FontSize.lg,
@@ -1964,7 +1960,7 @@ const styles = StyleSheet.create({
   },
   // ─── 气囊状态 ───
   airbagStatusCard: {
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(41, 45, 50, 0.85)',
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
   },
