@@ -55,6 +55,7 @@ interface HomeScreenProps {
   onAdaptiveChange: (enabled: boolean) => void;
   connectionStatus: ConnectionStatus;
   onConnectionStatusChange: (status: ConnectionStatus) => void;
+  onBodyShapeChange?: (shape: BodyShape) => void;
 }
 
 interface SerialDevice {
@@ -404,7 +405,7 @@ function matrixCellColor(val: number): string {
 
 // ─── 组件 ────────────────────────────────────────────────────────────
 
-const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange}) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange, onBodyShapeChange}) => {
   // 合并所有算法结果为单个状态对象，减少 setState 调用（8→1），大幅降低重渲染次数
   const [algoState, setAlgoState] = useState({
     seatStatus: 'away' as SeatStatus,
@@ -505,19 +506,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       }
       carAirRef.current?.unfreeze?.();
     }
-    // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
-    const isAdaptive = adaptiveEnabledRef.current;
+    // 通知体型变化（触发按体型加载气囊缓存）
+    if (parsed.bodyShapeInfo.body_shape) {
+      onBodyShapeChange?.(parsed.bodyShapeInfo.body_shape);
+    }
+    // 气囊状态始终根据回传指令控制，不受自适应开关影响
     setAlgoState({
       seatStatus: parsed.seatStatus,
       algoSeatStatus: parsed.algoSeatStatus,
       bodyShapeInfo: parsed.bodyShapeInfo,
-      commandStates: isAdaptive ? parsed.commandStates : DEFAULT_AIRBAG_COMMAND_STATES as AirbagCommandStates,
-      rawCommand: isAdaptive ? parsed.rawCommand : null,
+      commandStates: parsed.commandStates,
+      rawCommand: parsed.rawCommand,
       livingStatus: parsed.livingStatus,
       bodyType: parsed.bodyType,
       realtimeData: parsed.realtimeData,
     });
-  }, []);
+  }, [onBodyShapeChange]);
 
   // ─── Python 配置管理 ──────────────────────────────────────
   const loadConfig = useCallback(() => {
@@ -544,11 +548,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
   const handleSetConfig = useCallback((key: string, value: any) => {
     const valueJson = JSON.stringify(value);
+    console.log('[Config] 设置配置:', key, '=', valueJson);
     NativeModules.SerialModule?.setConfig?.(key, valueJson)
       .then((json: string) => {
         try {
           const result = JSON.parse(json);
           if (result.ok) {
+            console.log('[Config] 配置写入成功:', key, '=', value);
             setConfigData(prev => {
               if (!prev) return prev;
               return {
@@ -556,10 +562,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 [key]: {...prev[key], value},
               };
             });
+          } else {
+            console.warn('[Config] 配置写入失败:', key, result.error);
           }
-        } catch (_) {}
+        } catch (e) {
+          console.warn('[Config] 解析响应失败:', e);
+        }
       })
-      .catch(() => {});
+      .catch((e: any) => {
+        console.warn('[Config] setConfig 调用失败:', key, e?.message || e);
+      });
   }, []);
 
   const handleResetConfig = useCallback(() => {

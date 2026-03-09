@@ -5,11 +5,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from './theme';
 import { HomeScreen, CustomAirbagScreen } from './screens';
 import { Toast } from './components';
-import type { ConnectionStatus, CustomAirbagValues } from './types';
+import type { ConnectionStatus, CustomAirbagValues, BodyShape } from './types';
 import { DEFAULT_CUSTOM_AIRBAG_VALUES } from './types';
 
-/** AsyncStorage 缓存 key，与 CustomAirbagScreen 保持一致 */
-const ASYNC_STORAGE_KEY = 'custom_airbag_values';
+/** AsyncStorage 缓存 key 前缀，按体型分类存储 */
+const ASYNC_STORAGE_KEY_PREFIX = 'custom_airbag_values_';
+/** 旧的单一缓存 key（兼容迁移） */
+const LEGACY_ASYNC_STORAGE_KEY = 'custom_airbag_values';
+
+/** 根据体型获取 AsyncStorage key */
+function getStorageKey(shape: BodyShape): string {
+  return shape ? `${ASYNC_STORAGE_KEY_PREFIX}${shape}` : LEGACY_ASYNC_STORAGE_KEY;
+}
 
 const sm = NativeModules.SerialModule;
 
@@ -36,43 +43,84 @@ const App: React.FC = () => {
     type: 'success' as 'success' | 'info' | 'error',
   });
 
-  // 持久化的气囊设置值
+  // 当前体型（由 HomeScreen 算法回传更新）
+  const [currentBodyShape, setCurrentBodyShape] = useState<BodyShape>('');
+  const currentBodyShapeRef = useRef<BodyShape>('');
+
+  // 持久化的气囊设置值（按体型分类）
   const [savedAirbagValues, setSavedAirbagValues] = useState<CustomAirbagValues | null>(null);
   const savedAirbagValuesRef = useRef<CustomAirbagValues | null>(null);
 
-  // 应用启动时加载已保存的气囊设置
-  // 优先级：SharedPreferences(Native) > AsyncStorage(JS层) > 默认值
-  useEffect(() => {
-    const loadSettings = async () => {
-      // 1. 尝试从 SharedPreferences 加载
-      if (sm?.loadAirbagSettings) {
-        try {
-          const json = await sm.loadAirbagSettings();
-          if (json) {
-            const parsed = JSON.parse(json) as CustomAirbagValues;
-            setSavedAirbagValues(parsed);
-            savedAirbagValuesRef.current = parsed;
-            AsyncStorage.setItem(ASYNC_STORAGE_KEY, json).catch(() => {});
-            return;
-          }
-        } catch (_) {}
-      }
+  // 当体型变化时，加载对应体型的气囊设置
+  const loadSettingsForShape = useCallback(async (shape: BodyShape) => {
+    const storageKey = getStorageKey(shape);
+    console.log('[AirbagStorage] 加载体型缓存:', shape || '默认', 'key:', storageKey);
 
-      // 2. SharedPreferences 无数据或失败，尝试从 AsyncStorage 加载
+    // 1. 尝试从 SharedPreferences 加载（按体型）
+    if (sm?.loadAirbagSettingsForShape && shape) {
       try {
-        const json = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
+        const json = await sm.loadAirbagSettingsForShape(shape);
         if (json) {
           const parsed = JSON.parse(json) as CustomAirbagValues;
           setSavedAirbagValues(parsed);
           savedAirbagValuesRef.current = parsed;
-          sm?.saveAirbagSettings?.(json)?.catch?.(() => {});
+          AsyncStorage.setItem(storageKey, json).catch(() => {});
+          console.log('[AirbagStorage] SP加载成功:', shape, parsed);
           return;
         }
       } catch (_) {}
-    };
+    }
 
-    loadSettings();
+    // 2. 尝试从 AsyncStorage 加载（按体型）
+    try {
+      const json = await AsyncStorage.getItem(storageKey);
+      if (json) {
+        const parsed = JSON.parse(json) as CustomAirbagValues;
+        setSavedAirbagValues(parsed);
+        savedAirbagValuesRef.current = parsed;
+        if (sm?.saveAirbagSettingsForShape && shape) {
+          sm.saveAirbagSettingsForShape(shape, json).catch(() => {});
+        }
+        console.log('[AirbagStorage] AS加载成功:', shape, parsed);
+        return;
+      }
+    } catch (_) {}
+
+    // 3. 该体型无缓存，尝试从旧的单一缓存迁移
+    if (shape) {
+      try {
+        const legacyJson = await AsyncStorage.getItem(LEGACY_ASYNC_STORAGE_KEY);
+        if (legacyJson) {
+          const parsed = JSON.parse(legacyJson) as CustomAirbagValues;
+          setSavedAirbagValues(parsed);
+          savedAirbagValuesRef.current = parsed;
+          console.log('[AirbagStorage] 从旧缓存迁移:', shape, parsed);
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // 4. 无任何缓存，使用默认值
+    setSavedAirbagValues(null);
+    savedAirbagValuesRef.current = null;
+    console.log('[AirbagStorage] 无缓存，使用默认值:', shape);
   }, []);
+
+  // 应用启动时加载（兼容旧缓存）
+  useEffect(() => {
+    loadSettingsForShape(currentBodyShape);
+  }, []);
+
+  // 体型变化时重新加载对应缓存
+  const handleBodyShapeChange = useCallback((shape: BodyShape) => {
+    if (shape === currentBodyShapeRef.current) return;
+    console.log('[BodyShape] 体型变化:', currentBodyShapeRef.current, '->', shape);
+    setCurrentBodyShape(shape);
+    currentBodyShapeRef.current = shape;
+    if (shape) {
+      loadSettingsForShape(shape);
+    }
+  }, [loadSettingsForShape]);
 
   // 导航到自定义气囊调节页面
   const navigateToCustomize = useCallback(() => {
@@ -90,9 +138,14 @@ const App: React.FC = () => {
     savedAirbagValuesRef.current = values;
 
     setCurrentScreen('home');
+    const shapeLabel = currentBodyShapeRef.current
+      ? ({'瘦小': '轻盈型', '中等': '均衡型', '高大': '稳健型'}[currentBodyShapeRef.current] || currentBodyShapeRef.current)
+      : '';
     setHomeToast({
       visible: true,
-      message: '自定义气囊调节保存成功，并应用到当前座椅。',
+      message: shapeLabel
+        ? `「${shapeLabel}」自定义气囊调节保存成功，并应用到当前座椅。`
+        : '自定义气囊调节保存成功，并应用到当前座椅。',
       type: 'success',
     });
   }, []);
@@ -105,30 +158,34 @@ const App: React.FC = () => {
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {currentScreen === 'home' ? (
-          <View style={styles.screenContainer}>
-            <HomeScreen
-              onNavigateToCustomize={navigateToCustomize}
+        {/* HomeScreen 始终挂载，避免切换页面时 3D 模型被销毁后无法重新加载 */}
+        <View style={[styles.screenContainer, currentScreen !== 'home' && styles.screenHidden]}>
+          <HomeScreen
+            onNavigateToCustomize={navigateToCustomize}
+            adaptiveEnabled={adaptiveEnabled}
+            onAdaptiveChange={setAdaptiveEnabled}
+            connectionStatus={connectionStatus}
+            onConnectionStatusChange={setConnectionStatus}
+            onBodyShapeChange={handleBodyShapeChange}
+          />
+          {/* 首页级别的 Toast（保存成功后显示） */}
+          <Toast
+            visible={homeToast.visible}
+            message={homeToast.message}
+            type={homeToast.type}
+            onHide={hideHomeToast}
+          />
+        </View>
+        {currentScreen === 'customAirbag' && (
+          <View style={styles.screenOverlay}>
+            <CustomAirbagScreen
+              onClose={navigateToHome}
+              onSaveSuccess={handleSaveSuccess}
+              initialValues={savedAirbagValues || undefined}
               adaptiveEnabled={adaptiveEnabled}
-              onAdaptiveChange={setAdaptiveEnabled}
-              connectionStatus={connectionStatus}
-              onConnectionStatusChange={setConnectionStatus}
-            />
-            {/* 首页级别的 Toast（保存成功后显示） */}
-            <Toast
-              visible={homeToast.visible}
-              message={homeToast.message}
-              type={homeToast.type}
-              onHide={hideHomeToast}
+              bodyShape={currentBodyShape}
             />
           </View>
-        ) : (
-          <CustomAirbagScreen
-            onClose={navigateToHome}
-            onSaveSuccess={handleSaveSuccess}
-            initialValues={savedAirbagValues || undefined}
-            adaptiveEnabled={adaptiveEnabled}
-          />
         )}
       </SafeAreaView>
     </SafeAreaProvider>
@@ -143,6 +200,18 @@ const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
     position: 'relative',
+  },
+  screenHidden: {
+    // 保持挂载但不可见，避免 3D 模型被销毁
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 0,
+    pointerEvents: 'none',
+  },
+  screenOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
   },
 });
 

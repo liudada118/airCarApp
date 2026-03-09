@@ -539,6 +539,33 @@ class SerialModule(
     }
 
     @ReactMethod
+    fun saveAirbagSettingsForShape(bodyShape: String, jsonStr: String, promise: Promise) {
+        try {
+            val key = "custom_airbag_values_$bodyShape"
+            val success = airbagPrefs.edit().putString(key, jsonStr).commit()
+            if (success) {
+                Log.i(logTag, "[AirbagStorage] SP commit for shape '$bodyShape': $jsonStr")
+                promise.resolve(true)
+            } else {
+                promise.reject("SAVE_ERROR", "SharedPreferences commit returned false")
+            }
+        } catch (e: Exception) {
+            promise.reject("SAVE_ERROR", e.message ?: "save airbag settings for shape failed")
+        }
+    }
+
+    @ReactMethod
+    fun loadAirbagSettingsForShape(bodyShape: String, promise: Promise) {
+        try {
+            val key = "custom_airbag_values_$bodyShape"
+            val json = airbagPrefs.getString(key, null)
+            promise.resolve(json)
+        } catch (e: Exception) {
+            promise.reject("LOAD_ERROR", e.message ?: "load airbag settings for shape failed")
+        }
+    }
+
+    @ReactMethod
     fun savePointSettings(jsonStr: String, promise: Promise) {
         try {
             prefs.edit().putString("settings", jsonStr).apply()

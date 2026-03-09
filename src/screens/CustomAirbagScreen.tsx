@@ -31,11 +31,13 @@ import type {
   CustomAirbagZoneConfig,
   ModalType,
   ConnectionStatus,
+  BodyShape,
 } from '../types';
 import {DEFAULT_CUSTOM_AIRBAG_VALUES, ALL_CUSTOM_AIRBAG_ZONES} from '../types';
 
-/** AsyncStorage 缓存 key */
-const ASYNC_STORAGE_KEY = 'custom_airbag_values';
+/** AsyncStorage 缓存 key 前缀，按体型分类存储 */
+const ASYNC_STORAGE_KEY_PREFIX = 'custom_airbag_values_';
+const LEGACY_ASYNC_STORAGE_KEY = 'custom_airbag_values';
 
 const sm = NativeModules.SerialModule;
 const serialEmitter = sm ? new NativeEventEmitter(sm as never) : null;
@@ -90,6 +92,7 @@ interface CustomAirbagScreenProps {
   onSaveSuccess: (values: CustomAirbagValues) => void;
   initialValues?: CustomAirbagValues;
   adaptiveEnabled?: boolean;
+  bodyShape?: BodyShape;
 }
 
 const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
@@ -97,7 +100,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   onSaveSuccess,
   initialValues,
   adaptiveEnabled = true,
+  bodyShape = '',
 }) => {
+  /** 根据体型获取存储 key */
+  const storageKey = bodyShape ? `${ASYNC_STORAGE_KEY_PREFIX}${bodyShape}` : LEGACY_ASYNC_STORAGE_KEY;
   const [connectionStatus] = useState<ConnectionStatus>('connected');
   const [selectedZone, setSelectedZone] = useState<CustomAirbagZone>('lumbar');
 
@@ -125,18 +131,16 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
       };
 
-      // 1. 尝试从 SharedPreferences 读取
-      if (sm?.loadAirbagSettings) {
+      // 1. 尝试从 SharedPreferences 读取（按体型）
+      if (sm?.loadAirbagSettingsForShape && bodyShape) {
         try {
-          const json = await sm.loadAirbagSettings();
-
+          const json = await sm.loadAirbagSettingsForShape(bodyShape);
           if (json) {
             const parsed = JSON.parse(json) as CustomAirbagValues;
-            const hasNonZero = Object.values(parsed).some(v => v !== 0);
-
             applyLoadedValues(parsed);
-            AsyncStorage.setItem(ASYNC_STORAGE_KEY, json).catch(() => {});
+            AsyncStorage.setItem(storageKey, json).catch(() => {});
             setStorageLoaded(true);
+            if (__DEV__) console.log('[CustomAirbag] SP加载成功:', bodyShape, parsed);
             return;
           }
         } catch (e: any) {
@@ -144,17 +148,17 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         }
       }
 
-      // 2. 尝试从 AsyncStorage 读取
+      // 2. 尝试从 AsyncStorage 读取（按体型）
       try {
-        const json = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
+        const json = await AsyncStorage.getItem(storageKey);
         if (json) {
           const parsed = JSON.parse(json) as CustomAirbagValues;
-
           applyLoadedValues(parsed);
-          if (sm?.saveAirbagSettings) {
-            sm.saveAirbagSettings(json).catch(() => {});
+          if (sm?.saveAirbagSettingsForShape && bodyShape) {
+            sm.saveAirbagSettingsForShape(bodyShape, json).catch(() => {});
           }
           setStorageLoaded(true);
+          if (__DEV__) console.log('[CustomAirbag] AS加载成功:', bodyShape, parsed);
           return;
         }
       } catch (e: any) {
@@ -270,20 +274,22 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     // 并行写入 SharedPreferences + AsyncStorage，等待两者都完成
     const saveResults: {sp: boolean; as: boolean} = {sp: false, as: false};
 
-    // 1. 写入 SharedPreferences（Native 层）
-    if (sm?.saveAirbagSettings) {
+    // 1. 写入 SharedPreferences（Native 层，按体型）
+    if (sm?.saveAirbagSettingsForShape && bodyShape) {
       try {
-        await sm.saveAirbagSettings(jsonStr);
+        await sm.saveAirbagSettingsForShape(bodyShape, jsonStr);
         saveResults.sp = true;
+        if (__DEV__) console.log('[AirbagStorage] SP保存成功:', bodyShape);
       } catch (e: any) {
         if (__DEV__) console.warn('[AirbagStorage] SP保存失败:', e?.message || e);
       }
     }
 
-    // 2. 写入 AsyncStorage（JS 层兑底）
+    // 2. 写入 AsyncStorage（JS 层兑底，按体型）
     try {
-      await AsyncStorage.setItem(ASYNC_STORAGE_KEY, jsonStr);
+      await AsyncStorage.setItem(storageKey, jsonStr);
       saveResults.as = true;
+      if (__DEV__) console.log('[AirbagStorage] AS保存成功:', bodyShape, 'key:', storageKey);
     } catch (e: any) {
       if (__DEV__) console.warn('[AirbagStorage] AS保存失败:', e?.message || e);
     }
@@ -457,10 +463,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       legRest: 0,
     });
     AIRBAG_ZONES.forEach(z => sendAirbagCmd(z.key, 'stop'));
-    // 恢复默认时清除本地缓存（下次进入将使用默认值）
-    AsyncStorage.removeItem(ASYNC_STORAGE_KEY).catch(() => {});
-    if (sm?.saveAirbagSettings) {
-      sm.saveAirbagSettings(JSON.stringify(DEFAULT_CUSTOM_AIRBAG_VALUES)).catch(() => {});
+    // 恢复默认时清除当前体型的本地缓存
+    AsyncStorage.removeItem(storageKey).catch(() => {});
+    if (sm?.saveAirbagSettingsForShape && bodyShape) {
+      sm.saveAirbagSettingsForShape(bodyShape, JSON.stringify(DEFAULT_CUSTOM_AIRBAG_VALUES)).catch(() => {});
     }
     setToast({
       visible: true,
@@ -494,10 +500,12 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     // 2. 发送停止指令给所有气囊
     AIRBAG_ZONES.forEach(z => sendAirbagCmd(z.key, 'stop'));
 
-    // 3. 清除本地缓存（同时写入全零值到存储）
+    // 3. 清除当前体型的本地缓存（同时写入全零值到存储）
     const zeroJson = JSON.stringify(zeroValues);
-    await AsyncStorage.setItem(ASYNC_STORAGE_KEY, zeroJson).catch(() => {});
-    sm?.saveAirbagSettings?.(zeroJson)?.catch?.(() => {});
+    await AsyncStorage.setItem(storageKey, zeroJson).catch(() => {});
+    if (sm?.saveAirbagSettingsForShape && bodyShape) {
+      sm.saveAirbagSettingsForShape(bodyShape, zeroJson).catch(() => {});
+    }
 
     setToast({
       visible: true,
