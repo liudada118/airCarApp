@@ -943,7 +943,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               <View style={styles.seatDiagramContainer}>
                 <SeatDiagram
                   activeZone={null}
-                  scale={1.2}
+                  scale={1.0}
                   commandStates={commandStates}
                 />
               </View>
@@ -1801,11 +1801,11 @@ const styles = StyleSheet.create({
   },
   // ─── 左侧面板 ───
   leftPanel: {
-    width: SCREEN_WIDTH * 0.4,
-    maxWidth: SCREEN_WIDTH * 0.4,
+    width: SCREEN_WIDTH * 0.30,
+    maxWidth: SCREEN_WIDTH * 0.30,
     flexShrink: 0,
     flexGrow: 0,
-    paddingRight: Spacing.md,
+    paddingRight: Spacing.sm,
   },
   leftPanelContent: {
     paddingBottom: Spacing.xxl,
@@ -2001,22 +2001,23 @@ const styles = StyleSheet.create({
   airbagStatusCard: {
     backgroundColor: 'rgba(41, 45, 50, 0.85)',
     borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
+    padding: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   airbagStatusText: {
-    fontSize: FontSize.md,
+    fontSize: FontSize.sm,
     color: Colors.textWhite,
     fontWeight: '600',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.xs,
   },
   seatDiagramContainer: {
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    paddingVertical: 2,
   },
   divider: {
     height: 1,
     backgroundColor: Colors.borderGray,
-    marginVertical: Spacing.md,
+    marginVertical: Spacing.sm,
   },
   customizeLinkRow: {
     flexDirection: 'row',
