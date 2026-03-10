@@ -1605,8 +1605,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           <StepControl
             label="X 位移"
             value={viewParams.modelPx}
-            min={-200}
-            max={200}
+            min={-1000}
+            max={1000}
             step={1}
             decimals={0}
             onValueChange={v => updateViewParam('modelPx', v)}
@@ -1614,8 +1614,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           <StepControl
             label="Y 位移"
             value={viewParams.modelPy}
-            min={-200}
-            max={200}
+            min={-1000}
+            max={1000}
             step={1}
             decimals={0}
             onValueChange={v => updateViewParam('modelPy', v)}
@@ -1623,8 +1623,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           <StepControl
             label="Z 位移"
             value={viewParams.modelPz}
-            min={-200}
-            max={200}
+            min={-1000}
+            max={1000}
             step={1}
             decimals={0}
             onValueChange={v => updateViewParam('modelPz', v)}
@@ -1634,8 +1634,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           <StepControl
             label="X 旋转"
             value={viewParams.modelRx}
-            min={-3.14}
-            max={3.14}
+            min={-6.28}
+            max={6.28}
             step={0.01}
             decimals={2}
             onValueChange={v => updateViewParam('modelRx', v)}
@@ -1643,8 +1643,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           <StepControl
             label="Y 旋转"
             value={viewParams.modelRy}
-            min={-3.14}
-            max={3.14}
+            min={-6.28}
+            max={6.28}
             step={0.01}
             decimals={2}
             onValueChange={v => updateViewParam('modelRy', v)}
@@ -1652,8 +1652,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           <StepControl
             label="Z 旋转"
             value={viewParams.modelRz}
-            min={-3.14}
-            max={3.14}
+            min={-6.28}
+            max={6.28}
             step={0.01}
             decimals={2}
             onValueChange={v => updateViewParam('modelRz', v)}
