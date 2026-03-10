@@ -41,7 +41,29 @@ _check_dependencies()
 
 from integrated_system import IntegratedSeatSystem
 
-_config_path = os.path.join(_release_dir, "sensor_config.yaml")
+# ─── 持久化配置路径 ─────────────────────────────────────────
+# Chaquopy 在 Android 上会将 HOME 设置为 /data/data/<包名>/files
+# 将用户修改过的配置保存到 HOME 目录，避免 APP 更新时被 extractPackages 覆盖
+_default_config_path = os.path.join(_release_dir, "sensor_config.yaml")
+_persistent_dir = os.environ.get("HOME", os.path.join(_base_dir, "_user_config"))
+_persistent_config_path = os.path.join(_persistent_dir, "sensor_config.yaml")
+
+import shutil
+
+def _ensure_persistent_config():
+    """确保持久化配置文件存在：不存在则从默认配置拷贝"""
+    if not os.path.exists(_persistent_config_path):
+        os.makedirs(_persistent_dir, exist_ok=True)
+        if os.path.exists(_default_config_path):
+            shutil.copy2(_default_config_path, _persistent_config_path)
+            print(f"[server.py] 首次运行，已拷贝默认配置到: {_persistent_config_path}")
+        else:
+            print(f"[server.py] 警告: 默认配置文件不存在: {_default_config_path}")
+    else:
+        print(f"[server.py] 使用持久化配置: {_persistent_config_path}")
+
+_ensure_persistent_config()
+_config_path = _persistent_config_path if os.path.exists(_persistent_config_path) else _default_config_path
 print(f"[server.py] 配置文件路径: {_config_path}")
 print(f"[server.py] 配置文件存在: {os.path.exists(_config_path)}")
 
@@ -189,11 +211,15 @@ def set_config(key_path, value_json):
 def reset_config():
     """
     重置配置到初始状态并持久化。
+    会从默认配置重新拷贝到持久化目录，然后重新加载。
     返回 JSON 字符串：{"ok": true} 或 {"error": "..."}
     """
     try:
-        _system.config.reset()
-        _system.config.save_to_file()
+        # 从默认配置重新拷贝到持久化目录
+        if os.path.exists(_default_config_path) and _config_path == _persistent_config_path:
+            shutil.copy2(_default_config_path, _persistent_config_path)
+            print(f"[server.py] 配置已重置，从默认配置拷贝到: {_persistent_config_path}")
+        _system.config.reload()
         return json.dumps({"ok": True}, ensure_ascii=False)
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
