@@ -463,6 +463,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showRealtimeData, setShowRealtimeData] = useState(false);
   const [showNonStdFrames, setShowNonStdFrames] = useState(false);
   const [showCommandModal, setShowCommandModal] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   const nonStdFramesRef = useRef<{hex: string; length: number; timestamp: number; csv: string}[]>([]);
   const [nonStdFrameVersion, setNonStdFrameVersion] = useState(0);
   const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
@@ -853,6 +854,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     <View style={styles.container}>
       <TopBar
         connectionStatus={connectionStatus}
+        onLogoPress={() => setShowDebugPanel(prev => !prev)}
         onRetry={() => {
           hasTriedAutoConnect = false;
           setShowConnectionError(false);
@@ -870,6 +872,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           ref={carAirRef}
           data={sensorData as unknown as never[]}
           style={styles.carAir3D}
+          showDebugPanel={showDebugPanel}
         />
       </View>
 
@@ -1028,7 +1031,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             </View>
           </View>
 
-          {/* 悬浮按钮组 - 右上角 */}
+          {/* 悬浮按钮组 - 右上角（点击Logo切换显示） */}
+          {showDebugPanel && (
           <View style={styles.floatingBtnGroupWrapper}>
             <View style={styles.floatingBtnGroup}>
               <TouchableOpacity
@@ -1063,6 +1067,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               </TouchableOpacity>
             </View>
           </View>
+          )}
         </View>
       </View>
 

@@ -727,7 +727,7 @@ const stepStyles = StyleSheet.create({
 
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
-function CarAirRNInner({data = [], style}, ref) {
+function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
   const stateRef = useRef({});
   const dataRef = useRef(data);
   const frameRef = useRef(null);
@@ -1431,14 +1431,17 @@ function CarAirRNInner({data = [], style}, ref) {
       />
 
       {/* 右侧开关按钮 */}
+      {showDebugPanel && (
       <TouchableOpacity
         style={[styles.toggleBtn, panelVisible && styles.toggleBtnOpen]}
         onPress={togglePanel}
         activeOpacity={0.7}>
         <Text style={styles.toggleBtnText}>{panelVisible ? '>' : '<'}</Text>
       </TouchableOpacity>
+      )}
 
       {/* 右侧调节面板 */}
+      {showDebugPanel && (
       <Animated.View
         style={[
           styles.panel,
@@ -1552,6 +1555,7 @@ function CarAirRNInner({data = [], style}, ref) {
 
         </ScrollView>
       </Animated.View>
+      )}
 
       {/* Loading */}
       {loading ? (

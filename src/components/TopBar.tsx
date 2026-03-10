@@ -17,9 +17,10 @@ const iconConnection = require('../assets/icons/icon-connection.png');
 interface TopBarProps {
   connectionStatus: ConnectionStatus;
   onRetry?: () => void;
+  onLogoPress?: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({connectionStatus, onRetry}) => {
+const TopBar: React.FC<TopBarProps> = ({connectionStatus, onRetry, onLogoPress}) => {
   const statusText =
     connectionStatus === 'connected'
       ? '已连接'
@@ -44,7 +45,9 @@ const TopBar: React.FC<TopBarProps> = ({connectionStatus, onRetry}) => {
 
   return (
     <View style={styles.container}>
-      <Image source={iconLogo} style={styles.logoImage} resizeMode="contain" />
+      <TouchableOpacity onPress={onLogoPress} activeOpacity={0.7}>
+        <Image source={iconLogo} style={styles.logoImage} resizeMode="contain" />
+      </TouchableOpacity>
       <View style={styles.statusContainer}>
         <Image
           source={iconConnection}
