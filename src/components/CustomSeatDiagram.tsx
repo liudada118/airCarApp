@@ -1,6 +1,6 @@
 import React from 'react';
 import {View, Image, StyleSheet} from 'react-native';
-import type {CustomAirbagZone, CustomAirbagValues} from '../types';
+import type {CustomAirbagZone, CustomAirbagValues, AirbagCommandStates, AirbagCommandState} from '../types';
 
 // 座椅背景图
 const SEAT_BG = require('../assets/images/seat_bg.png');
@@ -11,12 +11,94 @@ interface CustomSeatDiagramProps {
   scale?: number;
   /** 各气囊的数值，用于判断是否激活 */
   values?: Partial<CustomAirbagValues>;
+  /** 气囊指令状态（来自51字节回传指令解析结果） */
+  commandStates?: AirbagCommandStates;
 }
 
 /**
- * 根据是否选中获取气囊区域的样式
+ * 箭头指示器（三角形）
  */
-function getZoneStyle(isActive: boolean) {
+const ArrowIndicator: React.FC<{
+  direction: 'up' | 'down';
+  size?: number;
+}> = ({direction, size = 10}) => {
+  return (
+    <View style={[arrowStyles.container, {width: size, height: size}]}>
+      <View
+        style={[
+          arrowStyles.arrow,
+          {
+            borderLeftWidth: size * 0.4,
+            borderRightWidth: size * 0.4,
+            borderBottomWidth: size * 0.6,
+            borderBottomColor: 'rgba(255,255,255,0.85)',
+            transform: [{rotate: direction === 'up' ? '0deg' : '180deg'}],
+          },
+        ]}
+      />
+    </View>
+  );
+};
+
+const arrowStyles = StyleSheet.create({
+  container: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arrow: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+});
+
+/**
+ * 自定义 zone 到物理气囊 zone 的映射
+ * 每个自定义 zone 对应两个物理气囊
+ */
+const CUSTOM_TO_PHYSICAL: Record<CustomAirbagZone, [string, string]> = {
+  shoulder: ['shoulderL', 'shoulderR'],
+  sideWing: ['sideWingL', 'sideWingR'],
+  lumbar: ['lumbarUp', 'lumbarDown'],
+  hipFirm: ['cushionFL', 'cushionFR'],
+  legRest: ['cushionRL', 'cushionRR'],
+};
+
+/**
+ * 获取自定义 zone 的指令状态
+ * 取两个物理气囊中优先级更高的状态（充气3 > 放气4 > 空闲0）
+ */
+function getCustomZoneCmd(
+  zone: CustomAirbagZone,
+  commandStates?: AirbagCommandStates,
+): AirbagCommandState {
+  if (!commandStates) return 0;
+  const [z1, z2] = CUSTOM_TO_PHYSICAL[zone];
+  const cmd1 = (commandStates as any)[z1] ?? 0;
+  const cmd2 = (commandStates as any)[z2] ?? 0;
+  // 优先返回充气(3)，其次放气(4)，最后空闲(0)
+  if (cmd1 === 3 || cmd2 === 3) return 3;
+  if (cmd1 === 4 || cmd2 === 4) return 4;
+  return 0;
+}
+
+/**
+ * 根据 command 状态获取气囊区域的样式
+ *
+ * 指令 3 = 充气：蓝色背景 + 向上箭头
+ * 指令 4 = 放气：蓝色背景 + 向下箭头
+ * 指令 0 = 空闲：无背景色 + 无箭头
+ */
+function getZoneStyleByCommand(cmd: AirbagCommandState, isActive: boolean) {
+  if (cmd === 3 || cmd === 4) {
+    return {
+      backgroundColor: 'rgba(0, 150, 255, 0.45)',
+      borderColor: 'rgba(0, 150, 255, 0.6)',
+    };
+  }
   if (isActive) {
     return {
       backgroundColor: 'rgba(0, 150, 255, 0.45)',
@@ -38,14 +120,42 @@ function getZoneStyle(isActive: boolean) {
  *             lumbar（腰托气囊 5,6）- 中间上下两块
  *   坐垫区域: hipFirm（臀部软硬度 7,8）- 左右两块
  *   坐垫前部: legRest（腿托气囊 9,10）- 左右两块
+ *
+ * 气囊状态由 commandStates 驱动：
+ *   指令 3 → 蓝色背景 + ↑ 箭头（充气）
+ *   指令 4 → 蓝色背景 + ↓ 箭头（放气）
+ *   指令 0 → 无背景 + 无箭头（空闲）
  */
 const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
   activeZone,
   scale = 1,
   values,
+  commandStates,
 }) => {
+  /** 获取某个自定义 zone 的指令状态 */
+  const getCmd = (zone: CustomAirbagZone): AirbagCommandState => {
+    return getCustomZoneCmd(zone, commandStates);
+  };
+
   const isActive = (zone: CustomAirbagZone): boolean => {
     return activeZone === zone;
+  };
+
+  /** 获取气囊区域样式 */
+  const getZoneStyle = (zone: CustomAirbagZone) => {
+    return getZoneStyleByCommand(getCmd(zone), isActive(zone));
+  };
+
+  /** 渲染气囊箭头（仅在指令为 3 或 4 时显示） */
+  const renderArrow = (zone: CustomAirbagZone, arrowSize: number) => {
+    const cmd = getCmd(zone);
+    if (cmd === 3) {
+      return <ArrowIndicator direction="up" size={arrowSize} />;
+    }
+    if (cmd === 4) {
+      return <ArrowIndicator direction="down" size={arrowSize} />;
+    }
+    return null;
   };
 
   const s = scale;
@@ -67,7 +177,7 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
       <View
         style={[
           styles.zone,
-          getZoneStyle(isActive('shoulder')),
+          getZoneStyle('shoulder'),
           {
             top: 52 * s,
             left: 48 * s,
@@ -75,12 +185,13 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
             height: 30 * s,
             borderRadius: 10 * s,
           },
-        ]}
-      />
+        ]}>
+        {renderArrow('shoulder', 8 * s)}
+      </View>
       <View
         style={[
           styles.zone,
-          getZoneStyle(isActive('shoulder')),
+          getZoneStyle('shoulder'),
           {
             top: 52 * s,
             right: 48 * s,
@@ -88,14 +199,15 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
             height: 30 * s,
             borderRadius: 10 * s,
           },
-        ]}
-      />
+        ]}>
+        {renderArrow('shoulder', 8 * s)}
+      </View>
 
       {/* ─── 侧翼气囊 (sideWing): 靠背中部左右两侧 ─── */}
       <View
         style={[
           styles.zone,
-          getZoneStyle(isActive('sideWing')),
+          getZoneStyle('sideWing'),
           {
             top: 120 * s,
             left: 28 * s,
@@ -103,12 +215,13 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
             height: 60 * s,
             borderRadius: 10 * s,
           },
-        ]}
-      />
+        ]}>
+        {renderArrow('sideWing', 8 * s)}
+      </View>
       <View
         style={[
           styles.zone,
-          getZoneStyle(isActive('sideWing')),
+          getZoneStyle('sideWing'),
           {
             top: 120 * s,
             right: 28 * s,
@@ -116,8 +229,9 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
             height: 60 * s,
             borderRadius: 10 * s,
           },
-        ]}
-      />
+        ]}>
+        {renderArrow('sideWing', 8 * s)}
+      </View>
 
       {/* ─── 腰托气囊 (lumbar): 靠背中部中间上下两块 ─── */}
       <View
@@ -132,7 +246,7 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
         <View
           style={[
             styles.zoneRelative,
-            getZoneStyle(isActive('lumbar')),
+            getZoneStyle('lumbar'),
             {
               width: '100%',
               height: '50%',
@@ -141,15 +255,16 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
               borderBottomLeftRadius: 0,
               borderBottomRightRadius: 0,
             },
-          ]}
-        />
+          ]}>
+          {renderArrow('lumbar', 8 * s)}
+        </View>
         {/* 虚线分隔 */}
         <View style={[styles.dashedLine, {height: 1 * s}]} />
         {/* 下半部分 */}
         <View
           style={[
             styles.zoneRelative,
-            getZoneStyle(isActive('lumbar')),
+            getZoneStyle('lumbar'),
             {
               width: '100%',
               height: '50%',
@@ -158,8 +273,9 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
               borderBottomLeftRadius: 8 * s,
               borderBottomRightRadius: 8 * s,
             },
-          ]}
-        />
+          ]}>
+          {renderArrow('lumbar', 8 * s)}
+        </View>
       </View>
 
       {/* ─── 臀部软硬度气囊 (hipFirm): 坐垫后部左右两块 ─── */}
@@ -176,7 +292,7 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
         <View
           style={[
             styles.zoneRelative,
-            getZoneStyle(isActive('hipFirm')),
+            getZoneStyle('hipFirm'),
             {
               flex: 1,
               height: '100%',
@@ -185,15 +301,16 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
               borderTopRightRadius: 0,
               borderBottomRightRadius: 0,
             },
-          ]}
-        />
+          ]}>
+          {renderArrow('hipFirm', 10 * s)}
+        </View>
         {/* 竖向虚线分隔 */}
         <View style={[styles.dashedLineVertical, {width: 1 * s}]} />
         {/* 右 */}
         <View
           style={[
             styles.zoneRelative,
-            getZoneStyle(isActive('hipFirm')),
+            getZoneStyle('hipFirm'),
             {
               flex: 1,
               height: '100%',
@@ -202,15 +319,16 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
               borderTopRightRadius: 8 * s,
               borderBottomRightRadius: 8 * s,
             },
-          ]}
-        />
+          ]}>
+          {renderArrow('hipFirm', 10 * s)}
+        </View>
       </View>
 
       {/* ─── 腿托气囊 (legRest): 坐垫前部左右两块 ─── */}
       <View
         style={[
           styles.zone,
-          getZoneStyle(isActive('legRest')),
+          getZoneStyle('legRest'),
           {
             top: 298 * s,
             left: 52 * s,
@@ -218,12 +336,13 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
             height: 28 * s,
             borderRadius: 10 * s,
           },
-        ]}
-      />
+        ]}>
+        {renderArrow('legRest', 8 * s)}
+      </View>
       <View
         style={[
           styles.zone,
-          getZoneStyle(isActive('legRest')),
+          getZoneStyle('legRest'),
           {
             top: 298 * s,
             right: 52 * s,
@@ -231,8 +350,9 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
             height: 28 * s,
             borderRadius: 10 * s,
           },
-        ]}
-      />
+        ]}>
+        {renderArrow('legRest', 8 * s)}
+      </View>
     </View>
   );
 };

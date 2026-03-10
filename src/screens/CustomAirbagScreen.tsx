@@ -32,8 +32,9 @@ import type {
   ModalType,
   ConnectionStatus,
   BodyShape,
+  AirbagCommandStates,
 } from '../types';
-import {DEFAULT_CUSTOM_AIRBAG_VALUES, ALL_CUSTOM_AIRBAG_ZONES} from '../types';
+import {DEFAULT_CUSTOM_AIRBAG_VALUES, ALL_CUSTOM_AIRBAG_ZONES, parseAirbagCommand, DEFAULT_AIRBAG_COMMAND_STATES} from '../types';
 
 /** AsyncStorage 缓存 key 前缀，按体型分类存储 */
 const ASYNC_STORAGE_KEY_PREFIX = 'custom_airbag_values_';
@@ -106,6 +107,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const storageKey = bodyShape ? `${ASYNC_STORAGE_KEY_PREFIX}${bodyShape}` : LEGACY_ASYNC_STORAGE_KEY;
   const [connectionStatus] = useState<ConnectionStatus>('connected');
   const [selectedZone, setSelectedZone] = useState<CustomAirbagZone>('lumbar');
+  const [commandStates, setCommandStates] = useState<AirbagCommandStates>(DEFAULT_AIRBAG_COMMAND_STATES);
 
   // ━━━ 同步初始化：用 initialValues 作为初始值，确保首次渲染就有正确的值 ━━━
   const initValues = initialValues || DEFAULT_CUSTOM_AIRBAG_VALUES;
@@ -315,6 +317,27 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     });
     return () => sub.remove();
   }, [addLog]);
+
+  // 监听51字节回传指令，解析气囊充放气状态
+  useEffect(() => {
+    if (!sm || !serialEmitter) {
+      return;
+    }
+    const sub = serialEmitter.addListener('onNonStandardFrame', (event: any) => {
+      try {
+        const csv = event?.data;
+        if (!csv || typeof csv !== 'string') return;
+        const bytes = csv.split(',').map((s: string) => parseInt(s.trim(), 10));
+        if (bytes.length >= 21) {
+          const newStates = parseAirbagCommand(bytes);
+          setCommandStates(newStates);
+        }
+      } catch (e) {
+        // 静默忽略解析错误
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   // 发送气囊控制指令
   const sendAirbagCmd = useCallback(
@@ -652,6 +675,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
                 activeZone={selectedZone}
                 scale={1.15}
                 values={airbagValues}
+                commandStates={commandStates}
               />
             </View>
 
