@@ -1147,6 +1147,26 @@ function CarAirRNInner({data = [], style}, ref) {
 
   // 初始化 3D 场景
   const onContextCreate = useCallback(gl => {
+    // ─── expo-gl 补丁：修复重新创建 GL context 时部分方法返回 undefined 导致 THREE.js .trim() 报错 ───
+    const _origGetShaderInfoLog = gl.getShaderInfoLog.bind(gl);
+    gl.getShaderInfoLog = (shader) => {
+      const result = _origGetShaderInfoLog(shader);
+      return result ?? '';
+    };
+    const _origGetProgramInfoLog = gl.getProgramInfoLog.bind(gl);
+    gl.getProgramInfoLog = (program) => {
+      const result = _origGetProgramInfoLog(program);
+      return result ?? '';
+    };
+    // getShaderSource 也可能返回 undefined
+    if (gl.getShaderSource) {
+      const _origGetShaderSource = gl.getShaderSource.bind(gl);
+      gl.getShaderSource = (shader) => {
+        const result = _origGetShaderSource(shader);
+        return result ?? '';
+      };
+    }
+
     const {drawingBufferWidth: width, drawingBufferHeight: height} = gl;
     const canvas = {
       width,

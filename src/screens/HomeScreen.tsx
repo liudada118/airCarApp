@@ -510,17 +510,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     if (parsed.bodyShapeInfo.body_shape) {
       onBodyShapeChange?.(parsed.bodyShapeInfo.body_shape);
     }
-    // 气囊状态始终根据回传指令控制，不受自适应开关影响
-    setAlgoState({
+    // 气囊状态由51字节回传指令控制（onNonStandardFrame），算法结果不覆盖 commandStates/rawCommand
+    setAlgoState(prev => ({
+      ...prev,
       seatStatus: parsed.seatStatus,
       algoSeatStatus: parsed.algoSeatStatus,
       bodyShapeInfo: parsed.bodyShapeInfo,
-      commandStates: parsed.commandStates,
-      rawCommand: parsed.rawCommand,
+      // commandStates 和 rawCommand 保留 prev 值，由 onNonStandardFrame 更新
       livingStatus: parsed.livingStatus,
       bodyType: parsed.bodyType,
       realtimeData: parsed.realtimeData,
-    });
+    }));
   }, [onBodyShapeChange]);
 
   // ─── Python 配置管理 ──────────────────────────────────────
@@ -784,6 +784,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       frames.unshift(entry);
       if (frames.length > 50) frames.length = 50;
       setNonStdFrameVersion(v => v + 1);
+
+      // 解析回传指令（长度∙51）更新气囊状态
+      if (entry.csv && (entry.length ?? 0) >= 21) {
+        try {
+          const bytes = entry.csv.split(',').map(Number);
+          if (bytes.length >= 21) {
+            const newStates = parseAirbagCommand(bytes);
+            console.log('[NonStdFrame] 解析回传指令, length:', bytes.length, 'states:', JSON.stringify(newStates));
+            setAlgoState(prev => ({
+              ...prev,
+              commandStates: newStates,
+              rawCommand: bytes,
+            }));
+          }
+        } catch (e) {
+          console.warn('[NonStdFrame] 解析失败:', e);
+        }
+      }
     });
 
     return () => {
