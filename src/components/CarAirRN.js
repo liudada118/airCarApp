@@ -1438,7 +1438,7 @@ function CarAirRNInner({data = [], style}, ref) {
         <Text style={styles.toggleBtnText}>{panelVisible ? '>' : '<'}</Text>
       </TouchableOpacity>
 
-      {/* 右侧调节面板 */
+      {/* 右侧调节面板 */}
       <Animated.View
         style={[
           styles.panel,
