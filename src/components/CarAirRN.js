@@ -907,6 +907,14 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     grpRx: DEFAULT_POINT_MAP_ROTATE.x,
     grpRy: DEFAULT_POINT_MAP_ROTATE.y,
     grpRz: DEFAULT_POINT_MAP_ROTATE.z,
+    // 座椅模型自身参数
+    modelPx: 0,     // 模型 X 位移
+    modelPy: 0,     // 模型 Y 位移
+    modelPz: 0,     // 模型 Z 位移
+    modelRx: 0,     // 模型 X 旋转
+    modelRy: 0,     // 模型 Y 旋转
+    modelRz: 0,     // 模型 Z 旋转
+    modelScale: 1,  // 模型缩放倍率（相对于自动计算的基准缩放）
   });
 
   // 将布局变化应用到 3D 场景
@@ -973,6 +981,27 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         if (s.pointGroup) s.pointGroup.rotation.y = value;
       } else if (param === 'grpRz') {
         if (s.pointGroup) s.pointGroup.rotation.z = value;
+      } else if (param.startsWith('model')) {
+        // 座椅模型自身参数
+        const model = s.model;
+        if (model) {
+          if (param === 'modelPx') {
+            model.position.x = (model._basePosition?.x ?? 0) + value;
+          } else if (param === 'modelPy') {
+            model.position.y = (model._basePosition?.y ?? 0) + value;
+          } else if (param === 'modelPz') {
+            model.position.z = (model._basePosition?.z ?? 0) + value;
+          } else if (param === 'modelRx') {
+            model.rotation.x = value;
+          } else if (param === 'modelRy') {
+            model.rotation.y = value;
+          } else if (param === 'modelRz') {
+            model.rotation.z = value;
+          } else if (param === 'modelScale') {
+            const baseScale = model._baseScale ?? 1;
+            model.scale.setScalar(baseScale * value);
+          }
+        }
       }
       s.dirty = true;
       return next;
@@ -1025,6 +1054,24 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     });
     setLayout(init);
     applyLayout(init);
+    // 重置座椅模型参数
+    const model = stateRef.current.model;
+    if (model) {
+      if (model._basePosition) {
+        model.position.copy(model._basePosition);
+      }
+      model.rotation.set(0, 0, 0);
+      if (model._baseScale) {
+        model.scale.setScalar(model._baseScale);
+      }
+      stateRef.current.dirty = true;
+    }
+    setViewParams(prev => ({
+      ...prev,
+      modelPx: 0, modelPy: 0, modelPz: 0,
+      modelRx: 0, modelRy: 0, modelRz: 0,
+      modelScale: 1,
+    }));
   }, [applyLayout]);
 
   // 打印当前参数到控制台
@@ -1038,7 +1085,12 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         scale: parseFloat(l.s.toFixed(2)),
       };
     });
-    // [PointFit] layout/view logs disabled
+    output._model = {
+      position: [viewParams.modelPx, viewParams.modelPy, viewParams.modelPz],
+      rotation: [viewParams.modelRx, viewParams.modelRy, viewParams.modelRz],
+      scale: viewParams.modelScale,
+    };
+    console.log('[CarAirRN] 当前参数:', JSON.stringify(output, null, 2));
   }, [layout, viewParams]);
 
   // 手势响应器：单指旋转 + 双指缩放
@@ -1239,6 +1291,11 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           return;
         }
         stateRef.current.model = model;
+        // 保存模型的基准位置和缩放，供调节面板使用
+        if (model) {
+          model._basePosition = model.position.clone();
+          model._baseScale = model.scale.x; // setScalar 后 xyz相同
+        }
         applyPointFitToModel(model, pointMeshes, DEFAULT_POINT_FIT_LAYOUT);
         stateRef.current.dirty = true;
         setLoading(false);
@@ -1541,6 +1598,76 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             step={1}
             decimals={0}
             onValueChange={v => updatePointSetting('deadZone', v)}
+          />
+
+          {/* ─── 座椅模型调节 ─── */}
+          <Text style={styles.sectionLabel}>座椅位置</Text>
+          <StepControl
+            label="X 位移"
+            value={viewParams.modelPx}
+            min={-200}
+            max={200}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateViewParam('modelPx', v)}
+          />
+          <StepControl
+            label="Y 位移"
+            value={viewParams.modelPy}
+            min={-200}
+            max={200}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateViewParam('modelPy', v)}
+          />
+          <StepControl
+            label="Z 位移"
+            value={viewParams.modelPz}
+            min={-200}
+            max={200}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateViewParam('modelPz', v)}
+          />
+
+          <Text style={styles.sectionLabel}>座椅旋转</Text>
+          <StepControl
+            label="X 旋转"
+            value={viewParams.modelRx}
+            min={-3.14}
+            max={3.14}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('modelRx', v)}
+          />
+          <StepControl
+            label="Y 旋转"
+            value={viewParams.modelRy}
+            min={-3.14}
+            max={3.14}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('modelRy', v)}
+          />
+          <StepControl
+            label="Z 旋转"
+            value={viewParams.modelRz}
+            min={-3.14}
+            max={3.14}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('modelRz', v)}
+          />
+
+          <Text style={styles.sectionLabel}>座椅缩放</Text>
+          <StepControl
+            label="缩放"
+            value={viewParams.modelScale}
+            min={0.1}
+            max={5}
+            step={0.05}
+            decimals={2}
+            onValueChange={v => updateViewParam('modelScale', v)}
           />
 
           {/* 操作按钮 */}
