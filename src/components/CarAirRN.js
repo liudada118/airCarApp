@@ -1609,6 +1609,96 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             onValueChange={v => updatePointSetting('deadZone', v)}
           />
 
+          {/* ─── 热力图区域调节 ─── */}
+          <Text style={styles.sectionLabel}>热力图区域</Text>
+          <View style={styles.zoneTabs}>
+            {ZONE_NAMES.map(name => (
+              <TouchableOpacity
+                key={name}
+                style={[styles.zoneTab, activeZone === name && styles.zoneTabActive]}
+                onPress={() => setActiveZone(name)}>
+                <Text style={[styles.zoneTabText, activeZone === name && styles.zoneTabTextActive]}>
+                  {ZONE_LABELS[name]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.sectionLabel}>{ZONE_LABELS[activeZone]} - 位置</Text>
+          <StepControl
+            label="X 位移"
+            value={zoneLayout.px ?? 0}
+            min={-1000}
+            max={1000}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateZoneParam(activeZone, 'px', v)}
+          />
+          <StepControl
+            label="Y 位移"
+            value={zoneLayout.py ?? 0}
+            min={-1000}
+            max={1000}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateZoneParam(activeZone, 'py', v)}
+          />
+          <StepControl
+            label="Z 位移"
+            value={zoneLayout.pz ?? 0}
+            min={-1000}
+            max={1000}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateZoneParam(activeZone, 'pz', v)}
+          />
+
+          <Text style={styles.sectionLabel}>{ZONE_LABELS[activeZone]} - 旋转</Text>
+          <StepControl
+            label="X 旋转"
+            value={zoneLayout.rx ?? 0}
+            min={-6.28}
+            max={6.28}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateZoneParam(activeZone, 'rx', v)}
+          />
+          <StepControl
+            label="Y 旋转"
+            value={zoneLayout.ry ?? 0}
+            min={-6.28}
+            max={6.28}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateZoneParam(activeZone, 'ry', v)}
+          />
+          <StepControl
+            label="Z 旋转"
+            value={zoneLayout.rz ?? 0}
+            min={-6.28}
+            max={6.28}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateZoneParam(activeZone, 'rz', v)}
+          />
+
+          <Text style={styles.sectionLabel}>{ZONE_LABELS[activeZone]} - 缩放</Text>
+          <StepControl
+            label="缩放"
+            value={zoneLayout.s ?? 1}
+            min={0.1}
+            max={10}
+            step={0.1}
+            decimals={1}
+            onValueChange={v => updateZoneParam(activeZone, 's', v)}
+          />
+
+          <View style={styles.btnRow}>
+            <TouchableOpacity style={[styles.actionBtn, {flex: 1}]} onPress={resetZone}>
+              <Text style={styles.actionBtnText}>重置{ZONE_LABELS[activeZone]}</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* ─── 座椅模型调节 ─── */}
           <Text style={styles.sectionLabel}>座椅位置</Text>
           <StepControl
