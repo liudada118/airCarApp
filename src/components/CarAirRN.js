@@ -1677,6 +1677,67 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             onValueChange={v => updateViewParam('modelScale', v)}
           />
 
+          {/* ─── 整体调节（rootGroup，同时影响点图和座椅模型） ─── */}
+          <Text style={styles.sectionLabel}>整体位置</Text>
+          <StepControl
+            label="X 位移"
+            value={viewParams.rootPx}
+            min={-1000}
+            max={1000}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateViewParam('rootPx', v)}
+          />
+          <StepControl
+            label="Y 位移"
+            value={viewParams.rootPy}
+            min={-1000}
+            max={1000}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateViewParam('rootPy', v)}
+          />
+          <StepControl
+            label="Z 位移"
+            value={viewParams.rootPz}
+            min={-1000}
+            max={1000}
+            step={1}
+            decimals={0}
+            onValueChange={v => updateViewParam('rootPz', v)}
+          />
+
+          <Text style={styles.sectionLabel}>整体旋转</Text>
+          <StepControl
+            label="X 旋转"
+            value={viewParams.rootRx}
+            min={-6.28}
+            max={6.28}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('rootRx', v)}
+          />
+          <StepControl
+            label="Y 旋转"
+            value={viewParams.rootRy}
+            min={-6.28}
+            max={6.28}
+            step={0.01}
+            decimals={2}
+            onValueChange={v => updateViewParam('rootRy', v)}
+          />
+
+          <Text style={styles.sectionLabel}>相机距离</Text>
+          <StepControl
+            label="距离"
+            value={viewParams.camDist}
+            min={80}
+            max={1500}
+            step={5}
+            decimals={0}
+            onValueChange={v => updateViewParam('camDist', v)}
+          />
+
           {/* 操作按钮 */}
           <View style={styles.btnRow}>
             <TouchableOpacity style={styles.actionBtn} onPress={resetAll}>
