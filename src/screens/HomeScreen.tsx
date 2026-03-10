@@ -510,13 +510,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     if (parsed.bodyShapeInfo.body_shape) {
       onBodyShapeChange?.(parsed.bodyShapeInfo.body_shape);
     }
-    // 气囊状态由51字节回传指令控制（onNonStandardFrame），算法结果不覆盖 commandStates/rawCommand
+    // commandStates 由51字节回传指令控制（onNonStandardFrame），算法结果不覆盖
+    // rawCommand 仍然从算法结果更新，用于指令弹窗显示
     setAlgoState(prev => ({
       ...prev,
       seatStatus: parsed.seatStatus,
       algoSeatStatus: parsed.algoSeatStatus,
       bodyShapeInfo: parsed.bodyShapeInfo,
-      // commandStates 和 rawCommand 保留 prev 值，由 onNonStandardFrame 更新
+      // commandStates 保留 prev 值，由 onNonStandardFrame 更新
+      rawCommand: parsed.rawCommand,
       livingStatus: parsed.livingStatus,
       bodyType: parsed.bodyType,
       realtimeData: parsed.realtimeData,
