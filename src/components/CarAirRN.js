@@ -208,14 +208,16 @@ function createWorkBuffers() {
 // ─── 模型加载 ────────────────────────────────────────────────────────────────
 
 async function loadSeatModel(group) {
+  console.log('[loadSeatModel] 开始加载模型...');
   const asset = Asset.fromModule(MODEL_ASSET);
+  console.log('[loadSeatModel] asset hash:', asset.hash, 'downloaded:', asset.downloaded);
   await asset.downloadAsync();
   const uri = asset.localUri || asset.uri;
   if (!uri) {
-    console.warn('glb: missing asset uri');
+    console.warn('[loadSeatModel] 模型 URI 为空，无法加载');
     return null;
   }
-  // console.log('glb: loading', uri);
+  console.log('[loadSeatModel] 模型 URI:', uri);
 
   const file = new FileSystem.File(uri);
   const buffer = await file.arrayBuffer();
@@ -1211,7 +1213,11 @@ function CarAirRNInner({data = [], style}, ref) {
     setLoadError(null);
     loadSeatModel(rootGroup)
       .then(model => {
-        if (!mountedRef.current) return;
+        console.log('[CarAirRN] 模型加载完成, mounted:', mountedRef.current, 'model:', !!model);
+        if (!mountedRef.current) {
+          console.warn('[CarAirRN] 组件已卸载，放弃模型加载结果');
+          return;
+        }
         stateRef.current.model = model;
         applyPointFitToModel(model, pointMeshes, DEFAULT_POINT_FIT_LAYOUT);
         stateRef.current.dirty = true;
@@ -1221,7 +1227,7 @@ function CarAirRNInner({data = [], style}, ref) {
         }
       })
       .catch(err => {
-        console.warn('glb: load failed', err);
+        console.warn('[CarAirRN] 模型加载失败:', err?.message || String(err));
         if (!mountedRef.current) return;
         setLoading(false);
         setLoadError(err?.message || String(err));

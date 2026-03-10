@@ -158,34 +158,32 @@ const App: React.FC = () => {
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* HomeScreen 始终挂载，避免切换页面时 3D 模型被销毁后无法重新加载 */}
-        <View style={[styles.screenContainer, currentScreen !== 'home' && styles.screenHidden]}>
-          <HomeScreen
-            onNavigateToCustomize={navigateToCustomize}
-            adaptiveEnabled={adaptiveEnabled}
-            onAdaptiveChange={setAdaptiveEnabled}
-            connectionStatus={connectionStatus}
-            onConnectionStatusChange={setConnectionStatus}
-            onBodyShapeChange={handleBodyShapeChange}
-          />
-          {/* 首页级别的 Toast（保存成功后显示） */}
-          <Toast
-            visible={homeToast.visible}
-            message={homeToast.message}
-            type={homeToast.type}
-            onHide={hideHomeToast}
-          />
-        </View>
-        {currentScreen === 'customAirbag' && (
-          <View style={styles.screenOverlay}>
-            <CustomAirbagScreen
-              onClose={navigateToHome}
-              onSaveSuccess={handleSaveSuccess}
-              initialValues={savedAirbagValues || undefined}
+        {currentScreen === 'home' ? (
+          <View style={styles.screenContainer}>
+            <HomeScreen
+              onNavigateToCustomize={navigateToCustomize}
               adaptiveEnabled={adaptiveEnabled}
-              bodyShape={currentBodyShape}
+              onAdaptiveChange={setAdaptiveEnabled}
+              connectionStatus={connectionStatus}
+              onConnectionStatusChange={setConnectionStatus}
+              onBodyShapeChange={handleBodyShapeChange}
+            />
+            {/* 首页级别的 Toast（保存成功后显示） */}
+            <Toast
+              visible={homeToast.visible}
+              message={homeToast.message}
+              type={homeToast.type}
+              onHide={hideHomeToast}
             />
           </View>
+        ) : (
+          <CustomAirbagScreen
+            onClose={navigateToHome}
+            onSaveSuccess={handleSaveSuccess}
+            initialValues={savedAirbagValues || undefined}
+            adaptiveEnabled={adaptiveEnabled}
+            bodyShape={currentBodyShape}
+          />
         )}
       </SafeAreaView>
     </SafeAreaProvider>
@@ -200,18 +198,6 @@ const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
     position: 'relative',
-  },
-  screenHidden: {
-    // 保持挂载但不可见，避免 3D 模型被销毁
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    opacity: 0,
-    pointerEvents: 'none',
-  },
-  screenOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 10,
   },
 });
 
