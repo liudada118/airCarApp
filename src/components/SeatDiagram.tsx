@@ -153,10 +153,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('shoulderL'),
           {
-            top: 58 * s,
-            left: 62 * s,
-            width: 54 * s,
-            height: 28 * s,
+            top: 72 * s,
+            left: 87 * s,
+            width: 52 * s,
+            height: 25 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -167,10 +167,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('shoulderR'),
           {
-            top: 58 * s,
-            right: 62 * s,
-            width: 54 * s,
-            height: 28 * s,
+            top: 72 * s,
+            right: 85 * s,
+            width: 51 * s,
+            height: 25 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -183,10 +183,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('sideWingL'),
           {
-            top: 102 * s,
-            left: 72 * s,
-            width: 22 * s,
-            height: 52 * s,
+            top: 144 * s,
+            left: 80 * s,
+            width: 24 * s,
+            height: 59 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -199,10 +199,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('sideWingR'),
           {
-            top: 102 * s,
-            right: 72 * s,
-            width: 22 * s,
-            height: 52 * s,
+            top: 143 * s,
+            right: 75 * s,
+            width: 24 * s,
+            height: 60 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -213,10 +213,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
       <View
         style={{
           position: 'absolute',
-          top: 98 * s,
-          left: 100 * s,
-          right: 100 * s,
-          height: 60 * s,
+          top: 144 * s,
+          left: 110 * s,
+          right: 105 * s,
+          height: 59 * s,
         }}>
         {/* 5: lumbarUp - 上半部分 */}
         <View
@@ -254,21 +254,21 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
         </View>
       </View>
 
-      {/* ─── 坐垫前部: 7(cushionFL) 8(cushionFR) ─── */}
+      {/* ─── 坐垫后部: 6(cushionRL) + 6(cushionRR) ─── */}
       <View
         style={{
           position: 'absolute',
-          top: 216 * s,
-          left: 76 * s,
-          right: 76 * s,
-          height: 34 * s,
+          top: 221 * s,
+          left: 85 * s,
+          right: 78 * s,
+          height: 43 * s,
           flexDirection: 'row',
         }}>
-        {/* 7: cushionFL */}
+        {/* cushionRL */}
         <View
           style={[
             styles.zoneRelative,
-            getZoneStyle('cushionFL'),
+            getZoneStyle('cushionRL'),
             {
               flex: 1,
               height: '100%',
@@ -278,15 +278,15 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
               borderBottomRightRadius: 0,
             },
           ]}>
-          {renderArrow('cushionFL', 10 * s)}
+          {renderArrow('cushionRL', 10 * s)}
         </View>
         {/* 竖向虚线分隔 */}
         <View style={[styles.dashedLineVertical, {width: 1 * s}]} />
-        {/* 8: cushionFR */}
+        {/* cushionRR */}
         <View
           style={[
             styles.zoneRelative,
-            getZoneStyle('cushionFR'),
+            getZoneStyle('cushionRR'),
             {
               flex: 1,
               height: '100%',
@@ -296,38 +296,38 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
               borderBottomRightRadius: 8 * s,
             },
           ]}>
-          {renderArrow('cushionFR', 10 * s)}
+          {renderArrow('cushionRR', 10 * s)}
         </View>
       </View>
 
-      {/* ─── 坐垫后部: 9(cushionRL) 10(cushionRR) ─── */}
+      {/* ─── 坐垫前端: 7(cushionFL) 8(cushionFR) ─── */}
       <View
         style={[
           styles.zone,
-          getZoneStyle('cushionRL'),
+          getZoneStyle('cushionFL'),
           {
-            top: 256 * s,
-            left: 76 * s,
-            width: 50 * s,
+            top: 267 * s,
+            left: 77 * s,
+            width: 60 * s,
             height: 24 * s,
             borderRadius: 10 * s,
           },
         ]}>
-        {renderArrow('cushionRL', 8 * s)}
+        {renderArrow('cushionFL', 8 * s)}
       </View>
       <View
         style={[
           styles.zone,
-          getZoneStyle('cushionRR'),
+          getZoneStyle('cushionFR'),
           {
-            top: 256 * s,
-            right: 76 * s,
-            width: 50 * s,
+            top: 268 * s,
+            right: 75 * s,
+            width: 60 * s,
             height: 24 * s,
             borderRadius: 10 * s,
           },
         ]}>
-        {renderArrow('cushionRR', 8 * s)}
+        {renderArrow('cushionFR', 8 * s)}
       </View>
     </View>
   );

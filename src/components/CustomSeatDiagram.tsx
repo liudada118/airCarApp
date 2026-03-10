@@ -181,10 +181,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('shoulder'),
           {
-            top: 58 * s,
-            left: 62 * s,
-            width: 54 * s,
-            height: 28 * s,
+            top: 72 * s,
+            left: 87 * s,
+            width: 52 * s,
+            height: 25 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -195,10 +195,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('shoulder'),
           {
-            top: 58 * s,
-            right: 62 * s,
-            width: 54 * s,
-            height: 28 * s,
+            top: 72 * s,
+            right: 85 * s,
+            width: 51 * s,
+            height: 25 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -211,10 +211,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('sideWing'),
           {
-            top: 102 * s,
-            left: 72 * s,
-            width: 22 * s,
-            height: 52 * s,
+            top: 144 * s,
+            left: 80 * s,
+            width: 24 * s,
+            height: 59 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -225,10 +225,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('sideWing'),
           {
-            top: 102 * s,
-            right: 72 * s,
-            width: 22 * s,
-            height: 52 * s,
+            top: 143 * s,
+            right: 75 * s,
+            width: 24 * s,
+            height: 60 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -239,10 +239,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
       <View
         style={{
           position: 'absolute',
-          top: 98 * s,
-          left: 100 * s,
-          right: 100 * s,
-          height: 60 * s,
+          top: 144 * s,
+          left: 110 * s,
+          right: 105 * s,
+          height: 59 * s,
         }}>
         {/* 上半部分 */}
         <View
@@ -284,10 +284,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
       <View
         style={{
           position: 'absolute',
-          top: 216 * s,
-          left: 76 * s,
-          right: 76 * s,
-          height: 34 * s,
+          top: 221 * s,
+          left: 85 * s,
+          right: 78 * s,
+          height: 43 * s,
           flexDirection: 'row',
         }}>
         {/* 左 */}
@@ -332,9 +332,9 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('legRest'),
           {
-            top: 256 * s,
-            left: 76 * s,
-            width: 50 * s,
+            top: 267 * s,
+            left: 77 * s,
+            width: 60 * s,
             height: 24 * s,
             borderRadius: 10 * s,
           },
@@ -346,9 +346,9 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('legRest'),
           {
-            top: 256 * s,
-            right: 76 * s,
-            width: 50 * s,
+            top: 268 * s,
+            right: 75 * s,
+            width: 60 * s,
             height: 24 * s,
             borderRadius: 10 * s,
           },
