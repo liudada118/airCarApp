@@ -1301,7 +1301,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                               <Text style={styles.cfgValueText} numberOfLines={1}>[{item.value.join(', ')}]</Text>
                             ) : (
                               <TextInput
-                                key={`${item.key}_${item.value}`}
                                 style={styles.cfgInput}
                                 defaultValue={String(item.value)}
                                 keyboardType="numeric"
