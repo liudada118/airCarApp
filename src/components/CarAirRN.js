@@ -1604,12 +1604,13 @@ const styles = StyleSheet.create({
   panel: {
     position: 'absolute',
     right: 0,
-    top: 0,
+    top: 80,
     bottom: 0,
     width: PANEL_WIDTH,
-    backgroundColor: 'rgba(10, 16, 28, 0.92)',
+    backgroundColor: 'rgba(10, 16, 28, 0.95)',
     borderLeftWidth: 1,
     borderLeftColor: '#1a3050',
+    borderTopLeftRadius: 12,
     zIndex: 10,
   },
   panelScroll: {
