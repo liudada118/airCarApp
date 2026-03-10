@@ -413,8 +413,8 @@ class SerialModule(
         "shoulder"   to listOf(1, 2),   // 肩部气囊
         "sideWing"   to listOf(3, 4),   // 侧翼气囊
         "lumbar"     to listOf(5, 6),   // 腰托气囊
-        "hipFirm"    to listOf(9, 10),  // 臀部软硬度气囊
-        "legRest"    to listOf(7, 8)    // 腿托气囊
+        "hipFirm"    to listOf(7, 8),   // 臀部软硬度气囊
+        "legRest"    to listOf(9, 10)   // 腿托气囊
     )
 
     private val FRAME_HEADER = 0x1F
