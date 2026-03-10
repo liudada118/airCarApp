@@ -874,7 +874,7 @@ function CarAirRNInner({data = [], style}, ref) {
 
   // ─── 调节面板状态 ──────────────────────────────────────────────────
   const [panelVisible, setPanelVisible] = useState(false);
-  const panelAnim = useRef(new Animated.Value(-PANEL_WIDTH)).current;
+  const panelAnim = useRef(new Animated.Value(PANEL_WIDTH)).current;
 
   // 点图布局参数（可调，每个区域独立 scale）
   const [layout, setLayout] = useState(() => {
@@ -940,7 +940,7 @@ function CarAirRNInner({data = [], style}, ref) {
     const toVisible = !panelVisible;
     setPanelVisible(toVisible);
     Animated.timing(panelAnim, {
-      toValue: toVisible ? 0 : -PANEL_WIDTH,
+      toValue: toVisible ? 0 : PANEL_WIDTH,
       duration: 250,
       useNativeDriver: true,
     }).start();
@@ -1430,15 +1430,15 @@ function CarAirRNInner({data = [], style}, ref) {
         {...panResponder.panHandlers}
       />
 
-      {/* 左侧开关按钮 */}
+      {/* 右侧开关按钮 */}
       <TouchableOpacity
         style={[styles.toggleBtn, panelVisible && styles.toggleBtnOpen]}
         onPress={togglePanel}
         activeOpacity={0.7}>
-        <Text style={styles.toggleBtnText}>{panelVisible ? '<' : '>'}</Text>
+        <Text style={styles.toggleBtnText}>{panelVisible ? '>' : '<'}</Text>
       </TouchableOpacity>
 
-      {/* 左侧调节面板 */}
+      {/* 右侧调节面板 */
       <Animated.View
         style={[
           styles.panel,
@@ -1581,7 +1581,7 @@ const styles = StyleSheet.create({
   // ─── 开关按钮 ──────────────────────────────────────────────────────
   toggleBtn: {
     position: 'absolute',
-    left: 4,
+    right: 4,
     top: '45%',
     width: 24,
     height: 48,
@@ -1592,7 +1592,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   toggleBtnOpen: {
-    left: PANEL_WIDTH + 4,
+    right: PANEL_WIDTH + 4,
   },
   toggleBtnText: {
     color: '#7af',
@@ -1603,13 +1603,13 @@ const styles = StyleSheet.create({
   // ─── 调节面板 ──────────────────────────────────────────────────────
   panel: {
     position: 'absolute',
-    left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
     width: PANEL_WIDTH,
     backgroundColor: 'rgba(10, 16, 28, 0.92)',
-    borderRightWidth: 1,
-    borderRightColor: '#1a3050',
+    borderLeftWidth: 1,
+    borderLeftColor: '#1a3050',
     zIndex: 10,
   },
   panelScroll: {
