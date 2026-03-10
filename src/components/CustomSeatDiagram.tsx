@@ -125,6 +125,8 @@ function getZoneStyleByCommand(cmd: AirbagCommandState, isActive: boolean) {
  *   指令 3 → 蓝色背景 + ↑ 箭头（充气）
  *   指令 4 → 蓝色背景 + ↓ 箭头（放气）
  *   指令 0 → 无背景 + 无箭头（空闲）
+ *
+ * 基准尺寸适配新座椅图 (791×924px, 宽高比 0.856:1)
  */
 const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
   activeZone,
@@ -160,9 +162,9 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
 
   const s = scale;
 
-  // 基准尺寸
-  const W = 240 * s;
-  const H = 380 * s;
+  // 基准尺寸（适配新座椅图 791×924px）
+  const W = 280 * s;
+  const H = 327 * s;
 
   return (
     <View style={[styles.container, {width: W, height: H}]}>
@@ -179,10 +181,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('shoulder'),
           {
-            top: 52 * s,
-            left: 48 * s,
-            width: 62 * s,
-            height: 30 * s,
+            top: 58 * s,
+            left: 62 * s,
+            width: 54 * s,
+            height: 28 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -193,10 +195,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('shoulder'),
           {
-            top: 52 * s,
-            right: 48 * s,
-            width: 62 * s,
-            height: 30 * s,
+            top: 58 * s,
+            right: 62 * s,
+            width: 54 * s,
+            height: 28 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -209,10 +211,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('sideWing'),
           {
-            top: 120 * s,
-            left: 28 * s,
-            width: 26 * s,
-            height: 60 * s,
+            top: 102 * s,
+            left: 72 * s,
+            width: 22 * s,
+            height: 52 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -223,10 +225,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('sideWing'),
           {
-            top: 120 * s,
-            right: 28 * s,
-            width: 26 * s,
-            height: 60 * s,
+            top: 102 * s,
+            right: 72 * s,
+            width: 22 * s,
+            height: 52 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -237,10 +239,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
       <View
         style={{
           position: 'absolute',
-          top: 112 * s,
-          left: 62 * s,
-          right: 62 * s,
-          height: 76 * s,
+          top: 98 * s,
+          left: 100 * s,
+          right: 100 * s,
+          height: 60 * s,
         }}>
         {/* 上半部分 */}
         <View
@@ -282,10 +284,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
       <View
         style={{
           position: 'absolute',
-          top: 248 * s,
-          left: 52 * s,
-          right: 52 * s,
-          height: 42 * s,
+          top: 216 * s,
+          left: 76 * s,
+          right: 76 * s,
+          height: 34 * s,
           flexDirection: 'row',
         }}>
         {/* 左 */}
@@ -330,10 +332,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('legRest'),
           {
-            top: 298 * s,
-            left: 52 * s,
-            width: 58 * s,
-            height: 28 * s,
+            top: 256 * s,
+            left: 76 * s,
+            width: 50 * s,
+            height: 24 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -344,10 +346,10 @@ const CustomSeatDiagram: React.FC<CustomSeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('legRest'),
           {
-            top: 298 * s,
-            right: 52 * s,
-            width: 58 * s,
-            height: 28 * s,
+            top: 256 * s,
+            right: 76 * s,
+            width: 50 * s,
+            height: 24 * s,
             borderRadius: 10 * s,
           },
         ]}>
