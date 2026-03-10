@@ -900,9 +900,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     camDist: 300,   // 相机距离
     rootRx: 0.21,   // rootGroup X 旋转
     rootRy: -0.54,  // rootGroup Y 旋转
-    rootPx: 0,      // rootGroup X 位移
+    rootPx: 71,     // rootGroup X 位移
     rootPy: 13,     // rootGroup Y 位移
-    rootPz: 0,      // rootGroup Z 位移
+    rootPz: -100,   // rootGroup Z 位移
     // pointGroup 整体旋转
     grpRx: DEFAULT_POINT_MAP_ROTATE.x,
     grpRy: DEFAULT_POINT_MAP_ROTATE.y,
@@ -1281,7 +1281,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     };
     rootGroup.rotation.x = controls.rotationX;
     rootGroup.rotation.y = controls.rotationY;
+    rootGroup.position.x = 71;
     rootGroup.position.y = 13;
+    rootGroup.position.z = -100;
 
     setLoading(true);
     setLoadError(null);
