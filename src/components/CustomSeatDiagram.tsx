@@ -63,8 +63,8 @@ const CUSTOM_TO_PHYSICAL: Record<CustomAirbagZone, [string, string]> = {
   shoulder: ['shoulderL', 'shoulderR'],
   sideWing: ['sideWingL', 'sideWingR'],
   lumbar: ['lumbarUp', 'lumbarDown'],
-  hipFirm: ['cushionFL', 'cushionFR'],
-  legRest: ['cushionRL', 'cushionRR'],
+  hipFirm: ['cushionRL', 'cushionRR'],
+  legRest: ['cushionFL', 'cushionFR'],
 };
 
 /**

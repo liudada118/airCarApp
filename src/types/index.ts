@@ -144,8 +144,8 @@ export function parseAirbagCommand(
  * 肩部气囊:    shoulder   → 物理气囊 1, 2
  * 侧翼气囊:    sideWing   → 物理气囊 3, 4
  * 腰托气囊:    lumbar     → 物理气囊 5, 6
- * 臀部软硬度:  hipFirm    → 物理气囊 7, 8
- * 腿托气囊:    legRest    → 物理气囊 9, 10
+ * 臀部软硬度:  hipFirm    → 物理气囊 9, 10
+ * 腿托气囊:    legRest    → 物理气囊 7, 8
  */
 export type CustomAirbagZone =
   | 'shoulder'
@@ -170,8 +170,8 @@ export const CUSTOM_ZONE_TO_AIRBAG_IDS: Record<CustomAirbagZone, number[]> = {
   shoulder: [1, 2],
   sideWing: [3, 4],
   lumbar: [5, 6],
-  hipFirm: [7, 8],
-  legRest: [9, 10],
+  hipFirm: [9, 10],
+  legRest: [7, 8],
 };
 
 /**
