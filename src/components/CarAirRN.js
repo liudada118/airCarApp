@@ -908,11 +908,11 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     grpRy: DEFAULT_POINT_MAP_ROTATE.y,
     grpRz: DEFAULT_POINT_MAP_ROTATE.z,
     // 座椅模型自身参数
-    modelPx: 0,     // 模型 X 位移
-    modelPy: 0,     // 模型 Y 位移
-    modelPz: 0,     // 模型 Z 位移
+    modelPx: 234,   // 模型 X 位移
+    modelPy: 6,     // 模型 Y 位移
+    modelPz: 431,   // 模型 Z 位移
     modelRx: 0,     // 模型 X 旋转
-    modelRy: 0,     // 模型 Y 旋转
+    modelRy: 1.57,  // 模型 Y 旋转
     modelRz: 0,     // 模型 Z 旋转
     modelScale: 1,  // 模型缩放倍率（相对于自动计算的基准缩放）
   });
@@ -1054,13 +1054,15 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     });
     setLayout(init);
     applyLayout(init);
-    // 重置座椅模型参数
+    // 重置座椅模型参数到初始值
     const model = stateRef.current.model;
     if (model) {
       if (model._basePosition) {
-        model.position.copy(model._basePosition);
+        model.position.x = model._basePosition.x + 234;
+        model.position.y = model._basePosition.y + 6;
+        model.position.z = model._basePosition.z + 431;
       }
-      model.rotation.set(0, 0, 0);
+      model.rotation.set(0, 1.57, 0);
       if (model._baseScale) {
         model.scale.setScalar(model._baseScale);
       }
@@ -1068,8 +1070,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     }
     setViewParams(prev => ({
       ...prev,
-      modelPx: 0, modelPy: 0, modelPz: 0,
-      modelRx: 0, modelRy: 0, modelRz: 0,
+      modelPx: 234, modelPy: 6, modelPz: 431,
+      modelRx: 0, modelRy: 1.57, modelRz: 0,
       modelScale: 1,
     }));
   }, [applyLayout]);
@@ -1295,6 +1297,11 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         if (model) {
           model._basePosition = model.position.clone();
           model._baseScale = model.scale.x; // setScalar 后 xyz相同
+          // 应用初始座椅模型参数
+          model.position.x = model._basePosition.x + 234;
+          model.position.y = model._basePosition.y + 6;
+          model.position.z = model._basePosition.z + 431;
+          model.rotation.set(0, 1.57, 0);
         }
         applyPointFitToModel(model, pointMeshes, DEFAULT_POINT_FIT_LAYOUT);
         stateRef.current.dirty = true;
