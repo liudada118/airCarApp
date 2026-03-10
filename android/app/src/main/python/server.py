@@ -202,47 +202,12 @@ def reset_config():
 def _sync_runtime(key_path, value):
     """将配置变更同步到 _system 运行时变量（热更新）"""
     _map = {
-        # 原有映射
         'integrated_system.cushion_sum_threshold': 'cushion_sum_threshold',
         'integrated_system.backrest_sum_threshold': 'backrest_sum_threshold',
         'integrated_system.off_seat_frames_threshold': 'off_seat_frames_threshold',
         'integrated_system.reset_frames_threshold': 'reset_frames_threshold',
         'integrated_system.reset_deflate_frames': 'reset_deflate_frames',
         'integrated_system.use_filtered_sum': 'use_filtered_sum',
-        # 集成系统补充参数
-        'integrated_system.backrest_buffer_frames': 'backrest_buffer_frames',
-        # 控制检查间隔
-        'control.check_interval_frames': 'control_check_interval',
-        # 初始化充气
-        'integrated_system.init_inflate.enabled': 'init_inflate_enabled',
-        'integrated_system.init_inflate.cycles': 'init_inflate_cycles',
-        'integrated_system.init_inflate.airbags': 'init_inflate_airbags',
-        # 放气冷却锁
-        'integrated_system.deflate_cooldown.enabled': 'deflate_cooldown_enabled',
-        'integrated_system.deflate_cooldown.max_continuous_commands': 'deflate_cooldown_max_commands',
-        'integrated_system.deflate_cooldown.reset_on_no_deflate': 'deflate_cooldown_reset_on_no_deflate',
-        # 矩阵预处理矫正
-        'matrix.pre_correction.enabled': 'pre_correction_enabled',
-        'matrix.pre_correction.value': 'pre_correction_value',
-        'matrix.pre_correction.multiplier': 'pre_correction_multiplier',
-        # 分压矫正
-        'matrix.voltage_divider_correction.enabled': 'voltage_divider_enabled',
-        'matrix.voltage_divider_correction.value': 'voltage_divider_value',
-        # 活体检测
-        'living_detection.queue_size': 'living_queue_size',
-        # 体型检测
-        'body_type_detection.queue_size': 'body_type_queue_size',
-        # 腿托行范围
-        'leg_support.front_rows': 'leg_front_rows',
-        'leg_support.rear_rows': 'leg_rear_rows',
-        # 阶跃下降检测
-        'integrated_system.step_drop_detection.enabled': 'step_drop_enabled',
-        'integrated_system.step_drop_detection.window_frames': 'step_drop_window_frames',
-        'integrated_system.step_drop_detection.history_gap_frames': 'step_drop_history_gap_frames',
-        'integrated_system.step_drop_detection.pressure_threshold': 'step_drop_pressure_threshold',
-        'integrated_system.step_drop_detection.drop_ratio': 'step_drop_ratio',
-        'integrated_system.step_drop_detection.confirm_cycles': 'step_drop_confirm_cycles',
-        'integrated_system.step_drop_detection.deflate_cycles': 'step_drop_deflate_cycles',
     }
     attr = _map.get(key_path)
     if attr and hasattr(_system, attr):
