@@ -1,7 +1,8 @@
 /**
- * Design: Command combo manager with loop repeat support
+ * Design: Command combo manager with loop repeat & real-time response display
  * Create sequences of saved commands with configurable delays
  * Supports infinite loop execution until manually stopped
+ * Shows real-time parsed response data from slave device during execution
  */
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSerialContext } from "@/contexts/SerialContext";
@@ -9,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -28,7 +30,17 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { hexToBytes, type CommandStep, type CommandCombo } from "@/lib/protocol";
+import {
+  hexToBytes,
+  GEAR_LABELS,
+  GEAR_COLORS,
+  GearLevel,
+  type CommandStep,
+  type CommandCombo,
+  type LogEntry,
+  type FrameData,
+  DataDirection,
+} from "@/lib/protocol";
 import {
   Plus,
   Trash2,
@@ -40,11 +52,28 @@ import {
   GripVertical,
   Repeat,
   Infinity,
+  Radio,
+  ChevronDown,
+  ChevronUp,
+  Eraser,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/** A single response record captured during combo execution */
+interface ResponseRecord {
+  id: string;
+  timestamp: number;
+  stepIdx: number;
+  loopRound: number;
+  commandName: string;
+  direction: "send" | "receive";
+  rawHex: string;
+  parsed: FrameData | null;
+  error?: string;
+}
+
 export default function ComboManager() {
-  const { commands, combos, addCombo, removeCombo, updateCombo, send, isConnected } =
+  const { commands, combos, addCombo, removeCombo, updateCombo, send, isConnected, logs } =
     useSerialContext();
 
   const [isCreating, setIsCreating] = useState(false);
@@ -56,11 +85,69 @@ export default function ComboManager() {
   const [isLoopMode, setIsLoopMode] = useState<Record<string, boolean>>({});
   const abortRef = useRef(false);
 
+  // Real-time response data
+  const [responseRecords, setResponseRecords] = useState<ResponseRecord[]>([]);
+  const [showResponsePanel, setShowResponsePanel] = useState<Record<string, boolean>>({});
+  const lastLogIdRef = useRef<string | null>(null);
+  const responseScrollRef = useRef<HTMLDivElement>(null);
+
+  // Track logs during execution to capture responses
+  const prevLogsLenRef = useRef(0);
+
   useEffect(() => {
     return () => {
       abortRef.current = true;
     };
   }, []);
+
+  // Monitor logs for new receive entries during combo execution
+  useEffect(() => {
+    if (!runningComboId) {
+      prevLogsLenRef.current = logs.length;
+      return;
+    }
+
+    // Check for new log entries
+    if (logs.length > 0 && logs[0].id !== lastLogIdRef.current) {
+      const newEntries: LogEntry[] = [];
+      for (let i = 0; i < logs.length; i++) {
+        if (logs[i].id === lastLogIdRef.current) break;
+        newEntries.push(logs[i]);
+      }
+      lastLogIdRef.current = logs[0].id;
+
+      // Convert new log entries to response records
+      const newRecords: ResponseRecord[] = newEntries
+        .reverse() // logs are newest-first, we want chronological
+        .map((log) => ({
+          id: log.id,
+          timestamp: log.timestamp,
+          stepIdx: currentStepIdx,
+          loopRound: loopCount,
+          commandName: log.direction === "send" ? "发送" : "回传",
+          direction: log.direction,
+          rawHex: log.rawHex,
+          parsed: log.parsed,
+          error: log.error,
+        }));
+
+      if (newRecords.length > 0) {
+        setResponseRecords((prev) => {
+          const updated = [...prev, ...newRecords];
+          // Keep max 200 records
+          return updated.length > 200 ? updated.slice(-200) : updated;
+        });
+      }
+    }
+  }, [logs, runningComboId, currentStepIdx, loopCount]);
+
+  // Auto-scroll response panel
+  useEffect(() => {
+    if (responseScrollRef.current) {
+      const el = responseScrollRef.current;
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [responseRecords]);
 
   const addStep = () => {
     if (commands.length === 0) {
@@ -101,6 +188,10 @@ export default function ComboManager() {
 
   const toggleLoopMode = (comboId: string) => {
     setIsLoopMode((prev) => ({ ...prev, [comboId]: !prev[comboId] }));
+  };
+
+  const toggleResponsePanel = (comboId: string) => {
+    setShowResponsePanel((prev) => ({ ...prev, [comboId]: !prev[comboId] }));
   };
 
   // Execute one round of the combo, returns false if aborted
@@ -162,9 +253,12 @@ export default function ComboManager() {
       abortRef.current = false;
       setRunningComboId(combo.id);
       setLoopCount(0);
+      setResponseRecords([]); // Clear previous responses
+      lastLogIdRef.current = logs.length > 0 ? logs[0].id : null;
+      // Auto-show response panel
+      setShowResponsePanel((prev) => ({ ...prev, [combo.id]: true }));
 
       if (loop) {
-        // Infinite loop mode
         let round = 0;
         while (!abortRef.current) {
           round++;
@@ -173,7 +267,6 @@ export default function ComboManager() {
           if (!ok) break;
         }
       } else {
-        // Single execution
         setLoopCount(1);
         await executeOneRound(combo);
       }
@@ -185,7 +278,7 @@ export default function ComboManager() {
         toast.success(`组合 "${combo.name}" 执行完成`);
       }
     },
-    [executeOneRound]
+    [executeOneRound, logs]
   );
 
   const stopCombo = () => {
@@ -196,8 +289,175 @@ export default function ComboManager() {
     toast.info("已停止执行");
   };
 
+  const clearResponses = () => {
+    setResponseRecords([]);
+  };
+
   const getCommandName = (id: string) =>
     commands.find((c) => c.id === id)?.name ?? "未知指令";
+
+  /** Render a single airbag status row for parsed frame */
+  const renderAirbagStatus = (parsed: FrameData) => {
+    const activeAirbags = parsed.airbags.filter(
+      (a) => a.id >= 1 && a.id <= 10
+    );
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {activeAirbags.map((ab) => {
+          const gearLabel = GEAR_LABELS[ab.gear as GearLevel] ?? `0x${ab.gear.toString(16)}`;
+          const gearColor = GEAR_COLORS[ab.gear as GearLevel] ?? "#64748b";
+          return (
+            <span
+              key={ab.id}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono border"
+              style={{
+                borderColor: `${gearColor}40`,
+                backgroundColor: `${gearColor}15`,
+                color: gearColor,
+              }}
+            >
+              <span className="opacity-70">{ab.id}:</span>
+              {gearLabel}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
+  /** Render the response panel for a combo */
+  const renderResponsePanel = (comboId: string) => {
+    const isOpen = showResponsePanel[comboId] ?? false;
+    const isRunning = runningComboId === comboId;
+    const hasRecords = responseRecords.length > 0;
+    const receiveRecords = responseRecords.filter((r) => r.direction === "receive");
+    const sendRecords = responseRecords.filter((r) => r.direction === "send");
+
+    return (
+      <div className="mt-3 border-t border-border/50 pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <button
+            onClick={() => toggleResponsePanel(comboId)}
+            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Radio className={cn("w-3.5 h-3.5", isRunning && "text-emerald-400 animate-pulse")} />
+            <span>实时回传数据</span>
+            {hasRecords && (
+              <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-mono">
+                发:{sendRecords.length} 收:{receiveRecords.length}
+              </Badge>
+            )}
+            {isOpen ? (
+              <ChevronUp className="w-3 h-3" />
+            ) : (
+              <ChevronDown className="w-3 h-3" />
+            )}
+          </button>
+          {hasRecords && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearResponses}
+              className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground gap-1"
+            >
+              <Eraser className="w-3 h-3" />
+              清空
+            </Button>
+          )}
+        </div>
+
+        {isOpen && (
+          <div
+            ref={responseScrollRef}
+            className="max-h-[400px] overflow-y-auto rounded-lg bg-[#0a0e17] border border-border/30 p-2 space-y-1 custom-scrollbar"
+          >
+            {!hasRecords ? (
+              <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
+                {isRunning ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    等待数据...
+                  </span>
+                ) : (
+                  "执行组合后将在此显示收发数据"
+                )}
+              </div>
+            ) : (
+              responseRecords.map((record) => (
+                <div
+                  key={record.id}
+                  className={cn(
+                    "p-2 rounded-md border text-xs",
+                    record.direction === "send"
+                      ? "border-cyan-500/20 bg-cyan-500/5"
+                      : "border-emerald-500/20 bg-emerald-500/5"
+                  )}
+                >
+                  {/* Header row */}
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[9px] h-4 px-1.5 font-medium",
+                          record.direction === "send"
+                            ? "border-cyan-500/40 text-cyan-400 bg-cyan-500/10"
+                            : "border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
+                        )}
+                      >
+                        {record.direction === "send" ? "▲ 发送" : "▼ 回传"}
+                      </Badge>
+                      {record.loopRound > 0 && (
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          轮次{record.loopRound} / 步骤{record.stepIdx + 1}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      {new Date(record.timestamp).toLocaleTimeString("zh-CN", {
+                        hour12: false,
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
+                      .{String(record.timestamp % 1000).padStart(3, "0")}
+                    </span>
+                  </div>
+
+                  {/* Raw HEX */}
+                  <div className="font-mono text-[10px] text-muted-foreground leading-relaxed break-all mb-1 bg-black/30 rounded px-1.5 py-1">
+                    {record.rawHex}
+                  </div>
+
+                  {/* Parsed data */}
+                  {record.parsed && (
+                    <div>
+                      <div className="flex items-center gap-2 text-[10px] mb-0.5">
+                        <span className="text-muted-foreground">
+                          {record.parsed.direction === DataDirection.Send
+                            ? "主机→从机"
+                            : "从机→主机"}
+                        </span>
+                        <span className="text-muted-foreground">|</span>
+                        <span className="text-muted-foreground">
+                          {record.parsed.workMode === 0 ? "自动模式" : "手动模式"}
+                        </span>
+                      </div>
+                      {renderAirbagStatus(record.parsed)}
+                    </div>
+                  )}
+
+                  {record.error && (
+                    <span className="text-[10px] text-destructive">{record.error}</span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -383,7 +643,6 @@ export default function ComboManager() {
 
                       {isRunning ? (
                         <div className="flex items-center gap-2">
-                          {/* Loop counter badge */}
                           {loopEnabled && loopCount > 0 && (
                             <Badge
                               variant="outline"
@@ -521,6 +780,9 @@ export default function ComboManager() {
                       </div>
                     )}
                   </div>
+
+                  {/* Real-time response panel */}
+                  {(isRunning || responseRecords.length > 0) && renderResponsePanel(combo.id)}
                 </CardContent>
               </Card>
             );
