@@ -1,6 +1,7 @@
 /**
- * Design: Command combo manager
+ * Design: Command combo manager with loop repeat support
  * Create sequences of saved commands with configurable delays
+ * Supports infinite loop execution until manually stopped
  */
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSerialContext } from "@/contexts/SerialContext";
@@ -37,6 +38,8 @@ import {
   Clock,
   Combine,
   GripVertical,
+  Repeat,
+  Infinity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +52,8 @@ export default function ComboManager() {
   const [newSteps, setNewSteps] = useState<CommandStep[]>([]);
   const [runningComboId, setRunningComboId] = useState<string | null>(null);
   const [currentStepIdx, setCurrentStepIdx] = useState(-1);
+  const [loopCount, setLoopCount] = useState(0);
+  const [isLoopMode, setIsLoopMode] = useState<Record<string, boolean>>({});
   const abortRef = useRef(false);
 
   useEffect(() => {
@@ -94,13 +99,15 @@ export default function ComboManager() {
     toast.success("指令组合已创建");
   };
 
-  const runCombo = useCallback(
-    async (combo: CommandCombo) => {
-      abortRef.current = false;
-      setRunningComboId(combo.id);
+  const toggleLoopMode = (comboId: string) => {
+    setIsLoopMode((prev) => ({ ...prev, [comboId]: !prev[comboId] }));
+  };
 
+  // Execute one round of the combo, returns false if aborted
+  const executeOneRound = useCallback(
+    async (combo: CommandCombo): Promise<boolean> => {
       for (let i = 0; i < combo.steps.length; i++) {
-        if (abortRef.current) break;
+        if (abortRef.current) return false;
         setCurrentStepIdx(i);
 
         const step = combo.steps[i];
@@ -112,7 +119,6 @@ export default function ComboManager() {
 
         const bytes = hexToBytes(cmd.rawHex.replace(/\s/g, ""));
         await send(bytes);
-        toast.info(`步骤 ${i + 1}/${combo.steps.length}: 已发送 "${cmd.name}"`);
 
         // Wait for delay
         if (step.delayAfterMs > 0 && i < combo.steps.length - 1) {
@@ -124,24 +130,69 @@ export default function ComboManager() {
                 clearInterval(check);
                 resolve();
               }
-            }, 100);
+            }, 50);
           });
         }
       }
 
+      // Delay after last step before next loop
+      if (!abortRef.current && combo.steps.length > 0) {
+        const lastStep = combo.steps[combo.steps.length - 1];
+        if (lastStep.delayAfterMs > 0) {
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, lastStep.delayAfterMs);
+            const check = setInterval(() => {
+              if (abortRef.current) {
+                clearTimeout(timer);
+                clearInterval(check);
+                resolve();
+              }
+            }, 50);
+          });
+        }
+      }
+
+      return !abortRef.current;
+    },
+    [commands, send]
+  );
+
+  const runCombo = useCallback(
+    async (combo: CommandCombo, loop: boolean) => {
+      abortRef.current = false;
+      setRunningComboId(combo.id);
+      setLoopCount(0);
+
+      if (loop) {
+        // Infinite loop mode
+        let round = 0;
+        while (!abortRef.current) {
+          round++;
+          setLoopCount(round);
+          const ok = await executeOneRound(combo);
+          if (!ok) break;
+        }
+      } else {
+        // Single execution
+        setLoopCount(1);
+        await executeOneRound(combo);
+      }
+
       setRunningComboId(null);
       setCurrentStepIdx(-1);
+      setLoopCount(0);
       if (!abortRef.current) {
         toast.success(`组合 "${combo.name}" 执行完成`);
       }
     },
-    [commands, send]
+    [executeOneRound]
   );
 
   const stopCombo = () => {
     abortRef.current = true;
     setRunningComboId(null);
     setCurrentStepIdx(-1);
+    setLoopCount(0);
     toast.info("已停止执行");
   };
 
@@ -288,6 +339,7 @@ export default function ComboManager() {
         <div className="grid gap-3">
           {combos.map((combo) => {
             const isRunning = runningComboId === combo.id;
+            const loopEnabled = isLoopMode[combo.id] ?? false;
 
             return (
               <Card
@@ -306,25 +358,62 @@ export default function ComboManager() {
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {isRunning ? (
+                      {/* Loop toggle button */}
+                      {!isRunning && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={stopCombo}
-                          className="gap-1 text-xs border-destructive/40 text-destructive"
+                          onClick={() => toggleLoopMode(combo.id)}
+                          className={cn(
+                            "gap-1 text-xs h-8 px-2.5 transition-all",
+                            loopEnabled
+                              ? "border-amber-500/50 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-300"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                          title={loopEnabled ? "循环模式已开启" : "点击开启循环模式"}
                         >
-                          <Square className="w-3 h-3" />
-                          停止
+                          {loopEnabled ? (
+                            <Infinity className="w-3.5 h-3.5" />
+                          ) : (
+                            <Repeat className="w-3.5 h-3.5" />
+                          )}
+                          {loopEnabled ? "循环" : "单次"}
                         </Button>
+                      )}
+
+                      {isRunning ? (
+                        <div className="flex items-center gap-2">
+                          {/* Loop counter badge */}
+                          {loopEnabled && loopCount > 0 && (
+                            <Badge
+                              variant="outline"
+                              className="border-primary/40 text-primary font-mono text-xs animate-pulse"
+                            >
+                              第 {loopCount} 轮
+                            </Badge>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={stopCombo}
+                            className="gap-1 text-xs border-destructive/40 text-destructive hover:bg-destructive/20 hover:text-destructive"
+                          >
+                            <Square className="w-3 h-3" />
+                            停止
+                          </Button>
+                        </div>
                       ) : (
                         <Button
                           size="sm"
-                          onClick={() => runCombo(combo)}
+                          onClick={() => runCombo(combo, loopEnabled)}
                           disabled={!isConnected || runningComboId !== null}
-                          className="gap-1 text-xs bg-primary"
+                          className={cn(
+                            "gap-1 text-xs",
+                            loopEnabled ? "bg-amber-600 hover:bg-amber-500" : "bg-primary"
+                          )}
                         >
                           <Play className="w-3 h-3" />
-                          执行
+                          {loopEnabled ? "循环执行" : "执行"}
                         </Button>
                       )}
                       <AlertDialog>
@@ -333,6 +422,7 @@ export default function ComboManager() {
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                            disabled={isRunning}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -354,6 +444,30 @@ export default function ComboManager() {
                       </AlertDialog>
                     </div>
                   </div>
+
+                  {/* Running status bar */}
+                  {isRunning && (
+                    <div className="mb-3 p-2.5 rounded-lg bg-primary/5 border border-primary/20">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                          <span className="text-xs text-primary font-medium">
+                            {loopEnabled ? "循环执行中" : "执行中"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                          {loopEnabled && (
+                            <span className="font-mono">
+                              轮次: <span className="text-primary">{loopCount}</span>
+                            </span>
+                          )}
+                          <span className="font-mono">
+                            步骤: <span className="text-primary">{currentStepIdx + 1}</span>/{combo.steps.length}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Steps visualization */}
                   <div className="space-y-1">
@@ -396,6 +510,16 @@ export default function ComboManager() {
                         </div>
                       );
                     })}
+                    {/* Show loop indicator at the end */}
+                    {loopEnabled && !isRunning && (
+                      <div className="flex items-center gap-1.5 pl-6 py-1 mt-1">
+                        <div className="w-px h-3 bg-amber-500/30 ml-2" />
+                        <Repeat className="w-2.5 h-2.5 text-amber-500/60 ml-1" />
+                        <span className="text-[10px] text-amber-500/60">
+                          循环回到步骤 1（最后一步延迟 {combo.steps[combo.steps.length - 1]?.delayAfterMs ?? 0}ms 后）
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

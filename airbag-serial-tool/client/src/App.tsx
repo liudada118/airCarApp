@@ -1,12 +1,13 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, Router as WouterRouter } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 
-function Router() {
+function Routes() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
@@ -17,6 +18,12 @@ function Router() {
 }
 
 function App() {
+  // Detect if running in Electron (file:// protocol) and use hash routing
+  const isElectron =
+    typeof window !== "undefined" &&
+    (window.location.protocol === "file:" ||
+      navigator.userAgent.toLowerCase().includes("electron"));
+
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
@@ -31,7 +38,13 @@ function App() {
               },
             }}
           />
-          <Router />
+          {isElectron ? (
+            <WouterRouter hook={useHashLocation}>
+              <Routes />
+            </WouterRouter>
+          ) : (
+            <Routes />
+          )}
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
