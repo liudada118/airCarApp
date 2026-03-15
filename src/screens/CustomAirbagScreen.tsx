@@ -1077,7 +1077,7 @@ const styles = StyleSheet.create({
     height: 360,
     paddingRight: 0,
     position: 'relative',
-    right: -40,
+    right: -80,
     zIndex: 1,
   },
   rightLabels: {
@@ -1085,7 +1085,7 @@ const styles = StyleSheet.create({
     height: 260,
     paddingLeft: 0,
     position: 'relative',
-    left: -40,
+    left: -80,
     zIndex: 1,
   },
   seatContainer: {
