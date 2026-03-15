@@ -127,9 +127,17 @@ class BodyShapeClassifier:
     
     def _load_model(self, model_path: Optional[str] = None):
         """加载预训练模型"""
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        default_model_path = os.path.join(base_dir, 'model', 'body_shape_model.pkl')
+        
         if model_path is None:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            model_path = os.path.join(base_dir, 'model', 'body_shape_model.pkl')
+            model_path = default_model_path
+        
+        # 如果指定路径不存在，尝试使用默认路径（解决持久化配置目录与模型目录不一致的问题）
+        if not os.path.exists(model_path) and model_path != default_model_path:
+            print(f"[体型三分类器] 指定模型路径不存在: {model_path}")
+            print(f"[体型三分类器] 尝试使用默认路径: {default_model_path}")
+            model_path = default_model_path
         
         if os.path.exists(model_path):
             try:
@@ -140,10 +148,13 @@ class BodyShapeClassifier:
                 print(f"  - 模型类型: {self.model.best_model_name}")
             except Exception as e:
                 print(f"[体型三分类器] 模型加载失败: {e}")
+                import traceback
+                traceback.print_exc()
                 self.model = None
                 self.feature_engineer = None
         else:
             print(f"[体型三分类器] 模型文件不存在: {model_path}")
+            print(f"  默认路径也不存在: {default_model_path}")
             print(f"  请先运行 train_model.py 训练模型")
     
     def trigger(self) -> Dict:
@@ -423,6 +434,9 @@ class BodyShapeClassifier:
         """
         获取当前检测器状态
         
+        改进：只要有 latest_result 就始终返回 result 字段，
+        不再仅限于 COMPLETED 状态，确保分类结果不会丢失。
+        
         Returns:
             状态信息字典
         """
@@ -439,7 +453,8 @@ class BodyShapeClassifier:
             status['skipped_frames'] = self.skipped_count
             status['remaining_sec'] = (self.collect_frames - self.collected_count) / self.hz
         
-        if self.state == ClassifierState.COMPLETED and self.latest_result:
+        # 只要有分类结果就返回（不再仅限 COMPLETED 状态）
+        if self.latest_result:
             status['result'] = self.latest_result
         
         return status

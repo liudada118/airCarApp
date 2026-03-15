@@ -73,8 +73,20 @@ class IntegratedSeatSystem:
         if self.config.get('body_shape_classification.enabled', False):
             model_path = self.config.get('body_shape_classification.model_path', None)
             if model_path and not os.path.isabs(model_path):
-                # 相对路径转为绝对路径（相对于配置文件所在目录）
-                model_path = os.path.join(os.path.dirname(os.path.abspath(config_path)), model_path)
+                # 相对路径转为绝对路径
+                # 优先相对于配置文件所在目录，如果不存在则尝试相对于本文件所在目录
+                config_dir_path = os.path.join(os.path.dirname(os.path.abspath(config_path)), model_path)
+                module_dir_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), model_path)
+                if os.path.exists(config_dir_path):
+                    model_path = config_dir_path
+                elif os.path.exists(module_dir_path):
+                    model_path = module_dir_path
+                    print(f"[集成系统] 模型文件不在配置目录，使用模块目录: {model_path}")
+                else:
+                    model_path = config_dir_path  # 保持原始行为，让 BodyShapeClassifier 报错
+                    print(f"[集成系统] 警告: 模型文件两个路径都不存在:")
+                    print(f"  配置目录: {config_dir_path}")
+                    print(f"  模块目录: {module_dir_path}")
             self.body_shape_classifier = BodyShapeClassifier(self.config, model_path)
         else:
             self.body_shape_classifier = None
@@ -641,6 +653,19 @@ class IntegratedSeatSystem:
                 'recording_progress': preference_status.get('recording_progress'),  # 记录进度（仅记录中非空）
             },
         }
+
+        # 调试日志：每100帧打印一次体型三分类状态
+        if self.frame_count % 100 == 0:
+            _bsc_state = self.body_shape_classifier.state.name if self.body_shape_classifier else 'None'
+            _bsc_result = self.body_shape_classifier.latest_result if self.body_shape_classifier else None
+            _bsi_shape = body_shape_info.get('body_shape', '')
+            _pref_shape = self.preference_manager.active_body_shape
+            print(f"[\u96c6\u6210\u7cfb\u7edf] \u5e27{self.frame_count} \u4f53\u578b\u8c03\u8bd5: "
+                  f"classifier_state={_bsc_state}, "
+                  f"latest_result={_bsc_result is not None}, "
+                  f"body_shape_info.body_shape='{_bsi_shape}', "
+                  f"pref_active='{_pref_shape}', "
+                  f"seat_state={self.state.name}")
 
         # ③ 气囊指令
         airbag_command = {
@@ -2124,6 +2149,9 @@ class IntegratedSeatSystem:
         """
         生成 process_frame 返回值中的 body_shape 字段
 
+        改进：即使分类器不在 COMPLETED 状态，也检查 latest_result 和
+        preference_manager.active_body_shape，确保分类结果不会丢失。
+
         Returns:
             Dict - 体型三分类状态摘要
         """
@@ -2147,11 +2175,24 @@ class IntegratedSeatSystem:
             result['progress'] = status.get('progress', 0)
             result['remaining_sec'] = status.get('remaining_sec', 0)
 
+        # 优先从 COMPLETED 状态的 result 中获取体型信息
         if state == 'COMPLETED' and 'result' in status:
             r = status['result']
             result['body_shape'] = r.get('body_shape', '')
             result['confidence'] = r.get('confidence', 0)
             result['probabilities'] = r.get('probabilities', {})
+        elif self.body_shape_classifier.latest_result is not None:
+            # Fallback: 分类器有历史结果但状态不是 COMPLETED（不应发生，但作为保护）
+            r = self.body_shape_classifier.latest_result
+            body_shape = r.get('body_shape', '')
+            if body_shape and body_shape not in ('分类失败', '采集超时'):
+                result['body_shape'] = body_shape
+                result['confidence'] = r.get('confidence', 0)
+                result['probabilities'] = r.get('probabilities', {})
+
+        # 最终 Fallback: 使用品味管理器的激活体型
+        if not result.get('body_shape') and self.preference_manager.active_body_shape:
+            result['body_shape'] = self.preference_manager.active_body_shape
 
         return result
 
