@@ -7,6 +7,7 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "postinstall": "node scripts/patch-gradle-repos.js",
+    "release": "cd android && gradlew.bat assembleRelease",
     "start": "react-native start",
     "test": "jest"
   },

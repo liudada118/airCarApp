@@ -1,6 +1,6 @@
 # 架构文档
 
-> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-06 00:30
+> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-15 19:58
 
 ## 1. 项目概述
 
@@ -15,7 +15,7 @@
 | **后端/算法** | Python (via Chaquopy) | 3.11 (在 Android 端运行) |
 | **编程语言** | TypeScript, Kotlin, Python | 分别用于前端、Android Native 和算法 |
 | **包管理器** | npm, yarn, pnpm, Gradle | 分别用于 Node.js 依赖管理和 Android 构建 |
-| **部署环境** | Android | 通过 Gradle 编译 APK |
+| **部署环境** | Android | 通过 `npm run release` 调用 Gradle 编译 APK |
 | **其他关键库**| `react-native-safe-area-context`, `expo-file-system`, `ruamel.yaml` | UI 适配、3D 模型文件读取、Python 端配置管理 |
 
 ## 3. 目录结构
@@ -40,7 +40,7 @@
 │   ├── theme/                # 主题、颜色、间距
 │   └── types/                # TypeScript 类型定义
 ├── App.tsx                 # App 主入口和页面导航
-└── package.json            # Node.js 依赖
+└── package.json            # Node.js 依赖与构建脚本（含 `npm run release`）
 ```
 
 ### 关键目录说明
@@ -182,6 +182,8 @@ graph TD
 | 2026-03-06 00:00 | baocun v5 | 新增归零按钮 | 底部新增橙色归零按钮，点击后确认弹窗→重置所有气囊值为0→发送stop指令→清除本地缓存 |
 | 2026-03-06 00:30 | baocun v6 | 性能优化 | 移除生产环境 console.log（41→条全部加 __DEV__ 保护）；子组件添加 React.memo（AdjustButtons/CustomAirbagLabel/CustomSeatDiagram）；useMemo 缓存 totalOps/leftZones/rightZones；NativeEventEmitter 实例移至组件外部；日志 ScrollView 改用 requestAnimationFrame + animated:false |
 
+| 2026-03-15 19:58 | Release 打包脚本 | 在 `package.json` 中新增 `npm run release`，封装 `android\gradlew.bat assembleRelease` 命令 |
+
 ## 7. 更新日志
 
 | 日期 | 变更类型 | 描述 |
@@ -210,6 +212,8 @@ graph TD
 | 2026-03-05 23:30 | 修复缺陷 | 同步初始化修复 UI 不更新：用 initialValues 同步初始化 useState 的 airbagValues 和 cmdCounts，不再依赖 useEffect 异步设置，确保组件首次渲染就显示正确的值 |
 | 2026-03-06 00:00 | 新增功能 | 新增归零按钮：底部橙色按钮，点击确认后重置所有气囊值为0、发送停止指令、清除本地缓存 |
 | 2026-03-06 00:30 | 性能优化 | 移除生产环境 console.log（41条→全部加 __DEV__ 保护）；子组件添加 React.memo；useMemo 缓存计算结果；优化 NativeEventEmitter 和日志滚动性能 |
+
+| 2026-03-15 19:58 | 配置变更 | 在 `package.json` 中新增 `release` 脚本，执行 `cd android && gradlew.bat assembleRelease` 以统一 Android release APK 打包入口 |
 
 ---
 
