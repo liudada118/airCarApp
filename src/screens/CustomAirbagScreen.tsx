@@ -76,8 +76,13 @@ const MAX_VALUE = 3;
 const MIN_VALUE = -3;
 const MAX_LOG_LINES = 50;
 
-/** 锁定持续时间（毫秒） */
-const LOCK_DURATION_MS = 3000;
+/** 根据气囊区域获取锁定持续时间（毫秒）：腰部和臀部 3秒，其他 2秒 */
+function getLockDuration(zone: string): number {
+  if (zone === 'lumbar' || zone === 'hipFirm') {
+    return 3000;
+  }
+  return 2000;
+}
 
 interface CmdLog {
   id: number;
@@ -372,25 +377,27 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       // 锁定所有按钮
       setIsLocked(true);
 
-      // 启动进度条动画（0 → 1，持续 LOCK_DURATION_MS）
+      // 根据气囊区域获取锁定时长
+      const duration = getLockDuration(zone);
+
+      // 启动进度条动画（0 → 1，持续 duration）
       lockProgressAnim.setValue(0);
       Animated.timing(lockProgressAnim, {
         toValue: 1,
-        duration: LOCK_DURATION_MS,
+        duration: duration,
         useNativeDriver: false,
       }).start();
 
-      // 3秒后发送保压（stop）指令并解锁
+      // duration 后发送保压（stop）指令并解锁
       lockTimerRef.current = setTimeout(() => {
         const targetZone = lastCmdZoneRef.current;
         if (targetZone) {
           sendAirbagCmd(targetZone, 'stop');
-
         }
         setIsLocked(false);
         lockTimerRef.current = null;
         lastCmdZoneRef.current = null;
-      }, LOCK_DURATION_MS);
+      }, duration);
     },
     [sendAirbagCmd, lockProgressAnim],
   );
