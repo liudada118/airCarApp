@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
-import {TopBar, SeatDiagram, ConnectionErrorModal} from '../components';
+import {TopBar, SeatDiagram, ConnectionErrorModal, Toast} from '../components';
 import IconFont from '../components/IconFont';
 import CarAirRN from '../components/CarAirRN';
 
@@ -466,6 +466,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showNonStdFrames, setShowNonStdFrames] = useState(false);
   const [showCommandModal, setShowCommandModal] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+
+  // 入座定时充气提示弹窗
+  const [seatedInflateToast, setSeatedInflateToast] = useState(false);
   const nonStdFramesRef = useRef<{hex: string; length: number; timestamp: number; csv: string}[]>([]);
   const [nonStdFrameVersion, setNonStdFrameVersion] = useState(0);
   const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
@@ -868,6 +871,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         sm.sendAirbagCommand('hipFirm', 'inflate').catch(e =>
           console.warn('[SeatedInflate] hipFirm inflate error:', e?.message || e),
         );
+
+        // 显示提示弹窗
+        setSeatedInflateToast(true);
 
         // 3秒后发送停止（保压）指令
         seatedInflateStopTimerRef.current = setTimeout(() => {
@@ -1869,6 +1875,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         </View>
       </Modal>
       )}
+
+      {/* 入座定时充气提示 */}
+      <Toast
+        visible={seatedInflateToast}
+        message="检测到您已进行长时间驾驶，自动为您调节坐垫软硬度，如感到不舒适请进入自定义气囊调节界面进行相应气囊自我调节"
+        type="info"
+        duration={2000}
+        onHide={() => setSeatedInflateToast(false)}
+      />
     </View>
   );
 };
