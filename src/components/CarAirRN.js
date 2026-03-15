@@ -55,7 +55,8 @@ const POINT_MAP_SCALE_DEFAULT = 1.8;
 
 // ─── 调节面板配置 ────────────────────────────────────────────────────────────
 const PANEL_WIDTH = 300;
-const ZONE_NAMES = ['center', 'centersit', 'leftsit', 'rightsit'];
+// 暂时取消侧翼展示（leftsit=右侧翼, rightsit=左侧翼）
+const ZONE_NAMES = ['center', 'centersit'];
 const ZONE_LABELS = {
   center: '坐垫',
   centersit: '靠背',
@@ -77,20 +78,21 @@ const allConfig = {
     flipRow: true,     // 座椅前后矩阵顺序翻转
     flipHeight: false,
   },
-  necksit: {
-    dataConfig: backConfig,
-    name: 'leftsit',
-    pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
-    flipRow: false,
-    flipHeight: true,  // 侧翼高度方向翻转（同靠背）
-  },
-  backsit: {
-    dataConfig: backConfig,
-    name: 'rightsit',
-    pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
-    flipRow: false,
-    flipHeight: true,  // 侧翼高度方向翻转（同靠背）
-  },
+  // 暂时取消侧翼展示
+  // necksit: {
+  //   dataConfig: backConfig,
+  //   name: 'leftsit',
+  //   pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+  //   flipRow: false,
+  //   flipHeight: true,
+  // },
+  // backsit: {
+  //   dataConfig: backConfig,
+  //   name: 'rightsit',
+  //   pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+  //   flipRow: false,
+  //   flipHeight: true,
+  // },
   sitsit: {
     dataConfig: sitConfigBack,
     name: 'centersit',
