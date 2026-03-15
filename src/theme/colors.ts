@@ -7,10 +7,10 @@ export const Colors = {
   primaryDark: '#0056CC',
 
   // 背景色
-  background: '#000000',
-  cardBackground: '#1C1C1E',
-  cardBackgroundLight: '#2C2C2E',
-  surfaceBackground: '#1C1C1E',
+  background: '#1A1A2E',
+  cardBackground: '#2A2A3E',
+  cardBackgroundLight: '#333350',
+  surfaceBackground: '#252540',
 
   // 文字色
   textWhite: '#FFFFFF',
@@ -24,7 +24,7 @@ export const Colors = {
   modalOverlay: 'rgba(0, 0, 0, 0.6)',
 
   // 边框
-  borderGray: '#2C2C2E',
+  borderGray: '#3A3A4E',
   borderLight: '#E5E5EA',
   borderBlue: '#007AFF',
 
@@ -37,11 +37,11 @@ export const Colors = {
   transparent: 'transparent',
   seatHighlight: 'rgba(0, 122, 255, 0.3)',
   airbagActive: '#007AFF',
-  airbagInactive: '#3A3A3C',
+  airbagInactive: '#4A4A5E',
 
   // 按钮
   buttonBlue: '#007AFF',
-  buttonGray: '#2C2C2E',
+  buttonGray: '#3A3A4E',
   buttonOutline: '#007AFF',
 
   // Toast

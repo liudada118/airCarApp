@@ -1,17 +1,18 @@
 import React from 'react';
-import {View, Text, Image, TouchableOpacity, StyleSheet, ImageSourcePropType} from 'react-native';
+import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
+import IconFont from './IconFont';
 import type {CustomAirbagZone} from '../types';
 
 /**
- * 自定义气囊区域对应的 icon 图片映射（5 组）
+ * 自定义气囊区域对应的 iconfont 图标名称映射（5 组）
  */
-const ZONE_ICON_MAP: Record<CustomAirbagZone, ImageSourcePropType> = {
-  shoulder: require('../assets/icons/icon-shoulder.png'),
-  sideWing: require('../assets/icons/icon-sideWing.png'),
-  lumbar: require('../assets/icons/icon-waist.png'),
-  hipFirm: require('../assets/icons/icon-hip.png'),
-  legRest: require('../assets/icons/icon-legRest.png'),
+const ZONE_ICON_MAP: Record<CustomAirbagZone, string> = {
+  shoulder: 'a-zu1175',    // 肩部气囊
+  sideWing: 'a-zu1216',    // 侧翼气囊
+  lumbar: 'a-zu1202',      // 腰托气囊
+  hipFirm: 'zu',           // 臀部软硬度气囊
+  legRest: 'a-zu1215',     // 腿托气囊
 };
 
 interface CustomAirbagLabelProps {
@@ -33,8 +34,8 @@ const CustomAirbagLabel: React.FC<CustomAirbagLabelProps> = ({
   lineDirection,
   cmdCount = 0,
 }) => {
-  const iconSource = ZONE_ICON_MAP[zone];
-  const iconTintColor = isActive ? Colors.textWhite : Colors.textGray;
+  const iconName = ZONE_ICON_MAP[zone];
+  const iconColor = isActive ? Colors.textWhite : Colors.textGray;
 
   // 格式化操作次数文本
   const countText =
@@ -55,11 +56,7 @@ const CustomAirbagLabel: React.FC<CustomAirbagLabelProps> = ({
         ]}
         onPress={() => onPress(zone)}
         activeOpacity={0.7}>
-        <Image
-          source={iconSource}
-          style={[styles.icon, {tintColor: iconTintColor}]}
-          resizeMode="contain"
-        />
+        <IconFont name={iconName} size={18} color={iconColor} />
         <Text
           style={[
             styles.label,
@@ -100,10 +97,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   activeContainer: {
     backgroundColor: Colors.primary,
@@ -111,12 +108,8 @@ const styles = StyleSheet.create({
   inactiveContainer: {
     backgroundColor: 'rgba(100, 100, 120, 0.4)',
   },
-  icon: {
-    width: 22,
-    height: 22,
-  },
   label: {
-    fontSize: FontSize.md,
+    fontSize: FontSize.sm,
     fontWeight: '500',
   },
   activeLabel: {
@@ -133,8 +126,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   line: {
-    width: 60,
-    height: 2,
+    width: 40,
+    height: 1.5,
   },
 });
 

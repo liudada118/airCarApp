@@ -25,11 +25,11 @@ const HIDE_THRESHOLD_RATIO = 0.3;
 const ENABLE_POINT_HIDE = true;
 const MODEL_ASSET = require('../../image/chair3.glb');
 const DEFAULT_SETTINGS = {
-  gauss: 1.5,
-  color: 325, // 色阶映射范围
-  height: 0.3,
+  gauss: 1,
+  color: 350, // 色阶映射范围
+  height: 1,
   coherent: 1.3, // 第二层平滑（插值后）：轻度平滑，新值占 77%
-  rawSmooth: 1.5, // 第一层平滑（插值前）：轻度平滑，新值占 77%
+  rawSmooth: 1.3, // 第一层平滑（插值前）：轻度平滑，新值占 77%
   deadZone: 0, // 死区阈值：0=不启用死区
   zeroFrameThreshold: 10, // 全 0 帧检测：帧总和低于此值视为气囊动作干扰帧，直接跳过
 };
@@ -44,10 +44,10 @@ const IDLE_RENDER_FRAMES = 3;
 
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
 const DEFAULT_POINT_FIT_LAYOUT = {
-  center: {position: [16, -58, 45], rotation: [2.96, 0, 0], scale: 5.2},
-  centersit: {position: [52, 38, -43], rotation: [1.32, 0, 0], scale: 3.9},
-  leftsit: {position: [-33, -20, -13], rotation: [1.35, 0, 0], scale: 3.3},
-  rightsit: {position: [61, -20, -13], rotation: [1.35, 0, 0], scale: 3.3},
+  center: {position: [12, -61, 46], rotation: [3.09, 0, 0], scale: 3.8},
+  centersit: {position: [42, 38, -42], rotation: [1.32, 0, 0], scale: 3.2},
+  leftsit: {position: [54, -20, -19], rotation: [1.35, 0, 0], scale: 3.1},
+  rightsit: {position: [-29, -20, -19], rotation: [1.35, 0, 0], scale: 3.1},
 };
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
@@ -55,8 +55,7 @@ const POINT_MAP_SCALE_DEFAULT = 1.8;
 
 // ─── 调节面板配置 ────────────────────────────────────────────────────────────
 const PANEL_WIDTH = 300;
-// 暂时取消侧翼展示（leftsit=右侧翼, rightsit=左侧翼）
-const ZONE_NAMES = ['center', 'centersit'];
+const ZONE_NAMES = ['center', 'centersit', 'leftsit', 'rightsit'];
 const ZONE_LABELS = {
   center: '坐垫',
   centersit: '靠背',
@@ -78,21 +77,20 @@ const allConfig = {
     flipRow: true,     // 座椅前后矩阵顺序翻转
     flipHeight: false,
   },
-  // 暂时取消侧翼展示
-  // necksit: {
-  //   dataConfig: backConfig,
-  //   name: 'leftsit',
-  //   pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
-  //   flipRow: false,
-  //   flipHeight: true,
-  // },
-  // backsit: {
-  //   dataConfig: backConfig,
-  //   name: 'rightsit',
-  //   pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
-  //   flipRow: false,
-  //   flipHeight: true,
-  // },
+  necksit: {
+    dataConfig: backConfig,
+    name: 'leftsit',
+    pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+    flipRow: false,
+    flipHeight: true,  // 侧翼高度方向翻转（同靠背）
+  },
+  backsit: {
+    dataConfig: backConfig,
+    name: 'rightsit',
+    pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+    flipRow: false,
+    flipHeight: true,  // 侧翼高度方向翻转（同靠背）
+  },
   sitsit: {
     dataConfig: sitConfigBack,
     name: 'centersit',
@@ -210,16 +208,14 @@ function createWorkBuffers() {
 // ─── 模型加载 ────────────────────────────────────────────────────────────────
 
 async function loadSeatModel(group) {
-  // console.log('[loadSeatModel] 开始加载模型...');
   const asset = Asset.fromModule(MODEL_ASSET);
-  // console.log('[loadSeatModel] asset hash:', asset.hash, 'downloaded:', asset.downloaded);
   await asset.downloadAsync();
   const uri = asset.localUri || asset.uri;
   if (!uri) {
-    // console.warn('[loadSeatModel] 模型 URI 为空，无法加载');
+    console.warn('glb: missing asset uri');
     return null;
   }
-  // console.log('[loadSeatModel] 模型 URI:', uri);
+  // console.log('glb: loading', uri);
 
   const file = new FileSystem.File(uri);
   const buffer = await file.arrayBuffer();
@@ -233,7 +229,7 @@ async function loadSeatModel(group) {
       gltf => {
         const model = gltf.scene || gltf.scenes?.[0];
         if (!model) {
-          // console.warn('glb: parse ok but no scene');
+          console.warn('glb: parse ok but no scene');
           reject(new Error('model missing'));
           return;
         }
@@ -270,7 +266,7 @@ async function loadSeatModel(group) {
         resolve(model);
       },
       err => {
-        // console.warn('glb: parse error', err);
+        console.warn('glb: parse error', err);
         reject(err);
       },
     );
@@ -729,7 +725,7 @@ const stepStyles = StyleSheet.create({
 
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
-function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
+function CarAirRNInner({data = [], style}, ref) {
   const stateRef = useRef({});
   const dataRef = useRef(data);
   const frameRef = useRef(null);
@@ -815,7 +811,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     /** 算法判断离座时调用：立即清零 3D 图所有点位数据，并冻结数据更新 */
     resetToZero() {
       const fs = stateRef.current;
-      // console.log('[CarAirRN] resetToZero 调用, smoothBig存在:', !!fs.smoothBig, 'pointMeshes存在:', !!fs.pointMeshes);
+      console.log('[CarAirRN] resetToZero 调用, smoothBig存在:', !!fs.smoothBig, 'pointMeshes存在:', !!fs.pointMeshes);
       // 冻结数据更新：渲染循环不再用传感器数据更新 smoothBig
       fs._frozen = true;
       // 将 smoothBig 所有区域填 0
@@ -876,7 +872,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
 
   // ─── 调节面板状态 ──────────────────────────────────────────────────
   const [panelVisible, setPanelVisible] = useState(false);
-  const panelAnim = useRef(new Animated.Value(PANEL_WIDTH)).current;
+  const panelAnim = useRef(new Animated.Value(-PANEL_WIDTH)).current;
 
   // 点图布局参数（可调，每个区域独立 scale）
   const [layout, setLayout] = useState(() => {
@@ -902,21 +898,13 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     camDist: 300,   // 相机距离
     rootRx: 0.21,   // rootGroup X 旋转
     rootRy: -0.54,  // rootGroup Y 旋转
-    rootPx: 71,     // rootGroup X 位移
+    rootPx: 0,      // rootGroup X 位移
     rootPy: 13,     // rootGroup Y 位移
-    rootPz: -100,   // rootGroup Z 位移
+    rootPz: 0,      // rootGroup Z 位移
     // pointGroup 整体旋转
     grpRx: DEFAULT_POINT_MAP_ROTATE.x,
     grpRy: DEFAULT_POINT_MAP_ROTATE.y,
     grpRz: DEFAULT_POINT_MAP_ROTATE.z,
-    // 座椅模型自身参数
-    modelPx: 234,   // 模型 X 位移
-    modelPy: 6,     // 模型 Y 位移
-    modelPz: 431,   // 模型 Z 位移
-    modelRx: 0,     // 模型 X 旋转
-    modelRy: 1.57,  // 模型 Y 旋转
-    modelRz: 0,     // 模型 Z 旋转
-    modelScale: 1,  // 模型缩放倍率（相对于自动计算的基准缩放）
   });
 
   // 将布局变化应用到 3D 场景
@@ -950,7 +938,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     const toVisible = !panelVisible;
     setPanelVisible(toVisible);
     Animated.timing(panelAnim, {
-      toValue: toVisible ? 0 : PANEL_WIDTH,
+      toValue: toVisible ? 0 : -PANEL_WIDTH,
       duration: 250,
       useNativeDriver: true,
     }).start();
@@ -983,27 +971,6 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         if (s.pointGroup) s.pointGroup.rotation.y = value;
       } else if (param === 'grpRz') {
         if (s.pointGroup) s.pointGroup.rotation.z = value;
-      } else if (param.startsWith('model')) {
-        // 座椅模型自身参数
-        const model = s.model;
-        if (model) {
-          if (param === 'modelPx') {
-            model.position.x = (model._basePosition?.x ?? 0) + value;
-          } else if (param === 'modelPy') {
-            model.position.y = (model._basePosition?.y ?? 0) + value;
-          } else if (param === 'modelPz') {
-            model.position.z = (model._basePosition?.z ?? 0) + value;
-          } else if (param === 'modelRx') {
-            model.rotation.x = value;
-          } else if (param === 'modelRy') {
-            model.rotation.y = value;
-          } else if (param === 'modelRz') {
-            model.rotation.z = value;
-          } else if (param === 'modelScale') {
-            const baseScale = model._baseScale ?? 1;
-            model.scale.setScalar(baseScale * value);
-          }
-        }
       }
       s.dirty = true;
       return next;
@@ -1056,26 +1023,6 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     });
     setLayout(init);
     applyLayout(init);
-    // 重置座椅模型参数到初始值
-    const model = stateRef.current.model;
-    if (model) {
-      if (model._basePosition) {
-        model.position.x = model._basePosition.x + 234;
-        model.position.y = model._basePosition.y + 6;
-        model.position.z = model._basePosition.z + 431;
-      }
-      model.rotation.set(0, 1.57, 0);
-      if (model._baseScale) {
-        model.scale.setScalar(model._baseScale);
-      }
-      stateRef.current.dirty = true;
-    }
-    setViewParams(prev => ({
-      ...prev,
-      modelPx: 234, modelPy: 6, modelPz: 431,
-      modelRx: 0, modelRy: 1.57, modelRz: 0,
-      modelScale: 1,
-    }));
   }, [applyLayout]);
 
   // 打印当前参数到控制台
@@ -1089,12 +1036,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         scale: parseFloat(l.s.toFixed(2)),
       };
     });
-    output._model = {
-      position: [viewParams.modelPx, viewParams.modelPy, viewParams.modelPz],
-      rotation: [viewParams.modelRx, viewParams.modelRy, viewParams.modelRz],
-      scale: viewParams.modelScale,
-    };
-    // console.log('[CarAirRN] 当前参数:', JSON.stringify(output, null, 2));
+    // [PointFit] layout/view logs disabled
   }, [layout, viewParams]);
 
   // 手势响应器：单指旋转 + 双指缩放
@@ -1203,26 +1145,6 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
 
   // 初始化 3D 场景
   const onContextCreate = useCallback(gl => {
-    // ─── expo-gl 补丁：修复重新创建 GL context 时部分方法返回 undefined 导致 THREE.js .trim() 报错 ───
-    const _origGetShaderInfoLog = gl.getShaderInfoLog.bind(gl);
-    gl.getShaderInfoLog = (shader) => {
-      const result = _origGetShaderInfoLog(shader);
-      return result ?? '';
-    };
-    const _origGetProgramInfoLog = gl.getProgramInfoLog.bind(gl);
-    gl.getProgramInfoLog = (program) => {
-      const result = _origGetProgramInfoLog(program);
-      return result ?? '';
-    };
-    // getShaderSource 也可能返回 undefined
-    if (gl.getShaderSource) {
-      const _origGetShaderSource = gl.getShaderSource.bind(gl);
-      gl.getShaderSource = (shader) => {
-        const result = _origGetShaderSource(shader);
-        return result ?? '';
-      };
-    }
-
     const {drawingBufferWidth: width, drawingBufferHeight: height} = gl;
     const canvas = {
       width,
@@ -1234,13 +1156,6 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0f16);
-
-    // ─── 网格背景（设计图还原） ───
-    const gridHelper = new THREE.GridHelper(600, 30, 0x1a2030, 0x1a2030);
-    gridHelper.position.y = -120;
-    gridHelper.material.opacity = 0.4;
-    gridHelper.material.transparent = true;
-    scene.add(gridHelper);
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 3000);
     camera.position.set(0, 0, 300);
@@ -1283,30 +1198,14 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     };
     rootGroup.rotation.x = controls.rotationX;
     rootGroup.rotation.y = controls.rotationY;
-    rootGroup.position.x = 71;
     rootGroup.position.y = 13;
-    rootGroup.position.z = -100;
 
     setLoading(true);
     setLoadError(null);
     loadSeatModel(rootGroup)
       .then(model => {
-        // console.log('[CarAirRN] 模型加载完成, mounted:', mountedRef.current, 'model:', !!model);
-        if (!mountedRef.current) {
-          // console.warn('[CarAirRN] 组件已卸载，放弃模型加载结果');
-          return;
-        }
+        if (!mountedRef.current) return;
         stateRef.current.model = model;
-        // 保存模型的基准位置和缩放，供调节面板使用
-        if (model) {
-          model._basePosition = model.position.clone();
-          model._baseScale = model.scale.x; // setScalar 后 xyz相同
-          // 应用初始座椅模型参数
-          model.position.x = model._basePosition.x + 234;
-          model.position.y = model._basePosition.y + 6;
-          model.position.z = model._basePosition.z + 431;
-          model.rotation.set(0, 1.57, 0);
-        }
         applyPointFitToModel(model, pointMeshes, DEFAULT_POINT_FIT_LAYOUT);
         stateRef.current.dirty = true;
         setLoading(false);
@@ -1315,7 +1214,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         }
       })
       .catch(err => {
-        // console.warn('[CarAirRN] 模型加载失败:', err?.message || String(err));
+        console.warn('glb: load failed', err);
         if (!mountedRef.current) return;
         setLoading(false);
         setLoadError(err?.message || String(err));
@@ -1498,18 +1397,15 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         {...panResponder.panHandlers}
       />
 
-      {/* 右侧开关按钮 */}
-      {showDebugPanel && (
+      {/* 左侧开关按钮 */}
       <TouchableOpacity
         style={[styles.toggleBtn, panelVisible && styles.toggleBtnOpen]}
         onPress={togglePanel}
         activeOpacity={0.7}>
-        <Text style={styles.toggleBtnText}>{panelVisible ? '>' : '<'}</Text>
+        <Text style={styles.toggleBtnText}>{panelVisible ? '<' : '>'}</Text>
       </TouchableOpacity>
-      )}
 
-      {/* 右侧调节面板 */}
-      {showDebugPanel && (
+      {/* 左侧调节面板 */}
       <Animated.View
         style={[
           styles.panel,
@@ -1611,227 +1507,6 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             onValueChange={v => updatePointSetting('deadZone', v)}
           />
 
-          {/* ─── 热力图区域调节 ─── */}
-          <Text style={styles.sectionLabel}>热力图区域</Text>
-          <View style={styles.zoneTabs}>
-            {ZONE_NAMES.map(name => (
-              <TouchableOpacity
-                key={name}
-                style={[styles.zoneTab, activeZone === name && styles.zoneTabActive]}
-                onPress={() => setActiveZone(name)}>
-                <Text style={[styles.zoneTabText, activeZone === name && styles.zoneTabTextActive]}>
-                  {ZONE_LABELS[name]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={styles.sectionLabel}>{ZONE_LABELS[activeZone]} - 位置</Text>
-          <StepControl
-            label="X 位移"
-            value={zoneLayout.px ?? 0}
-            min={-1000}
-            max={1000}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateZoneParam(activeZone, 'px', v)}
-          />
-          <StepControl
-            label="Y 位移"
-            value={zoneLayout.py ?? 0}
-            min={-1000}
-            max={1000}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateZoneParam(activeZone, 'py', v)}
-          />
-          <StepControl
-            label="Z 位移"
-            value={zoneLayout.pz ?? 0}
-            min={-1000}
-            max={1000}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateZoneParam(activeZone, 'pz', v)}
-          />
-
-          <Text style={styles.sectionLabel}>{ZONE_LABELS[activeZone]} - 旋转</Text>
-          <StepControl
-            label="X 旋转"
-            value={zoneLayout.rx ?? 0}
-            min={-6.28}
-            max={6.28}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateZoneParam(activeZone, 'rx', v)}
-          />
-          <StepControl
-            label="Y 旋转"
-            value={zoneLayout.ry ?? 0}
-            min={-6.28}
-            max={6.28}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateZoneParam(activeZone, 'ry', v)}
-          />
-          <StepControl
-            label="Z 旋转"
-            value={zoneLayout.rz ?? 0}
-            min={-6.28}
-            max={6.28}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateZoneParam(activeZone, 'rz', v)}
-          />
-
-          <Text style={styles.sectionLabel}>{ZONE_LABELS[activeZone]} - 缩放</Text>
-          <StepControl
-            label="缩放"
-            value={zoneLayout.s ?? 1}
-            min={0.1}
-            max={10}
-            step={0.1}
-            decimals={1}
-            onValueChange={v => updateZoneParam(activeZone, 's', v)}
-          />
-
-          <View style={styles.btnRow}>
-            <TouchableOpacity style={[styles.actionBtn, {flex: 1}]} onPress={resetZone}>
-              <Text style={styles.actionBtnText}>重置{ZONE_LABELS[activeZone]}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* ─── 座椅模型调节 ─── */}
-          <Text style={styles.sectionLabel}>座椅位置</Text>
-          <StepControl
-            label="X 位移"
-            value={viewParams.modelPx}
-            min={-1000}
-            max={1000}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateViewParam('modelPx', v)}
-          />
-          <StepControl
-            label="Y 位移"
-            value={viewParams.modelPy}
-            min={-1000}
-            max={1000}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateViewParam('modelPy', v)}
-          />
-          <StepControl
-            label="Z 位移"
-            value={viewParams.modelPz}
-            min={-1000}
-            max={1000}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateViewParam('modelPz', v)}
-          />
-
-          <Text style={styles.sectionLabel}>座椅旋转</Text>
-          <StepControl
-            label="X 旋转"
-            value={viewParams.modelRx}
-            min={-6.28}
-            max={6.28}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('modelRx', v)}
-          />
-          <StepControl
-            label="Y 旋转"
-            value={viewParams.modelRy}
-            min={-6.28}
-            max={6.28}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('modelRy', v)}
-          />
-          <StepControl
-            label="Z 旋转"
-            value={viewParams.modelRz}
-            min={-6.28}
-            max={6.28}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('modelRz', v)}
-          />
-
-          <Text style={styles.sectionLabel}>座椅缩放</Text>
-          <StepControl
-            label="缩放"
-            value={viewParams.modelScale}
-            min={0.1}
-            max={5}
-            step={0.05}
-            decimals={2}
-            onValueChange={v => updateViewParam('modelScale', v)}
-          />
-
-          {/* ─── 整体调节（rootGroup，同时影响点图和座椅模型） ─── */}
-          <Text style={styles.sectionLabel}>整体位置</Text>
-          <StepControl
-            label="X 位移"
-            value={viewParams.rootPx}
-            min={-1000}
-            max={1000}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateViewParam('rootPx', v)}
-          />
-          <StepControl
-            label="Y 位移"
-            value={viewParams.rootPy}
-            min={-1000}
-            max={1000}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateViewParam('rootPy', v)}
-          />
-          <StepControl
-            label="Z 位移"
-            value={viewParams.rootPz}
-            min={-1000}
-            max={1000}
-            step={1}
-            decimals={0}
-            onValueChange={v => updateViewParam('rootPz', v)}
-          />
-
-          <Text style={styles.sectionLabel}>整体旋转</Text>
-          <StepControl
-            label="X 旋转"
-            value={viewParams.rootRx}
-            min={-6.28}
-            max={6.28}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('rootRx', v)}
-          />
-          <StepControl
-            label="Y 旋转"
-            value={viewParams.rootRy}
-            min={-6.28}
-            max={6.28}
-            step={0.01}
-            decimals={2}
-            onValueChange={v => updateViewParam('rootRy', v)}
-          />
-
-          <Text style={styles.sectionLabel}>相机距离</Text>
-          <StepControl
-            label="距离"
-            value={viewParams.camDist}
-            min={80}
-            max={1500}
-            step={5}
-            decimals={0}
-            onValueChange={v => updateViewParam('camDist', v)}
-          />
-
           {/* 操作按钮 */}
           <View style={styles.btnRow}>
             <TouchableOpacity style={styles.actionBtn} onPress={resetAll}>
@@ -1844,7 +1519,6 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
 
         </ScrollView>
       </Animated.View>
-      )}
 
       {/* Loading */}
       {loading ? (
@@ -1874,7 +1548,7 @@ const styles = StyleSheet.create({
   // ─── 开关按钮 ──────────────────────────────────────────────────────
   toggleBtn: {
     position: 'absolute',
-    right: 4,
+    left: 4,
     top: '45%',
     width: 24,
     height: 48,
@@ -1885,7 +1559,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   toggleBtnOpen: {
-    right: PANEL_WIDTH + 4,
+    left: PANEL_WIDTH + 4,
   },
   toggleBtnText: {
     color: '#7af',
@@ -1896,14 +1570,13 @@ const styles = StyleSheet.create({
   // ─── 调节面板 ──────────────────────────────────────────────────────
   panel: {
     position: 'absolute',
-    right: 0,
-    top: 80,
+    left: 0,
+    top: 0,
     bottom: 0,
     width: PANEL_WIDTH,
-    backgroundColor: 'rgba(10, 16, 28, 0.95)',
-    borderLeftWidth: 1,
-    borderLeftColor: '#1a3050',
-    borderTopLeftRadius: 12,
+    backgroundColor: 'rgba(10, 16, 28, 0.92)',
+    borderRightWidth: 1,
+    borderRightColor: '#1a3050',
     zIndex: 10,
   },
   panelScroll: {

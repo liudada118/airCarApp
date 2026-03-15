@@ -64,9 +64,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   button: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
   },

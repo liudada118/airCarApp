@@ -117,7 +117,7 @@ const IconFont: React.FC<IconFontProps> = ({
   const unicode = ICON_MAP[name];
 
   if (!unicode) {
-    // console.warn(`IconFont: unknown icon name "${name}"`);
+    console.warn(`IconFont: unknown icon name "${name}"`);
     return null;
   }
 

@@ -1,0 +1,9 @@
+# 座椅压力传感器算法包 - 最小集成依赖
+# Core
+numpy>=1.21.0
+ruamel.yaml>=0.17.0
+
+# ML (体型三分类模型推理)
+scikit-learn>=1.0.0
+scipy>=1.7.0
+pandas>=1.3.0

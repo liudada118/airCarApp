@@ -353,7 +353,7 @@ class ConfigWindow:
             return
 
         try:
-            # print("\n[配置] 批量应用修改...")
+            print("\n[配置] 批量应用修改...")
             count = len(self.pending_changes)
 
             # 批量应用（最后一个才保存）
@@ -361,9 +361,9 @@ class ConfigWindow:
             for i, (key_path, value) in enumerate(items):
                 is_last = (i == count - 1)
                 self.integrated_system.set_param(key_path, value, auto_save=is_last)
-                # print(f"  [{i+1}/{count}] {key_path} = {value}")
+                print(f"  [{i+1}/{count}] {key_path} = {value}")
 
-            # print(f"[配置] 应用完成，共 {count} 项")
+            print(f"[配置] 应用完成，共 {count} 项")
 
             # 清空缓存
             self.pending_changes.clear()
@@ -583,8 +583,7 @@ class HeatmapWindow:
         except queue.Empty:
             pass
         except Exception as e:
-            # print(f"热力图更新错误: {e}")
-            pass
+            print(f"热力图更新错误: {e}")
 
         self.window.after(60, self.update_heatmaps)
 
@@ -756,8 +755,7 @@ class TapMassageWindow:
                 self._update_status_text(vis_data)
 
         except Exception as e:
-            # print(f"[拍打按摩窗口] 更新错误: {e}")
-            pass
+            print(f"[拍打按摩窗口] 更新错误: {e}")
 
         # 每100ms更新一次
         if self.window and self.window.winfo_exists():
@@ -867,10 +865,6 @@ class SensorVisualizer:
         self.command_count = 0
         self.last_command_frame = 0
 
-        # 手动模式状态
-        self.manual_action_in_progress = False  # 是否有手动动作正在执行
-        self.manual_action_timer = None  # 定时器ID
-
         # 创建UI
         self._create_ui()
 
@@ -937,14 +931,6 @@ class SensorVisualizer:
         self.reset_massage_btn = ttk.Button(control_frame, text="关闭按摩", command=self._reset_massage)
         self.reset_massage_btn.grid(row=1, column=1, padx=5, pady=5)
 
-        # 体型识别按钮
-        self.body_shape_btn = ttk.Button(control_frame, text="体型识别", command=self._trigger_body_shape)
-        self.body_shape_btn.grid(row=1, column=2, padx=5, pady=5)
-
-        # 重置体型识别按钮
-        self.body_shape_reset_btn = ttk.Button(control_frame, text="重置识别", command=self._reset_body_shape)
-        self.body_shape_reset_btn.grid(row=1, column=3, padx=5, pady=5)
-
         # 热力图范围设置
         ttk.Label(control_frame, text="最小值:").grid(row=0, column=8, padx=5, pady=5, sticky=tk.W)
         self.vmin_var = tk.StringVar(value="0")
@@ -980,12 +966,6 @@ class SensorVisualizer:
 
         # 气囊状态面板
         self._create_airbag_status_panel()
-
-        # 品味系数显示面板
-        self._create_preference_panel()
-
-        # 手动控制面板（模式切换 + 气囊控制）
-        self._create_manual_control_panel()
 
     def _open_heatmap(self):
         """打开热力图窗口"""
@@ -1100,62 +1080,6 @@ class SensorVisualizer:
         self.cushion_massage_label = ttk.Label(row4, text="关闭", font=("Arial", 10), foreground="gray")
         self.cushion_massage_label.pack(side=tk.LEFT, padx=5)
 
-        # 第5行：阶跃检测状态
-        row5 = ttk.Frame(status_frame)
-        row5.pack(fill=tk.X, pady=2)
-
-        ttk.Label(row5, text="阶跃检测:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=5)
-        self.step_drop_status_label = ttk.Label(row5, text="未启用", font=("Arial", 10), foreground="gray")
-        self.step_drop_status_label.pack(side=tk.LEFT, padx=5)
-
-        ttk.Label(row5, text="历史压力:", font=("Arial", 10)).pack(side=tk.LEFT, padx=10)
-        self.step_drop_history_label = ttk.Label(row5, text="0", font=("Arial", 10), foreground="blue")
-        self.step_drop_history_label.pack(side=tk.LEFT, padx=2)
-
-        ttk.Label(row5, text="当前压力:", font=("Arial", 10)).pack(side=tk.LEFT, padx=10)
-        self.step_drop_current_label = ttk.Label(row5, text="0", font=("Arial", 10), foreground="blue")
-        self.step_drop_current_label.pack(side=tk.LEFT, padx=2)
-
-        ttk.Label(row5, text="确认:", font=("Arial", 10)).pack(side=tk.LEFT, padx=10)
-        self.step_drop_confirm_label = ttk.Label(row5, text="0/2", font=("Arial", 10), foreground="gray")
-        self.step_drop_confirm_label.pack(side=tk.LEFT, padx=2)
-
-        ttk.Label(row5, text="放气:", font=("Arial", 10)).pack(side=tk.LEFT, padx=10)
-        self.step_drop_deflate_label = ttk.Label(row5, text="0/6", font=("Arial", 10), foreground="gray")
-        self.step_drop_deflate_label.pack(side=tk.LEFT, padx=2)
-
-        # 第6行：体型三分类状态
-        row6 = ttk.Frame(status_frame)
-        row6.pack(fill=tk.X, pady=2)
-
-        ttk.Label(row6, text="体型三分类:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=5)
-        self.body_shape_state_label = ttk.Label(row6, text="未启用", font=("Arial", 10), foreground="gray")
-        self.body_shape_state_label.pack(side=tk.LEFT, padx=5)
-
-        ttk.Label(row6, text="体型:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=10)
-        self.body_shape_result_label = ttk.Label(row6, text="-", font=("Arial", 12, "bold"), foreground="gray")
-        self.body_shape_result_label.pack(side=tk.LEFT, padx=5)
-
-        ttk.Label(row6, text="置信度:", font=("Arial", 10)).pack(side=tk.LEFT, padx=10)
-        self.body_shape_confidence_label = ttk.Label(row6, text="-", font=("Arial", 10), foreground="gray")
-        self.body_shape_confidence_label.pack(side=tk.LEFT, padx=5)
-
-        ttk.Label(row6, text="进度:", font=("Arial", 10)).pack(side=tk.LEFT, padx=10)
-        self.body_shape_progress_label = ttk.Label(row6, text="-", font=("Arial", 10), foreground="gray")
-        self.body_shape_progress_label.pack(side=tk.LEFT, padx=5)
-
-        # 第7行：体型三分类概率分布
-        row7 = ttk.Frame(status_frame)
-        row7.pack(fill=tk.X, pady=2)
-
-        ttk.Label(row7, text="  概率分布:", font=("Arial", 9)).pack(side=tk.LEFT, padx=5)
-        self.body_shape_prob_slim_label = ttk.Label(row7, text="瘦小: -", font=("Arial", 9), foreground="#2196F3")
-        self.body_shape_prob_slim_label.pack(side=tk.LEFT, padx=8)
-        self.body_shape_prob_medium_label = ttk.Label(row7, text="中等: -", font=("Arial", 9), foreground="#4CAF50")
-        self.body_shape_prob_medium_label.pack(side=tk.LEFT, padx=8)
-        self.body_shape_prob_large_label = ttk.Label(row7, text="高大: -", font=("Arial", 9), foreground="#FF5722")
-        self.body_shape_prob_large_label.pack(side=tk.LEFT, padx=8)
-
     def _create_module_output_panel(self):
         """创建模块输出面板"""
         module_frame = ttk.LabelFrame(self.scrollable_main_frame, text="模块详细输出", padding="10")
@@ -1225,40 +1149,6 @@ class SensorVisualizer:
         ttk.Label(control_info_frame, text="最后指令:").grid(row=2, column=0, padx=5, pady=2, sticky=tk.W)
         self.last_command_label = ttk.Label(control_info_frame, text="-", foreground="gray", font=("Arial", 8))
         self.last_command_label.grid(row=2, column=1, padx=5, pady=2, sticky=tk.W)
-
-        # 体型三分类详细输出
-        body_shape_frame = ttk.LabelFrame(module_frame, text="体型三分类", padding="5")
-        body_shape_frame.grid(row=1, column=0, columnspan=3, padx=10, pady=5, sticky=tk.W+tk.E)
-
-        body_shape_info_frame = ttk.Frame(body_shape_frame)
-        body_shape_info_frame.pack(fill=tk.X)
-
-        # 第1列：状态信息
-        ttk.Label(body_shape_info_frame, text="模型状态:").grid(row=0, column=0, padx=5, pady=2, sticky=tk.W)
-        self.bs_model_status_label = ttk.Label(body_shape_info_frame, text="未加载", foreground="gray")
-        self.bs_model_status_label.grid(row=0, column=1, padx=5, pady=2, sticky=tk.W)
-
-        ttk.Label(body_shape_info_frame, text="分类次数:").grid(row=1, column=0, padx=5, pady=2, sticky=tk.W)
-        self.bs_classification_count_label = ttk.Label(body_shape_info_frame, text="0", foreground="blue")
-        self.bs_classification_count_label.grid(row=1, column=1, padx=5, pady=2, sticky=tk.W)
-
-        # 第2列：采集信息
-        ttk.Label(body_shape_info_frame, text="有效帧数:").grid(row=0, column=2, padx=15, pady=2, sticky=tk.W)
-        self.bs_collected_frames_label = ttk.Label(body_shape_info_frame, text="0/30", foreground="blue")
-        self.bs_collected_frames_label.grid(row=0, column=3, padx=5, pady=2, sticky=tk.W)
-
-        ttk.Label(body_shape_info_frame, text="跳过帧数:").grid(row=1, column=2, padx=15, pady=2, sticky=tk.W)
-        self.bs_skipped_frames_label = ttk.Label(body_shape_info_frame, text="0", foreground="gray")
-        self.bs_skipped_frames_label.grid(row=1, column=3, padx=5, pady=2, sticky=tk.W)
-
-        # 第3列：剩余时间
-        ttk.Label(body_shape_info_frame, text="剩余时间:").grid(row=0, column=4, padx=15, pady=2, sticky=tk.W)
-        self.bs_remaining_time_label = ttk.Label(body_shape_info_frame, text="-", foreground="gray")
-        self.bs_remaining_time_label.grid(row=0, column=5, padx=5, pady=2, sticky=tk.W)
-
-        ttk.Label(body_shape_info_frame, text="最后结果:").grid(row=1, column=4, padx=15, pady=2, sticky=tk.W)
-        self.bs_last_result_label = ttk.Label(body_shape_info_frame, text="-", foreground="gray", font=("Arial", 9, "bold"))
-        self.bs_last_result_label.grid(row=1, column=5, padx=5, pady=2, sticky=tk.W)
 
         # 配置网格权重
         module_frame.columnconfigure(0, weight=1)
@@ -1331,48 +1221,43 @@ class SensorVisualizer:
         leg_info_frame = ttk.Frame(leg_frame)
         leg_info_frame.pack(fill=tk.X)
 
-        # 重心标定状态
-        ttk.Label(leg_info_frame, text="重心:", font=("Arial", 9, "bold")).grid(row=0, column=0, padx=5, pady=2, sticky=tk.W)
-        self.centroid_label = ttk.Label(leg_info_frame, text="未标定", foreground="gray")
-        self.centroid_label.grid(row=0, column=1, padx=5, pady=2, sticky=tk.W)
+        # 左腿托数据
+        ttk.Label(leg_info_frame, text="左腿托:", font=("Arial", 9, "bold")).grid(row=0, column=0, columnspan=2, padx=5, pady=2, sticky=tk.W)
 
-        # 左腿托数据（前3后3比）
-        ttk.Label(leg_info_frame, text="左腿托:", font=("Arial", 9, "bold")).grid(row=1, column=0, columnspan=2, padx=5, pady=2, sticky=tk.W)
-
-        ttk.Label(leg_info_frame, text="  前3行:").grid(row=2, column=0, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(leg_info_frame, text="  腿部压力:").grid(row=1, column=0, padx=5, pady=2, sticky=tk.W)
         self.left_leg_pressure_label = ttk.Label(leg_info_frame, text="0.0", foreground="blue")
-        self.left_leg_pressure_label.grid(row=2, column=1, padx=5, pady=2, sticky=tk.W)
+        self.left_leg_pressure_label.grid(row=1, column=1, padx=5, pady=2, sticky=tk.W)
 
-        ttk.Label(leg_info_frame, text="  后3行:").grid(row=3, column=0, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(leg_info_frame, text="  臀部压力:").grid(row=2, column=0, padx=5, pady=2, sticky=tk.W)
         self.left_butt_pressure_label = ttk.Label(leg_info_frame, text="0.0", foreground="blue")
-        self.left_butt_pressure_label.grid(row=3, column=1, padx=5, pady=2, sticky=tk.W)
+        self.left_butt_pressure_label.grid(row=2, column=1, padx=5, pady=2, sticky=tk.W)
 
-        ttk.Label(leg_info_frame, text="  F3/R3比:").grid(row=4, column=0, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(leg_info_frame, text="  比值:").grid(row=3, column=0, padx=5, pady=2, sticky=tk.W)
         self.left_leg_ratio_label = ttk.Label(leg_info_frame, text="0.00", foreground="blue")
-        self.left_leg_ratio_label.grid(row=4, column=1, padx=5, pady=2, sticky=tk.W)
+        self.left_leg_ratio_label.grid(row=3, column=1, padx=5, pady=2, sticky=tk.W)
 
-        ttk.Label(leg_info_frame, text="  决策:").grid(row=5, column=0, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(leg_info_frame, text="  决策:").grid(row=4, column=0, padx=5, pady=2, sticky=tk.W)
         self.left_leg_decision_label = ttk.Label(leg_info_frame, text="HOLD", foreground="gray")
-        self.left_leg_decision_label.grid(row=5, column=1, padx=5, pady=2, sticky=tk.W)
+        self.left_leg_decision_label.grid(row=4, column=1, padx=5, pady=2, sticky=tk.W)
 
-        # 右腿托数据（前3后3比）
-        ttk.Label(leg_info_frame, text="右腿托:", font=("Arial", 9, "bold")).grid(row=6, column=0, columnspan=2, padx=5, pady=(10,2), sticky=tk.W)
+        # 右腿托数据
+        ttk.Label(leg_info_frame, text="右腿托:", font=("Arial", 9, "bold")).grid(row=5, column=0, columnspan=2, padx=5, pady=(10,2), sticky=tk.W)
 
-        ttk.Label(leg_info_frame, text="  前3行:").grid(row=7, column=0, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(leg_info_frame, text="  腿部压力:").grid(row=6, column=0, padx=5, pady=2, sticky=tk.W)
         self.right_leg_pressure_label = ttk.Label(leg_info_frame, text="0.0", foreground="blue")
-        self.right_leg_pressure_label.grid(row=7, column=1, padx=5, pady=2, sticky=tk.W)
+        self.right_leg_pressure_label.grid(row=6, column=1, padx=5, pady=2, sticky=tk.W)
 
-        ttk.Label(leg_info_frame, text="  后3行:").grid(row=8, column=0, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(leg_info_frame, text="  臀部压力:").grid(row=7, column=0, padx=5, pady=2, sticky=tk.W)
         self.right_butt_pressure_label = ttk.Label(leg_info_frame, text="0.0", foreground="blue")
-        self.right_butt_pressure_label.grid(row=8, column=1, padx=5, pady=2, sticky=tk.W)
+        self.right_butt_pressure_label.grid(row=7, column=1, padx=5, pady=2, sticky=tk.W)
 
-        ttk.Label(leg_info_frame, text="  F3/R3比:").grid(row=9, column=0, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(leg_info_frame, text="  比值:").grid(row=8, column=0, padx=5, pady=2, sticky=tk.W)
         self.right_leg_ratio_label = ttk.Label(leg_info_frame, text="0.00", foreground="blue")
-        self.right_leg_ratio_label.grid(row=9, column=1, padx=5, pady=2, sticky=tk.W)
+        self.right_leg_ratio_label.grid(row=8, column=1, padx=5, pady=2, sticky=tk.W)
 
-        ttk.Label(leg_info_frame, text="  决策:").grid(row=10, column=0, padx=5, pady=2, sticky=tk.W)
+        ttk.Label(leg_info_frame, text="  决策:").grid(row=9, column=0, padx=5, pady=2, sticky=tk.W)
         self.right_leg_decision_label = ttk.Label(leg_info_frame, text="HOLD", foreground="gray")
-        self.right_leg_decision_label.grid(row=10, column=1, padx=5, pady=2, sticky=tk.W)
+        self.right_leg_decision_label.grid(row=9, column=1, padx=5, pady=2, sticky=tk.W)
 
         # 配置网格权重
         decision_frame.columnconfigure(0, weight=1)
@@ -1461,532 +1346,6 @@ class SensorVisualizer:
                             font=("Arial", 9), foreground="gray")
             label.grid(row=i // 3, column=col, padx=5, pady=2, sticky=tk.W)
             self.airbag_labels[airbag_id] = label
-
-    def _create_preference_panel(self):
-        """创建品味系数显示面板"""
-        pref_frame = ttk.LabelFrame(self.scrollable_main_frame, text="品味记忆", padding="10")
-        pref_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
-
-        # 第1行：品味状态概览
-        row1 = ttk.Frame(pref_frame)
-        row1.pack(fill=tk.X, pady=2)
-
-        ttk.Label(row1, text="品味状态:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=5)
-        self.pref_status_label = ttk.Label(row1, text="未启用", font=("Arial", 10, "bold"), foreground="gray")
-        self.pref_status_label.pack(side=tk.LEFT, padx=5)
-
-        ttk.Label(row1, text="激活体型:", font=("Arial", 10)).pack(side=tk.LEFT, padx=15)
-        self.pref_body_shape_label = ttk.Label(row1, text="-", font=("Arial", 10, "bold"), foreground="gray")
-        self.pref_body_shape_label.pack(side=tk.LEFT, padx=5)
-
-        ttk.Label(row1, text="过滤模式:", font=("Arial", 10)).pack(side=tk.LEFT, padx=15)
-        self.pref_filter_mode_label = ttk.Label(row1, text="clamp", font=("Arial", 10), foreground="blue")
-        self.pref_filter_mode_label.pack(side=tk.LEFT, padx=5)
-
-        # 第2行：当前生效的调节区间
-        row2 = ttk.Frame(pref_frame)
-        row2.pack(fill=tk.X, pady=2)
-
-        ttk.Label(row2, text="腰托区间:", font=("Arial", 9)).pack(side=tk.LEFT, padx=5)
-        self.pref_lumbar_label = ttk.Label(row2, text="充<1.50 | 放>0.70", font=("Arial", 9), foreground="blue")
-        self.pref_lumbar_label.pack(side=tk.LEFT, padx=5)
-
-        ttk.Label(row2, text="侧翼区间:", font=("Arial", 9)).pack(side=tk.LEFT, padx=15)
-        self.pref_wing_label = ttk.Label(row2, text="左充<0.70 | 左放>1.30", font=("Arial", 9), foreground="blue")
-        self.pref_wing_label.pack(side=tk.LEFT, padx=5)
-
-        # 第3行：腿托区间
-        row3 = ttk.Frame(pref_frame)
-        row3.pack(fill=tk.X, pady=2)
-
-        ttk.Label(row3, text="左腿托:", font=("Arial", 9)).pack(side=tk.LEFT, padx=5)
-        self.pref_left_leg_label = ttk.Label(row3, text="充<0.48 | 放>0.70", font=("Arial", 9), foreground="blue")
-        self.pref_left_leg_label.pack(side=tk.LEFT, padx=5)
-
-        ttk.Label(row3, text="右腿托:", font=("Arial", 9)).pack(side=tk.LEFT, padx=15)
-        self.pref_right_leg_label = ttk.Label(row3, text="充<0.64 | 放>0.96", font=("Arial", 9), foreground="blue")
-        self.pref_right_leg_label.pack(side=tk.LEFT, padx=5)
-
-        # 第4行：记录进度（仅记录中显示）
-        row4 = ttk.Frame(pref_frame)
-        row4.pack(fill=tk.X, pady=2)
-
-        ttk.Label(row4, text="记录进度:", font=("Arial", 9)).pack(side=tk.LEFT, padx=5)
-        self.pref_progress_label = ttk.Label(row4, text="未开始", font=("Arial", 9), foreground="gray")
-        self.pref_progress_label.pack(side=tk.LEFT, padx=5)
-
-        self.pref_progress_bar = ttk.Progressbar(row4, length=200, mode='determinate')
-        self.pref_progress_bar.pack(side=tk.LEFT, padx=10)
-
-        # 第5行：操作按钮
-        row5 = ttk.Frame(pref_frame)
-        row5.pack(fill=tk.X, pady=5)
-
-        self.pref_record_btn = ttk.Button(row5, text="记录品味", command=self._trigger_preference_record)
-        self.pref_record_btn.pack(side=tk.LEFT, padx=5)
-
-        self.pref_cancel_btn = ttk.Button(row5, text="取消记录", command=self._cancel_preference_record, state="disabled")
-        self.pref_cancel_btn.pack(side=tk.LEFT, padx=5)
-
-        self.pref_clear_btn = ttk.Button(row5, text="清除品味", command=self._clear_preference)
-        self.pref_clear_btn.pack(side=tk.LEFT, padx=5)
-
-        # 第6行：各体型品味状态
-        row6 = ttk.Frame(pref_frame)
-        row6.pack(fill=tk.X, pady=2)
-
-        ttk.Label(row6, text="各体型:", font=("Arial", 9)).pack(side=tk.LEFT, padx=5)
-        self.pref_slim_status_label = ttk.Label(row6, text="瘦小: 无", font=("Arial", 9), foreground="gray")
-        self.pref_slim_status_label.pack(side=tk.LEFT, padx=8)
-        self.pref_medium_status_label = ttk.Label(row6, text="中等: 无", font=("Arial", 9), foreground="gray")
-        self.pref_medium_status_label.pack(side=tk.LEFT, padx=8)
-        self.pref_large_status_label = ttk.Label(row6, text="高大: 无", font=("Arial", 9), foreground="gray")
-        self.pref_large_status_label.pack(side=tk.LEFT, padx=8)
-
-    def _create_manual_control_panel(self):
-        """创建手动控制面板（模式切换 + 气囊控制）"""
-        manual_frame = ttk.LabelFrame(self.scrollable_main_frame, text="控制模式", padding="10")
-        manual_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
-
-        # 第1行：模式切换
-        mode_row = ttk.Frame(manual_frame)
-        mode_row.pack(fill=tk.X, pady=2)
-
-        ttk.Label(mode_row, text="当前模式:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=5)
-        self.mode_label = ttk.Label(mode_row, text="自适应", font=("Arial", 12, "bold"), foreground="green")
-        self.mode_label.pack(side=tk.LEFT, padx=5)
-
-        self.mode_toggle_btn = ttk.Button(mode_row, text="切换到手动模式", command=self._toggle_mode)
-        self.mode_toggle_btn.pack(side=tk.LEFT, padx=15)
-
-        ttk.Label(mode_row, text="操作计数:", font=("Arial", 9)).pack(side=tk.LEFT, padx=15)
-        self.manual_ops_label = ttk.Label(mode_row, text="-", font=("Arial", 9), foreground="gray")
-        self.manual_ops_label.pack(side=tk.LEFT, padx=5)
-
-        # 第2行：手动气囊控制（仅手动模式下可用）
-        control_row = ttk.Frame(manual_frame)
-        control_row.pack(fill=tk.X, pady=5)
-
-        ttk.Label(control_row, text="气囊选择:", font=("Arial", 10)).pack(side=tk.LEFT, padx=5)
-
-        # 气囊选择下拉框（仅显示功能气囊1-10）
-        self.manual_airbag_var = tk.StringVar()
-        airbag_options = [f"{i}: {self.airbag_names[i]}" for i in range(1, 11)]
-        self.manual_airbag_combo = ttk.Combobox(
-            control_row, textvariable=self.manual_airbag_var,
-            values=airbag_options, width=15, state="disabled"
-        )
-        self.manual_airbag_combo.pack(side=tk.LEFT, padx=5)
-        if airbag_options:
-            self.manual_airbag_combo.current(0)
-
-        # 充气按钮
-        self.manual_inflate_btn = ttk.Button(
-            control_row, text="充气 (1s)", command=lambda: self._manual_airbag_action('inflate'),
-            state="disabled"
-        )
-        self.manual_inflate_btn.pack(side=tk.LEFT, padx=5)
-
-        # 放气按钮
-        self.manual_deflate_btn = ttk.Button(
-            control_row, text="放气 (1s)", command=lambda: self._manual_airbag_action('deflate'),
-            state="disabled"
-        )
-        self.manual_deflate_btn.pack(side=tk.LEFT, padx=5)
-
-        # 动作状态指示
-        self.manual_action_label = ttk.Label(control_row, text="", font=("Arial", 9), foreground="gray")
-        self.manual_action_label.pack(side=tk.LEFT, padx=10)
-
-        # 第3行：一键操作（全部气囊）
-        batch_row = ttk.Frame(manual_frame)
-        batch_row.pack(fill=tk.X, pady=5)
-
-        ttk.Label(batch_row, text="一键操作:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=5)
-
-        self.batch_inflate_btn = ttk.Button(
-            batch_row, text="全部充气",
-            command=lambda: self._batch_airbag_action('inflate'),
-            state="disabled"
-        )
-        self.batch_inflate_btn.pack(side=tk.LEFT, padx=5)
-
-        self.batch_deflate_btn = ttk.Button(
-            batch_row, text="全部放气",
-            command=lambda: self._batch_airbag_action('deflate'),
-            state="disabled"
-        )
-        self.batch_deflate_btn.pack(side=tk.LEFT, padx=5)
-
-        self.batch_stop_btn = ttk.Button(
-            batch_row, text="全部停止",
-            command=lambda: self._batch_airbag_action('stop'),
-            state="disabled"
-        )
-        self.batch_stop_btn.pack(side=tk.LEFT, padx=5)
-
-        self.batch_action_label = ttk.Label(batch_row, text="", font=("Arial", 9), foreground="gray")
-        self.batch_action_label.pack(side=tk.LEFT, padx=10)
-
-    # ==================== 品味面板操作方法 ====================
-
-    def _trigger_preference_record(self):
-        """触发品味记录"""
-        if not self.integrated_system:
-            messagebox.showwarning("警告", "请先连接串口")
-            return
-
-        # 获取手动模式下的操作计数
-        airbag_ops = None
-        if self.integrated_system.get_mode() == 'manual':
-            airbag_ops = self.integrated_system.get_manual_airbag_ops()
-            # 检查是否有操作记录
-            total_ops = sum(
-                v['inflate'] + v['deflate'] for v in airbag_ops.values()
-            )
-            if total_ops == 0:
-                if not messagebox.askyesno(
-                    "确认",
-                    "当前手动模式下未进行任何气囊操作。\n"
-                    "将以无过滤模式记录品味，是否继续？"
-                ):
-                    return
-                airbag_ops = None  # 无操作则不传入
-
-        result = self.integrated_system.trigger_preference_recording(airbag_ops=airbag_ops)
-
-        if result['success']:
-            # 记录启动成功后立即清空操作计数，避免后续再次调节时有基础值
-            if airbag_ops is not None:
-                self.integrated_system.reset_manual_airbag_ops()
-            self.pref_record_btn.config(state="disabled")
-            self.pref_cancel_btn.config(state="normal")
-            messagebox.showinfo("品味记录", result['message'])
-        else:
-            messagebox.showwarning("品味记录", result['message'])
-
-    def _cancel_preference_record(self):
-        """取消品味记录"""
-        if not self.integrated_system:
-            return
-
-        result = self.integrated_system.cancel_preference_recording()
-        self.pref_record_btn.config(state="normal")
-        self.pref_cancel_btn.config(state="disabled")
-        messagebox.showinfo("品味记录", result['message'])
-
-    def _clear_preference(self):
-        """清除品味数据"""
-        if not self.integrated_system:
-            messagebox.showwarning("警告", "请先连接串口")
-            return
-
-        # 询问清除范围
-        choice = messagebox.askyesnocancel(
-            "清除品味",
-            "是否清除所有体型的品味数据？\n\n"
-            "• 是：清除所有体型\n"
-            "• 否：仅清除当前激活体型\n"
-            "• 取消：不清除"
-        )
-
-        if choice is None:  # 取消
-            return
-
-        if choice:  # 是：清除所有
-            result = self.integrated_system.clear_preference()
-        else:  # 否：清除当前体型
-            status = self.integrated_system.get_preference_status()
-            body_shape = status.get('active_body_shape')
-            if not body_shape:
-                messagebox.showwarning("警告", "当前无激活体型，无法清除")
-                return
-            result = self.integrated_system.clear_preference(body_shape)
-
-        messagebox.showinfo("清除品味", result['message'])
-
-    # ==================== 手动模式操作方法 ====================
-
-    def _toggle_mode(self):
-        """切换自适应/手动模式"""
-        if not self.integrated_system:
-            messagebox.showwarning("警告", "请先连接串口")
-            return
-
-        current_mode = self.integrated_system.get_mode()
-        new_enabled = (current_mode == 'adaptive')  # 当前自适应→切换到手动
-
-        result = self.integrated_system.set_manual_mode(new_enabled)
-
-        if result['success']:
-            if result['mode'] == 'manual':
-                self.mode_label.config(text="手动", foreground="#FF5722")
-                self.mode_toggle_btn.config(text="切换到自适应模式")
-                self.manual_airbag_combo.config(state="readonly")
-                self.manual_inflate_btn.config(state="normal")
-                self.manual_deflate_btn.config(state="normal")
-                self.batch_inflate_btn.config(state="normal")
-                self.batch_deflate_btn.config(state="normal")
-                self.batch_stop_btn.config(state="normal")
-                # 重置操作计数
-                self.integrated_system.reset_manual_airbag_ops()
-                # 立即发送全部保持指令，终止自适应遗留的充放气动作
-                hold_cmd = self.integrated_system.generate_manual_hold_all_command()
-                if hold_cmd and self.serial_port and self.serial_port.is_open:
-                    try:
-                        self.serial_port.write(bytes(hold_cmd))
-                        # print("[模式切换] 已发送全部保持指令，终止自适应遗留指令")
-                    except Exception as e:
-                        # print(f"[模式切换] 发送保持指令失败: {e}")
-                        pass
-            else:
-                self.mode_label.config(text="自适应", foreground="green")
-                self.mode_toggle_btn.config(text="切换到手动模式")
-                self.manual_airbag_combo.config(state="disabled")
-                self.manual_inflate_btn.config(state="disabled")
-                self.manual_deflate_btn.config(state="disabled")
-                self.batch_inflate_btn.config(state="disabled")
-                self.batch_deflate_btn.config(state="disabled")
-                self.batch_stop_btn.config(state="disabled")
-                self.manual_action_label.config(text="")
-                self.batch_action_label.config(text="")
-
-    def _manual_airbag_action(self, action: str):
-        """手动气囊操作（充气/放气 1秒后自动保持）"""
-        if not self.integrated_system:
-            return
-
-        if self.manual_action_in_progress:
-            return  # 动作进行中，忽略
-
-        # 解析气囊ID
-        selected = self.manual_airbag_var.get()
-        if not selected:
-            messagebox.showwarning("警告", "请选择气囊")
-            return
-
-        try:
-            airbag_id = int(selected.split(":")[0].strip())
-        except (ValueError, IndexError):
-            messagebox.showerror("错误", "无法解析气囊ID")
-            return
-
-        # 生成并发送指令
-        frame = self.integrated_system.generate_manual_command(airbag_id, action)
-        if frame is None:
-            messagebox.showwarning("警告", "指令生成失败（非手动模式或无效参数）")
-            return
-
-        # 发送到串口
-        if self.serial_port and self.serial_port.is_open:
-            try:
-                self.serial_port.write(bytes(frame))
-            except Exception as e:
-                # print(f"[手动控制] 串口发送失败: {e}")
-                pass
-
-        # 更新气囊显示
-        self._update_airbag_display_from_command(frame)
-
-        # 禁用按钮，显示动作状态
-        self.manual_action_in_progress = True
-        self.manual_inflate_btn.config(state="disabled")
-        self.manual_deflate_btn.config(state="disabled")
-        action_name = '充气' if action == 'inflate' else '放气'
-        self.manual_action_label.config(
-            text=f"气囊{airbag_id} {action_name}中...",
-            foreground="#FF5722"
-        )
-
-        # 1秒后自动发送保持指令
-        self.manual_action_timer = self.root.after(1000, self._manual_action_complete)
-
-    def _manual_action_complete(self):
-        """手动动作完成，发送保持指令"""
-        if not self.integrated_system:
-            return
-
-        # 发送全部保持指令
-        hold_frame = self.integrated_system.generate_manual_hold_all_command()
-        if self.serial_port and self.serial_port.is_open:
-            try:
-                self.serial_port.write(bytes(hold_frame))
-            except Exception as e:
-                # print(f"[手动控制] 保持指令发送失败: {e}")
-                pass
-
-        # 更新气囊显示
-        self._update_airbag_display_from_command(hold_frame)
-
-        # 恢复按钮状态
-        self.manual_action_in_progress = False
-        self.manual_action_timer = None
-        self.manual_inflate_btn.config(state="normal")
-        self.manual_deflate_btn.config(state="normal")
-        self.manual_action_label.config(text="已保持", foreground="green")
-
-        # print("[手动控制] 动作完成，已发送保持指令")
-
-    def _batch_airbag_action(self, action: str):
-        """一键操作全部气囊（充气/放气/停止）"""
-        if not self.integrated_system:
-            return
-
-        if self.integrated_system.get_mode() != 'manual':
-            return
-
-        # 生成对应指令
-        action_map = {
-            'inflate': ('全部充气', self.integrated_system.generate_manual_inflate_all_command),
-            'deflate': ('全部放气', self.integrated_system.generate_manual_deflate_all_command),
-            'stop': ('全部停止', self.integrated_system.generate_manual_hold_all_command),
-        }
-
-        if action not in action_map:
-            return
-
-        label, cmd_func = action_map[action]
-        command = cmd_func()
-
-        if command and self.serial_port and self.serial_port.is_open:
-            try:
-                self.serial_port.write(bytes(command))
-                # 更新气囊显示
-                self._update_airbag_display_from_command(command)
-                # 状态提示
-                color_map = {'inflate': 'green', 'deflate': 'red', 'stop': 'blue'}
-                self.batch_action_label.config(
-                    text=f"✓ {label}",
-                    foreground=color_map.get(action, 'gray')
-                )
-                # print(f"[手动控制] 已发送{label}指令")
-            except Exception as e:
-                self.batch_action_label.config(text=f"发送失败", foreground="red")
-                # print(f"[手动控制] {label}指令发送失败: {e}")
-        else:
-            self.batch_action_label.config(text="串口未连接", foreground="red")
-
-    def _update_preference_display(self):
-        """更新品味面板显示（在 update_integrated_display 中调用）"""
-        if not self.integrated_system:
-            return
-
-        try:
-            status = self.integrated_system.get_preference_status()
-        except Exception:
-            return
-
-        # 品味状态
-        active_shape = status.get('active_body_shape')
-        using_pref = status.get('using_preference', False)
-        is_recording = status.get('is_recording', False)
-
-        if is_recording:
-            self.pref_status_label.config(text="记录中", foreground="#FF5722")
-            self.pref_record_btn.config(state="disabled")
-            self.pref_cancel_btn.config(state="normal")
-            # 进度
-            progress = status.get('recording_progress')
-            if progress:
-                current = progress.get('current_frames', 0)
-                total = progress.get('total_frames', 30)
-                pct = progress.get('progress_pct', 0)
-                self.pref_progress_label.config(
-                    text=f"{current}/{total} ({pct:.0f}%)",
-                    foreground="#FF5722"
-                )
-                self.pref_progress_bar['value'] = pct
-                # 显示过滤模式
-                fm = progress.get('filter_mode', 'none')
-                self.pref_filter_mode_label.config(text=fm)
-        else:
-            self.pref_cancel_btn.config(state="disabled")
-            self.pref_record_btn.config(state="normal")
-            self.pref_progress_bar['value'] = 0
-
-            if using_pref:
-                self.pref_status_label.config(text="品味生效中", foreground="#4CAF50")
-                self.pref_progress_label.config(text="已应用", foreground="#4CAF50")
-            elif active_shape:
-                self.pref_status_label.config(text="默认区间", foreground="blue")
-                self.pref_progress_label.config(text="未记录", foreground="gray")
-            else:
-                self.pref_status_label.config(text="未激活", foreground="gray")
-                self.pref_progress_label.config(text="未开始", foreground="gray")
-
-        # 激活体型
-        if active_shape:
-            color = self._get_body_shape_color(active_shape)
-            self.pref_body_shape_label.config(text=active_shape, foreground=color)
-        else:
-            self.pref_body_shape_label.config(text="-", foreground="gray")
-
-        # 配置信息
-        config = status.get('config', {})
-        self.pref_filter_mode_label.config(text=config.get('robust_filter_mode', 'clamp'))
-
-        # 当前生效的调节区间
-        thresholds = status.get('active_thresholds', {})
-        lumbar = thresholds.get('lumbar', {})
-        self.pref_lumbar_label.config(
-            text=f"充<{lumbar.get('inflate', 1.5):.2f} | 放>{lumbar.get('deflate', 0.7):.2f}",
-            foreground="#4CAF50" if using_pref else "blue"
-        )
-
-        wings = thresholds.get('side_wings', {})
-        self.pref_wing_label.config(
-            text=f"左充<{wings.get('inflate_left', 0.7):.2f} | 左放>{wings.get('deflate_left', 1.3):.2f}",
-            foreground="#4CAF50" if using_pref else "blue"
-        )
-
-        leg = thresholds.get('leg_support', {})
-        self.pref_left_leg_label.config(
-            text=f"充<{leg.get('left_inflate', 0.48):.2f} | 放>{leg.get('left_deflate', 0.70):.2f}",
-            foreground="#4CAF50" if using_pref else "blue"
-        )
-        self.pref_right_leg_label.config(
-            text=f"充<{leg.get('right_inflate', 0.64):.2f} | 放>{leg.get('right_deflate', 0.96):.2f}",
-            foreground="#4CAF50" if using_pref else "blue"
-        )
-
-        # 各体型品味状态
-        shapes = status.get('shapes', {})
-        shape_labels = {
-            '瘦小': self.pref_slim_status_label,
-            '中等': self.pref_medium_status_label,
-            '高大': self.pref_large_status_label,
-        }
-        for shape_name, label in shape_labels.items():
-            info = shapes.get(shape_name, {})
-            if info.get('has_preference'):
-                fm = info.get('filter_mode', 'none')
-                frames = info.get('sample_frames', 0)
-                label.config(
-                    text=f"{shape_name}: ✓ ({fm},{frames}帧)",
-                    foreground="#4CAF50"
-                )
-            else:
-                label.config(text=f"{shape_name}: 无", foreground="gray")
-
-        # 更新手动模式操作计数显示
-        if self.integrated_system.get_mode() == 'manual':
-            ops = self.integrated_system.get_manual_airbag_ops()
-            ops_parts = []
-            for region, counts in ops.items():
-                total = counts['inflate'] + counts['deflate']
-                if total > 0:
-                    region_short = {
-                        'lumbar': '腰', 'side_wings_left': '左翼',
-                        'side_wings_right': '右翼', 'leg_left': '左腿',
-                        'leg_right': '右腿'
-                    }.get(region, region)
-                    ops_parts.append(f"{region_short}:{counts['inflate']}充{counts['deflate']}放")
-            if ops_parts:
-                self.manual_ops_label.config(text=" | ".join(ops_parts), foreground="blue")
-            else:
-                self.manual_ops_label.config(text="无操作", foreground="gray")
-        else:
-            self.manual_ops_label.config(text="-", foreground="gray")
 
     def _create_heatmap_area(self):
         """创建热力图显示区域"""
@@ -2124,9 +1483,9 @@ class SensorVisualizer:
             self.is_running = True
 
             # 初始化集成系统
-            # print("[集成模式] 初始化集成系统...")
+            print("[集成模式] 初始化集成系统...")
             self.integrated_system = IntegratedSeatSystem('sensor_config.yaml')
-            # print("[集成模式] 集成系统已初始化")
+            print("[集成模式] 集成系统已初始化")
 
             # 更新UI
             self.connect_btn.config(text="断开")
@@ -2151,7 +1510,7 @@ class SensorVisualizer:
         # 清理集成系统
         if self.integrated_system:
             self.integrated_system = None
-            # print("[集成模式] 集成系统已清理")
+            print("[集成模式] 集成系统已清理")
 
         self.connect_btn.config(text="连接")
         self.config_btn.config(state="disabled")
@@ -2179,8 +1538,7 @@ class SensorVisualizer:
                 else:
                     time.sleep(0.001)
             except Exception as e:
-                # print(f"读取错误: {e}")
-                pass
+                print(f"读取错误: {e}")
                 break
 
     def _process_buffer(self):
@@ -2230,7 +1588,12 @@ class SensorVisualizer:
             sensor_data = np.array(frame_data, dtype=np.uint8).reshape(1, 144)
             self.integrated_system.process_frame(sensor_data)
 
-            # 自适应指令发送已移至 update_integrated_display 中的 pending_commands 处理逻辑
+            # 如需自动发送控制指令，可在此处获取结果并发送
+            # result = self.integrated_system.get_latest_result()
+            # if result and result['control_command']:
+            #     # 将list[int]转换为bytes后发送到串口
+            #     command_bytes = bytes(result['control_command'])
+            #     self.serial_port.write(command_bytes)
 
         # 更新帧计数和帧率
         self.frame_count += 1
@@ -2354,54 +1717,6 @@ class SensorVisualizer:
                     else:
                         self.cushion_massage_label.config(text="关闭", foreground="gray")
 
-                # 更新阶跃检测状态
-                step_drop_data = result.get('step_drop_detection')
-                if step_drop_data:
-                    # 历史压力和当前压力
-                    history_avg = step_drop_data.get('history_avg', 0)
-                    current_pressure = step_drop_data.get('current_pressure', 0)
-                    self.step_drop_history_label.config(text=f"{history_avg:.0f}")
-                    self.step_drop_current_label.config(text=f"{current_pressure:.0f}")
-
-                    # 确认计数
-                    confirm_counter = step_drop_data.get('confirm_counter', 0)
-                    confirm_cycles = step_drop_data.get('confirm_cycles', 2)
-                    self.step_drop_confirm_label.config(text=f"{confirm_counter}/{confirm_cycles}")
-
-                    # 放气计数
-                    deflate_counter = step_drop_data.get('deflate_counter', 0)
-                    deflate_cycles = step_drop_data.get('deflate_cycles', 6)
-                    self.step_drop_deflate_label.config(text=f"{deflate_counter}/{deflate_cycles}")
-
-                    # 状态显示
-                    if step_drop_data.get('triggered'):
-                        self.step_drop_status_label.config(text="放气中", foreground="red")
-                        self.step_drop_deflate_label.config(foreground="red")
-                    elif step_drop_data.get('is_drop_detected'):
-                        self.step_drop_status_label.config(text="检测到阶跃", foreground="orange")
-                        self.step_drop_confirm_label.config(foreground="orange")
-                    elif history_avg >= step_drop_data.get('pressure_threshold', 6000):
-                        self.step_drop_status_label.config(text="监控中", foreground="green")
-                        self.step_drop_confirm_label.config(foreground="gray")
-                        self.step_drop_deflate_label.config(foreground="gray")
-                    else:
-                        self.step_drop_status_label.config(text="压力不足", foreground="gray")
-                        self.step_drop_confirm_label.config(foreground="gray")
-                        self.step_drop_deflate_label.config(foreground="gray")
-                else:
-                    # 未启用或不在检测状态
-                    self.step_drop_status_label.config(text="未启用", foreground="gray")
-                    self.step_drop_history_label.config(text="0")
-                    self.step_drop_current_label.config(text="0")
-                    self.step_drop_confirm_label.config(text="0/2", foreground="gray")
-                    self.step_drop_deflate_label.config(text="0/6", foreground="gray")
-
-                # 更新体型三分类状态
-                self._update_body_shape_display(result)
-
-                # 更新品味面板显示
-                self._update_preference_display()
-
                 # 更新模块详细输出
                 self._update_module_output(result)
 
@@ -2416,19 +1731,9 @@ class SensorVisualizer:
                         self.command_count += 1
                         self.last_command_frame = cmd_info['frame_count']
                         self._update_command_status(cmd_info['command'], cmd_info)
-                    # 只用最后一条指令更新气囊显示和发送串口
+                    # 只用最后一条指令更新气囊显示
                     last_cmd = pending_commands[-1]
                     self._update_airbag_display_from_command(last_cmd['command'])
-
-                    # 自适应模式下发送指令到串口（手动模式下不透传）
-                    if self.integrated_system.get_mode() == 'adaptive':
-                        if self.serial_port and self.serial_port.is_open:
-                            try:
-                                command_bytes = bytes(last_cmd['command'])
-                                self.serial_port.write(command_bytes)
-                            except Exception as e:
-                                # print(f"[自适应] 串口发送失败: {e}")
-                                pass
                 elif result['control_command']:
                     # 无新指令但有缓存指令：显示"延续"状态
                     self.command_status_label.config(text="延续中", foreground="blue")
@@ -2479,61 +1784,6 @@ class SensorVisualizer:
             self.body_thresholds_label.config(
                 text=f"大人>={adult_threshold:.0f}, 小孩>={child_threshold:.0f}"
             )
-
-        # 体型三分类详细输出
-        self._update_body_shape_module_output(result)
-
-    def _update_body_shape_module_output(self, result: dict):
-        """更新体型三分类模块详细输出"""
-        if not self.integrated_system or not self.integrated_system.body_shape_classifier:
-            self.bs_model_status_label.config(text="未启用", foreground="gray")
-            return
-
-        classifier = self.integrated_system.body_shape_classifier
-        status = classifier.get_status()
-        state = status.get('state', 'IDLE')
-
-        # 模型状态
-        if classifier.model is not None:
-            self.bs_model_status_label.config(text="已加载", foreground="green")
-        else:
-            self.bs_model_status_label.config(text="未加载", foreground="red")
-
-        # 分类次数
-        self.bs_classification_count_label.config(text=str(status.get('classification_count', 0)))
-
-        # 采集信息
-        if state == 'COLLECTING':
-            collected = status.get('collected_frames', 0)
-            total = status.get('total_frames', 30)
-            skipped = status.get('skipped_frames', 0)
-            remaining = status.get('remaining_sec', 0)
-            self.bs_collected_frames_label.config(text=f"{collected}/{total}", foreground="blue")
-            self.bs_skipped_frames_label.config(text=str(skipped), foreground="orange")
-            self.bs_remaining_time_label.config(text=f"{remaining:.1f}秒", foreground="blue")
-        elif state == 'COMPLETED':
-            r = status.get('result', {})
-            frames_used = r.get('frames_used', 0)
-            frames_skipped = r.get('frames_skipped', 0)
-            self.bs_collected_frames_label.config(text=f"{frames_used}/{frames_used}", foreground="green")
-            self.bs_skipped_frames_label.config(text=str(frames_skipped), foreground="gray")
-            self.bs_remaining_time_label.config(text="已完成", foreground="green")
-        else:
-            self.bs_collected_frames_label.config(text="0/30", foreground="gray")
-            self.bs_skipped_frames_label.config(text="0", foreground="gray")
-            self.bs_remaining_time_label.config(text="-", foreground="gray")
-
-        # 最后结果
-        latest = classifier.get_result()
-        if latest and latest.get('label', -1) >= 0:
-            body_shape = latest.get('body_shape', '-')
-            confidence = latest.get('confidence', 0)
-            self.bs_last_result_label.config(
-                text=f"{body_shape} ({confidence:.0%})",
-                foreground=self._get_body_shape_color(body_shape)
-            )
-        elif latest and latest.get('label', -1) < 0:
-            self.bs_last_result_label.config(text=latest.get('body_shape', '失败'), foreground="red")
 
     def _update_control_decision_data(self, result: dict):
         """更新控制决策数据显示"""
@@ -2591,20 +1841,12 @@ class SensorVisualizer:
         else:
             self.right_wing_decision_label.config(foreground="gray")
 
-        # 腿托控制数据（前3后3比方案）
+        # 腿托控制数据
         leg_data = control_data.get('leg_support', {})
 
-        # 重心标定状态
-        centroid = leg_data.get('centroid', None)
-        calibrated = leg_data.get('centroid_calibrated', False)
-        if calibrated and centroid is not None:
-            self.centroid_label.config(text=f"{centroid:.3f}", foreground="blue")
-        else:
-            self.centroid_label.config(text="未标定", foreground="gray")
-
-        # 左腿托数据（前3后3比）
-        self.left_leg_pressure_label.config(text=f"{leg_data.get('left_f3', 0.0):.1f}")
-        self.left_butt_pressure_label.config(text=f"{leg_data.get('left_r3', 0.0):.1f}")
+        # 左腿托数据
+        self.left_leg_pressure_label.config(text=f"{leg_data.get('left_leg_pressure', 0.0):.1f}")
+        self.left_butt_pressure_label.config(text=f"{leg_data.get('left_butt_pressure', 0.0):.1f}")
         self.left_leg_ratio_label.config(text=f"{leg_data.get('left_ratio', 0.0):.2f}")
 
         # 左腿托决策
@@ -2617,9 +1859,9 @@ class SensorVisualizer:
         else:
             self.left_leg_decision_label.config(foreground="gray")
 
-        # 右腿托数据（前3后3比）
-        self.right_leg_pressure_label.config(text=f"{leg_data.get('right_f3', 0.0):.1f}")
-        self.right_butt_pressure_label.config(text=f"{leg_data.get('right_r3', 0.0):.1f}")
+        # 右腿托数据
+        self.right_leg_pressure_label.config(text=f"{leg_data.get('right_leg_pressure', 0.0):.1f}")
+        self.right_butt_pressure_label.config(text=f"{leg_data.get('right_butt_pressure', 0.0):.1f}")
         self.right_leg_ratio_label.config(text=f"{leg_data.get('right_ratio', 0.0):.2f}")
 
         # 右腿托决策
@@ -2683,17 +1925,14 @@ class SensorVisualizer:
             orig_frame = cmd_info.get('frame_count', self.frame_count)
             orig_cmd_count = cmd_info.get('command_count', self.command_count)
             state = cmd_info.get('state', 'UNKNOWN')
-            # print(f"\n[Visualizer] 帧{orig_frame} | 系统指令#{orig_cmd_count} | 状态={state} | GUI指令#{self.command_count}")
+            print(f"\n[Visualizer] 帧{orig_frame} | 系统指令#{orig_cmd_count} | 状态={state} | GUI指令#{self.command_count}")
         else:
-            # print(f"\n[Visualizer] 帧{self.frame_count} | GUI指令#{self.command_count}")
-            pass
-        # print(f"  → 指令长度: {len(command)} 元素")
+            print(f"\n[Visualizer] 帧{self.frame_count} | GUI指令#{self.command_count}")
+        print(f"  → 指令长度: {len(command)} 元素")
         if active_airbags:
-            # print(f"  → 动作气囊: {', '.join(active_airbags)}")
-            pass
+            print(f"  → 动作气囊: {', '.join(active_airbags)}")
         else:
-            # print(f"  → 所有气囊保持状态")
-            pass
+            print(f"  → 所有气囊保持状态")
 
     def _update_airbag_display_from_command(self, command: list[int] | None):
         """根据控制指令更新气囊状态显示
@@ -2744,124 +1983,6 @@ class SensorVisualizer:
         for airbag_id, label in self.airbag_labels.items():
             name = self.airbag_names[airbag_id]
             label.config(text=f"{airbag_id}:{name} [保持]", foreground="gray")
-
-    def _trigger_body_shape(self):
-        """触发体型三分类识别"""
-        if not self.integrated_system:
-            # print("[可视化] 集成系统未连接")
-            pass
-            return
-
-        try:
-            result = self.integrated_system.trigger_body_shape_classification()
-            if result.get('success'):
-                # print(f"[可视化] 体型识别已触发: {result.get('message', '')}")
-                pass
-                # 更新按钮状态
-                self.body_shape_btn.config(state='disabled')
-                self.body_shape_state_label.config(text="采集中", foreground="blue")
-            else:
-                # print(f"[可视化] 体型识别触发失败: {result.get('message', '')}")
-                pass
-        except Exception as e:
-            # print(f"[可视化] 体型识别触发异常: {e}")
-            pass
-
-    def _reset_body_shape(self):
-        """重置体型三分类检测器"""
-        if not self.integrated_system:
-            return
-
-        try:
-            if self.integrated_system.body_shape_classifier:
-                self.integrated_system.body_shape_classifier.reset()
-                # print("[可视化] 体型三分类已重置")
-                # 恢复按钮状态
-                self.body_shape_btn.config(state='normal')
-                # 重置状态面板显示
-                self.body_shape_state_label.config(text="空闲", foreground="gray")
-                self.body_shape_result_label.config(text="-", foreground="gray")
-                self.body_shape_confidence_label.config(text="-", foreground="gray")
-                self.body_shape_progress_label.config(text="-", foreground="gray")
-                self.body_shape_prob_slim_label.config(text="瘦小: -")
-                self.body_shape_prob_medium_label.config(text="中等: -")
-                self.body_shape_prob_large_label.config(text="高大: -")
-        except Exception as e:
-            # print(f"[可视化] 体型三分类重置异常: {e}")
-            pass
-
-    def _update_body_shape_display(self, result: dict):
-        """更新体型三分类状态面板显示"""
-        body_shape_data = result.get('body_shape', {})
-        if not body_shape_data:
-            return
-
-        state = body_shape_data.get('state', 'DISABLED')
-        status_text = body_shape_data.get('status', '未启用')
-
-        # 状态显示
-        state_colors = {
-            'DISABLED': 'gray',
-            'IDLE': 'gray',
-            'COLLECTING': 'blue',
-            'CLASSIFYING': 'orange',
-            'COMPLETED': 'green',
-        }
-        self.body_shape_state_label.config(
-            text=status_text,
-            foreground=state_colors.get(state, 'gray')
-        )
-
-        # 采集进度
-        if state == 'COLLECTING':
-            progress = body_shape_data.get('progress', 0)
-            remaining = body_shape_data.get('remaining_sec', 0)
-            self.body_shape_progress_label.config(
-                text=f"{progress:.0%} (剩余{remaining:.1f}秒)",
-                foreground="blue"
-            )
-            # 采集中时禁用触发按钮
-            self.body_shape_btn.config(state='disabled')
-        elif state == 'COMPLETED':
-            self.body_shape_progress_label.config(text="已完成", foreground="green")
-            # 完成后恢复触发按钮
-            self.body_shape_btn.config(state='normal')
-
-            # 显示分类结果
-            body_shape = body_shape_data.get('body_shape', '')
-            confidence = body_shape_data.get('confidence', 0)
-            probabilities = body_shape_data.get('probabilities', {})
-
-            if body_shape:
-                color = self._get_body_shape_color(body_shape)
-                self.body_shape_result_label.config(text=body_shape, foreground=color)
-                self.body_shape_confidence_label.config(
-                    text=f"{confidence:.0%}",
-                    foreground=color
-                )
-
-                # 概率分布
-                slim_prob = probabilities.get('瘦小', 0)
-                medium_prob = probabilities.get('中等', 0)
-                large_prob = probabilities.get('高大', 0)
-                self.body_shape_prob_slim_label.config(text=f"瘦小: {slim_prob:.1%}")
-                self.body_shape_prob_medium_label.config(text=f"中等: {medium_prob:.1%}")
-                self.body_shape_prob_large_label.config(text=f"高大: {large_prob:.1%}")
-        else:
-            # IDLE 或 DISABLED
-            self.body_shape_btn.config(state='normal')
-            if state == 'DISABLED':
-                self.body_shape_progress_label.config(text="未启用", foreground="gray")
-
-    @staticmethod
-    def _get_body_shape_color(body_shape: str) -> str:
-        """根据体型返回对应的显示颜色"""
-        color_map = {
-            '瘦小': '#2196F3',   # 蓝色
-            '中等': '#4CAF50',   # 绿色
-            '高大': '#FF5722',   # 橙红色
-        }
-        return color_map.get(body_shape, 'gray')
 
     def on_closing(self):
         """窗口关闭事件"""

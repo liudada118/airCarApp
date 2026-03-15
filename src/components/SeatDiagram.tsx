@@ -90,8 +90,6 @@ function getZoneStyleByCommand(cmd: AirbagCommandState) {
  *   指令 3 → 蓝色背景 + ↑ 箭头（充气）
  *   指令 4 → 蓝色背景 + ↓ 箭头（放气）
  *   指令 0 → 无背景 + 无箭头（空闲）
- *
- * 基准尺寸适配新座椅图 (791×924px, 宽高比 0.856:1)
  */
 const SeatDiagram: React.FC<SeatDiagramProps> = ({
   activeZone,
@@ -134,9 +132,9 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
 
   const s = scale;
 
-  // 基准尺寸（适配新座椅图 791×924px）
-  const W = 280 * s;
-  const H = 327 * s;
+  // 基准尺寸（设计稿中座椅图的参考尺寸）
+  const W = 240 * s;
+  const H = 380 * s;
 
   return (
     <View style={[styles.container, {width: W, height: H}]}>
@@ -153,10 +151,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('shoulderL'),
           {
-            top: 72 * s,
-            left: 87 * s,
-            width: 52 * s,
-            height: 25 * s,
+            top: 52 * s,
+            left: 48 * s,
+            width: 62 * s,
+            height: 30 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -167,10 +165,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('shoulderR'),
           {
-            top: 72 * s,
-            right: 85 * s,
-            width: 51 * s,
-            height: 25 * s,
+            top: 52 * s,
+            right: 48 * s,
+            width: 62 * s,
+            height: 30 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -183,10 +181,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('sideWingL'),
           {
-            top: 144 * s,
-            left: 80 * s,
-            width: 24 * s,
-            height: 59 * s,
+            top: 120 * s,
+            left: 28 * s,
+            width: 26 * s,
+            height: 60 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -199,9 +197,9 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('sideWingR'),
           {
-            top: 143 * s,
-            right: 75 * s,
-            width: 24 * s,
+            top: 120 * s,
+            right: 28 * s,
+            width: 26 * s,
             height: 60 * s,
             borderRadius: 10 * s,
           },
@@ -213,10 +211,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
       <View
         style={{
           position: 'absolute',
-          top: 144 * s,
-          left: 110 * s,
-          right: 105 * s,
-          height: 59 * s,
+          top: 112 * s,
+          left: 62 * s,
+          right: 62 * s,
+          height: 76 * s,
         }}>
         {/* 5: lumbarUp - 上半部分 */}
         <View
@@ -254,17 +252,17 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
         </View>
       </View>
 
-      {/* ─── 坐垫主区域(臀部): 7(cushionFL) + 8(cushionFR) ─── */}
+      {/* ─── 坐垫前部: 7(cushionFL) 8(cushionFR) ─── */}
       <View
         style={{
           position: 'absolute',
-          top: 221 * s,
-          left: 85 * s,
-          right: 78 * s,
-          height: 43 * s,
+          top: 248 * s,
+          left: 52 * s,
+          right: 52 * s,
+          height: 42 * s,
           flexDirection: 'row',
         }}>
-        {/* cushionFL */}
+        {/* 7: cushionFL */}
         <View
           style={[
             styles.zoneRelative,
@@ -282,7 +280,7 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
         </View>
         {/* 竖向虚线分隔 */}
         <View style={[styles.dashedLineVertical, {width: 1 * s}]} />
-        {/* cushionFR */}
+        {/* 8: cushionFR */}
         <View
           style={[
             styles.zoneRelative,
@@ -300,16 +298,16 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
         </View>
       </View>
 
-      {/* ─── 坐垫前端(腿托): 9(cushionRL) 10(cushionRR) ─── */}
+      {/* ─── 坐垫后部: 9(cushionRL) 10(cushionRR) ─── */}
       <View
         style={[
           styles.zone,
           getZoneStyle('cushionRL'),
           {
-            top: 267 * s,
-            left: 77 * s,
-            width: 60 * s,
-            height: 24 * s,
+            top: 298 * s,
+            left: 52 * s,
+            width: 58 * s,
+            height: 28 * s,
             borderRadius: 10 * s,
           },
         ]}>
@@ -320,10 +318,10 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
           styles.zone,
           getZoneStyle('cushionRR'),
           {
-            top: 268 * s,
-            right: 75 * s,
-            width: 60 * s,
-            height: 24 * s,
+            top: 298 * s,
+            right: 52 * s,
+            width: 58 * s,
+            height: 28 * s,
             borderRadius: 10 * s,
           },
         ]}>

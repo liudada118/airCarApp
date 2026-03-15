@@ -2,7 +2,6 @@ import React, {useCallback, useEffect, useMemo, useState, useRef} from 'react';
 import {
   Alert,
   Dimensions,
-  Image,
   Modal,
   NativeEventEmitter,
   NativeModules,
@@ -15,17 +14,9 @@ import {
   View,
 } from 'react-native';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
-import {TopBar, SeatDiagram, ConnectionErrorModal, Toast} from '../components';
+import {TopBar, SeatDiagram, ConnectionErrorModal} from '../components';
 import IconFont from '../components/IconFont';
 import CarAirRN from '../components/CarAirRN';
-
-// icon 图片资源
-const iconSitStatus = require('../assets/icons/icon-sitStatus.png');
-const iconAirStatus = require('../assets/icons/icon-airStatus.png');
-const iconSetting = require('../assets/icons/icon-setting.png');
-const iconOnSeat = require('../assets/icons/icon-onSeat.png');
-const iconOutSeat = require('../assets/icons/icon-outSeat.png');
-const iconCustomAirbag = require('../assets/icons/icon-customAirbag.png');
 import type {
   SeatStatus,
   ConnectionStatus,
@@ -40,7 +31,7 @@ import type {
 import {parseAirbagCommand, DEFAULT_AIRBAG_COMMAND_STATES, ALL_AIRBAG_ZONES} from '../types';
 import {mockSerial} from '../mock/mockSerialData';
 
-const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
+const {width: SCREEN_WIDTH} = Dimensions.get('window');
 
 const DEFAULT_BAUD_RATE = 1000000;
 const INITIAL_SENSOR_FRAME: number[] = new Array(144).fill(0);
@@ -55,9 +46,6 @@ interface HomeScreenProps {
   onAdaptiveChange: (enabled: boolean) => void;
   connectionStatus: ConnectionStatus;
   onConnectionStatusChange: (status: ConnectionStatus) => void;
-  onBodyShapeChange?: (shape: BodyShape) => void;
-  /** 注册重置入座定时充气的回调，供外部调用 */
-  onRegisterResetSeatedInflate?: (resetFn: () => void) => void;
 }
 
 interface SerialDevice {
@@ -79,10 +67,6 @@ interface SerialModuleType {
   setAlgoMode?: (enabled: boolean) => void;
   sendAirbagCommand?: (zone: string, action: string) => Promise<string>;
   sendStopAllFrame?: () => Promise<string>;
-  /** 设置气囊覆盖层，在指定时间内将某个 zone 的指令合并到算法帧中发送 */
-  setAirbagOverride?: (zone: string, action: string, durationMs: number) => Promise<string>;
-  /** 清除气囊覆盖层 */
-  clearAirbagOverride?: () => Promise<string>;
 }
 
 interface SerialResultEvent {
@@ -245,9 +229,9 @@ function parseAlgoResult(resultJson: string): {
       ...DEFAULT_BODY_SHAPE_INFO,
     };
     // 调试：打印离座状态
-    // console.log('[SeatStatus] seat_status:', JSON.stringify(parsed.seat_status), 'seat_state:', parsed.seat_state, '=> is_off_seat:', algoSeatStatus.is_off_seat, 'state:', algoSeatStatus.state);
+    console.log('[SeatStatus] seat_status:', JSON.stringify(parsed.seat_status), 'seat_state:', parsed.seat_state, '=> is_off_seat:', algoSeatStatus.is_off_seat, 'state:', algoSeatStatus.state);
     // 调试：打印 body_shape_info
-    // console.log('[BodyShape] raw:', JSON.stringify(parsed.body_shape_info), 'state:', bodyShapeInfo.body_shape_state, 'shape:', bodyShapeInfo.body_shape);
+    console.log('[BodyShape] raw:', JSON.stringify(parsed.body_shape_info), 'state:', bodyShapeInfo.body_shape_state, 'shape:', bodyShapeInfo.body_shape);
 
     // 映射到简化的 SeatStatus
     const seatStatus: SeatStatus = algoSeatStatus.is_seated
@@ -411,7 +395,7 @@ function matrixCellColor(val: number): string {
 
 // ─── 组件 ────────────────────────────────────────────────────────────
 
-const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange, onBodyShapeChange, onRegisterResetSeatedInflate}) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange}) => {
   // 合并所有算法结果为单个状态对象，减少 setState 调用（8→1），大幅降低重渲染次数
   const [algoState, setAlgoState] = useState({
     seatStatus: 'away' as SeatStatus,
@@ -468,11 +452,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showConfig, setShowConfig] = useState(false);
   const [showRealtimeData, setShowRealtimeData] = useState(false);
   const [showNonStdFrames, setShowNonStdFrames] = useState(false);
-  const [showCommandModal, setShowCommandModal] = useState(false);
-  const [showDebugPanel, setShowDebugPanel] = useState(false);
-
-  // 入座定时充气提示弹窗
-  const [seatedInflateToast, setSeatedInflateToast] = useState(false);
   const nonStdFramesRef = useRef<{hex: string; length: number; timestamp: number; csv: string}[]>([]);
   const [nonStdFrameVersion, setNonStdFrameVersion] = useState(0);
   const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
@@ -495,7 +474,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       sensorDataRef.current = INITIAL_SENSOR_FRAME;
       // 立即清零 3D 点位数据并冻结，阻止传感器残留数据重新填充
       if (!frozenRef.current) {
-        // console.log('[3D清零] 首次触发清零+冻结! state:', parsed.algoSeatStatus.state, 'carAirRef:', !!carAirRef.current);
+        console.log('[3D清零] 首次触发清零+冻结! state:', parsed.algoSeatStatus.state, 'carAirRef:', !!carAirRef.current);
       }
       lastResetTimeRef.current = now;
       frozenRef.current = true;
@@ -505,35 +484,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       // 防抖：清零后至少保持2秒冻结，防止状态快速切换导致闪烁
       const timeSinceReset = now - lastResetTimeRef.current;
       if (frozenRef.current && timeSinceReset < 2000) {
-        // console.log('[3D清零] 防抖中, 距上次清零:', timeSinceReset, 'ms, 忽略解冻');
+        console.log('[3D清零] 防抖中, 距上次清零:', timeSinceReset, 'ms, 忽略解冻');
         // 保持冻结，继续调用 resetToZero 确保清零状态
         carAirRef.current?.resetToZero?.();
         return; // 不更新 algoState，保持离座显示
       }
       if (frozenRef.current) {
-        // console.log('[3D解冻] 解冻! state:', parsed.algoSeatStatus.state, 'timeSinceReset:', timeSinceReset, 'ms');
+        console.log('[3D解冻] 解冻! state:', parsed.algoSeatStatus.state, 'timeSinceReset:', timeSinceReset, 'ms');
         frozenRef.current = false;
       }
       carAirRef.current?.unfreeze?.();
     }
-    // 通知体型变化（触发按体型加载气囊缓存）
-    if (parsed.bodyShapeInfo.body_shape) {
-      onBodyShapeChange?.(parsed.bodyShapeInfo.body_shape);
-    }
-    // commandStates 由51字节回传指令控制（onNonStandardFrame），算法结果不覆盖
-    // rawCommand 仍然从算法结果更新，用于指令弹窗显示
-    setAlgoState(prev => ({
-      ...prev,
+    // 自适应关闭时，气囊状态保持全灰（默认值），不跟算法回传走
+    const isAdaptive = adaptiveEnabledRef.current;
+    setAlgoState({
       seatStatus: parsed.seatStatus,
       algoSeatStatus: parsed.algoSeatStatus,
       bodyShapeInfo: parsed.bodyShapeInfo,
-      // commandStates 保留 prev 值，由 onNonStandardFrame 更新
-      rawCommand: parsed.rawCommand,
+      commandStates: isAdaptive ? parsed.commandStates : DEFAULT_AIRBAG_COMMAND_STATES as AirbagCommandStates,
+      rawCommand: isAdaptive ? parsed.rawCommand : null,
       livingStatus: parsed.livingStatus,
       bodyType: parsed.bodyType,
       realtimeData: parsed.realtimeData,
-    }));
-  }, [onBodyShapeChange]);
+    });
+  }, []);
 
   // ─── Python 配置管理 ──────────────────────────────────────
   const loadConfig = useCallback(() => {
@@ -543,30 +517,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         try {
           const parsed = JSON.parse(json);
           if (parsed.error) {
-            // console.warn('getConfig error:', parsed.error);
+            console.warn('getConfig error:', parsed.error);
           } else {
             setConfigData(parsed);
           }
         } catch (e) {
-          // console.warn('getConfig parse error:', e);
+          console.warn('getConfig parse error:', e);
         }
         setConfigLoading(false);
       })
       .catch((e: any) => {
-        // console.warn('getConfig failed:', e);
+        console.warn('getConfig failed:', e);
         setConfigLoading(false);
       });
   }, []);
 
   const handleSetConfig = useCallback((key: string, value: any) => {
     const valueJson = JSON.stringify(value);
-    // console.log('[Config] 设置配置:', key, '=', valueJson);
     NativeModules.SerialModule?.setConfig?.(key, valueJson)
       .then((json: string) => {
         try {
           const result = JSON.parse(json);
           if (result.ok) {
-            // console.log('[Config] 配置写入成功:', key, '=', value);
             setConfigData(prev => {
               if (!prev) return prev;
               return {
@@ -574,16 +546,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 [key]: {...prev[key], value},
               };
             });
-          } else {
-            // console.warn('[Config] 配置写入失败:', key, result.error);
           }
-        } catch (e) {
-          // console.warn('[Config] 解析响应失败:', e);
-        }
+        } catch (_) {}
       })
-      .catch((e: any) => {
-        // console.warn('[Config] setConfig 调用失败:', key, e?.message || e);
-      });
+      .catch(() => {});
   }, []);
 
   const handleResetConfig = useCallback(() => {
@@ -765,7 +731,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     const disconnectSub = emitter.addListener(
       'onSerialDisconnect',
       (event: {reason?: string}) => {
-        // console.warn('[Serial] Disconnected:', event.reason);
+        console.warn('[Serial] Disconnected:', event.reason);
         setConnectionStatus('error');
         setConnectionErrorMessage(event.reason || '串口连接已断开');
         setShowConnectionError(true);
@@ -776,13 +742,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     const algoErrorSub = emitter.addListener(
       'onAlgoError',
       (event: {error?: string}) => {
-        // console.warn('[AlgoError]', event.error);
+        console.warn('[AlgoError]', event.error);
       },
     );
 
     const modeSub = emitter.addListener('onSerialMode', (event: {data?: string; modeValue?: number; manual?: boolean; auto?: boolean}) => {
       // 模式帧仅记录日志，不控制自适应调节（自适应由用户手动开关控制）
-      // console.log('[ModeFrame] modeValue=', event.modeValue, 'auto=', event.auto, 'manual=', event.manual);
+      console.log('[ModeFrame] modeValue=', event.modeValue, 'auto=', event.auto, 'manual=', event.manual);
     });
 
     const nonStdSub = emitter.addListener('onNonStandardFrame', (event: {data?: string; hex?: string; length?: number; timestamp?: number}) => {
@@ -796,24 +762,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       frames.unshift(entry);
       if (frames.length > 50) frames.length = 50;
       setNonStdFrameVersion(v => v + 1);
-
-      // 解析回传指令（长度∙51）更新气囊状态
-      if (entry.csv && (entry.length ?? 0) >= 21) {
-        try {
-          const bytes = entry.csv.split(',').map(Number);
-          if (bytes.length >= 21) {
-            const newStates = parseAirbagCommand(bytes);
-            // console.log('[NonStdFrame] 解析回传指令, length:', bytes.length, 'states:', JSON.stringify(newStates));
-            setAlgoState(prev => ({
-              ...prev,
-              commandStates: newStates,
-              rawCommand: bytes,
-            }));
-          }
-        } catch (e) {
-          // console.warn('[NonStdFrame] 解析失败:', e);
-        }
-      }
     });
 
     return () => {
@@ -830,112 +778,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const {seatStatus, algoSeatStatus, bodyShapeInfo, commandStates, rawCommand, livingStatus, bodyType, realtimeData} = algoState;
   const sensorData = sensorDataRef.current;
 
-  // ─── 入座定时充气逻辑（cushionFL + cushionFR，每分钟充气3s，最多3次，离座重置）───
-  const seatedInflateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const seatedInflateCountRef = useRef<number>(0);
-  const seatedInflateStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    // 清理辅助函数
-    const clearAllTimers = () => {
-      if (seatedInflateTimerRef.current) {
-        clearInterval(seatedInflateTimerRef.current);
-        seatedInflateTimerRef.current = null;
-      }
-      if (seatedInflateStopTimerRef.current) {
-        clearTimeout(seatedInflateStopTimerRef.current);
-        seatedInflateStopTimerRef.current = null;
-      }
-    };
-
-    if (seatStatus === 'seated' && adaptiveEnabled) {
-      // 入座且自适应开启：启动每60秒一次的定时器
-      if (seatedInflateTimerRef.current) return; // 已在运行，不重复启动
-      seatedInflateCountRef.current = 0; // 重置计数
-
-      const doInflate = () => {
-        // 检查自适应是否仍然开启（使用 ref 获取最新值，避免闭包陈旧）
-        if (!adaptiveEnabledRef.current) {
-          clearAllTimers();
-          // console.log('[SeatedInflate] 自适应已关闭，停止定时充气');
-          return;
-        }
-
-        if (seatedInflateCountRef.current >= 3) {
-          // 已达最大次数，停止定时器
-          clearAllTimers();
-          // console.log('[SeatedInflate] 已完成3次充气，停止定时任务');
-          return;
-        }
-
-        // 使用模块级 SerialModule 引用
-        if (!SerialModule?.setAirbagOverride) {
-          // console.warn('[SeatedInflate] setAirbagOverride 不可用, SerialModule:', !!SerialModule);
-          return;
-        }
-
-        seatedInflateCountRef.current += 1;
-        const count = seatedInflateCountRef.current;
-        // console.log(`[SeatedInflate] 第${count}次充气开始 (hipFirm override inflate 3000ms)`);
-
-        // 使用 setAirbagOverride 将 hipFirm 充气指令合并到算法帧中，持续3秒
-        // 这样算法帧中其他气囊的指令不会被覆盖，hipFirm 会被强制设为充气
-        SerialModule.setAirbagOverride('hipFirm', 'inflate', 3000)
-          .then(() => {
-            // console.log(`[SeatedInflate] 第${count}次 hipFirm override 设置成功，将3秒后自动过期`);
-          })
-          .catch(e => {
-            // console.warn(`[SeatedInflate] 第${count}次 hipFirm override 设置失败:`, e?.message || e);
-          });
-
-        // 显示提示弹窗
-        setSeatedInflateToast(true);
-
-        // 3秒后无需手动发送 stop，Kotlin 层 override 会自动过期，算法帧恢复原始状态
-        // 不再需要 seatedInflateStopTimerRef
-      };
-
-      // 第一次在入座后60秒触发
-      seatedInflateTimerRef.current = setInterval(doInflate, 60000);
-      // console.log('[SeatedInflate] 入座且自适应开启，启动定时充气（每60s一次，最多3次）');
-    } else {
-      // 离座 或 自适应关闭：重置一切
-      clearAllTimers();
-      seatedInflateCountRef.current = 0;
-      // 清除 override 覆盖层
-      SerialModule?.clearAirbagOverride?.().catch(() => {});
-      // console.log('[SeatedInflate] 离座或自适应关闭，重置定时充气并清除override');
-    }
-
-    return () => {
-      clearAllTimers();
-    };
-  }, [seatStatus, adaptiveEnabled]);
-
-  // 重置入座定时充气的函数（供外部调用，如手动调节气囊时）
-  const resetSeatedInflate = useCallback(() => {
-    if (seatedInflateTimerRef.current) {
-      clearInterval(seatedInflateTimerRef.current);
-      seatedInflateTimerRef.current = null;
-    }
-    if (seatedInflateStopTimerRef.current) {
-      clearTimeout(seatedInflateStopTimerRef.current);
-      seatedInflateStopTimerRef.current = null;
-    }
-    // 清除 override 覆盖层，避免手动调节时定时充气仍在生效
-    SerialModule?.clearAirbagOverride?.().catch(() => {});
-    seatedInflateCountRef.current = 0;
-    // console.log('[SeatedInflate] 手动调节气囊，重置定时充气并清除override');
-  }, []);
-
-  // 注册重置函数供外部调用
-  useEffect(() => {
-    if (onRegisterResetSeatedInflate) {
-      onRegisterResetSeatedInflate(resetSeatedInflate);
-    }
-  }, [onRegisterResetSeatedInflate, resetSeatedInflate]);
-
-  // ─── 渲染辅助助 ──────────────────────────────────────────
+  // ─── 渲染辅助 ──────────────────────────────────────────
 
   /** 体型概率条 */
   const renderProbabilityBar = (
@@ -968,7 +811,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     <View style={styles.container}>
       <TopBar
         connectionStatus={connectionStatus}
-        onLogoPress={() => setShowDebugPanel(prev => !prev)}
         onRetry={() => {
           hasTriedAutoConnect = false;
           setShowConnectionError(false);
@@ -980,23 +822,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         }}
       />
 
-      {/* ─── 3D 座椅模型（全屏背景） ─── */}
-      <View style={styles.fullscreen3DBackground}>
-        <CarAirRN
-          ref={carAirRef}
-          data={sensorData as unknown as never[]}
-          style={styles.carAir3D}
-          showDebugPanel={showDebugPanel}
-        />
-      </View>
-
-      <View style={styles.content} pointerEvents="box-none">
+      <View style={styles.content}>
         {/* ─── 左侧面板 ─── */}
         <View style={styles.leftPanel}>
+        <ScrollView showsVerticalScrollIndicator={false}>
           {/* 座椅状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Image source={iconSitStatus} style={styles.sectionIcon} resizeMode="contain" />
+              <IconFont name="bianji" size={14} color={Colors.textGray} />
               <Text style={styles.sectionTitle}>座椅状态</Text>
             </View>
             <View style={styles.seatStatusRow}>
@@ -1005,10 +838,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   styles.seatStatusCard,
                   seatStatus === 'seated' && styles.seatStatusCardActive,
                 ]}>
-                <Image
-                  source={iconOnSeat}
-                  style={[styles.seatIcon, {tintColor: seatStatus === 'seated' ? Colors.primary : Colors.textGray}]}
-                  resizeMode="contain"
+                <IconFont
+                  name="zaizuo"
+                  size={36}
+                  color={
+                    seatStatus === 'seated' ? Colors.primary : Colors.textGray
+                  }
                 />
                 <Text
                   style={[
@@ -1024,10 +859,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   styles.seatStatusCard,
                   seatStatus === 'away' && styles.seatStatusCardActive,
                 ]}>
-                <Image
-                  source={iconOutSeat}
-                  style={[styles.seatIcon, {tintColor: seatStatus === 'away' ? Colors.primary : Colors.textGray}]}
-                  resizeMode="contain"
+                <IconFont
+                  name="lizuo"
+                  size={36}
+                  color={
+                    seatStatus === 'away' ? Colors.primary : Colors.textGray
+                  }
                 />
                 <Text
                   style={[
@@ -1041,12 +878,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           </View>
 
           {/* 气囊状态 */}
-          <View style={[styles.section, {flex: 1, marginBottom: 0}]}>
+          <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Image source={iconAirStatus} style={styles.sectionIcon} resizeMode="contain" />
+              <IconFont name="bianji" size={14} color={Colors.textGray} />
               <Text style={styles.sectionTitle}>气囊状态</Text>
             </View>
-            <View style={[styles.airbagStatusCard, {flex: 1}]}>
+            <View style={styles.airbagStatusCard}>
               <Text style={styles.airbagStatusText}>
                 {adaptiveEnabled
                   ? (bodyShapeInfo.body_shape
@@ -1054,48 +891,77 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                       : '当前为自适应调节状态')
                   : '自适应调节已关闭'}
               </Text>
-              <View style={styles.seatDiagramContainer}>
+              <View style={styles.seatThumbnail}>
                 <SeatDiagram
                   activeZone={null}
-                  scale={1.0}
+                  scale={0.55}
                   commandStates={commandStates}
                 />
               </View>
-              <View style={styles.customizeBtnWrapper}>
-                <View style={styles.customizeDivider} />
-                <TouchableOpacity
-                  onPress={() => {
-                    // 进入自定义气囊调节前，关闭算法模式（停止透传算法指令）
-                    SerialModule?.setAlgoMode?.(false);
-                    // 发送全停保压帧，让所有气囊进入保压状态
-                    SerialModule?.sendStopAllFrame?.().then(() => {
-                      // console.log('[AlgoMode] 进入自定义气囊调节，已发送全停保压帧');
-                    }).catch((e: any) => {
-                      // console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
-                    });
-                    // console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
-                    onNavigateToCustomize();
-                  }}
-                  activeOpacity={0.7}
-                  style={styles.customizeBtn}>
-                  <Image
-                    source={iconCustomAirbag}
-                    style={[styles.customizeLinkIcon, {tintColor: Colors.primary}]}
-                    resizeMode="contain"
+              <View style={styles.divider} />
+              <TouchableOpacity
+                onPress={() => {
+                  // 进入自定义气囊调节前，关闭算法模式（停止透传算法指令）
+                  SerialModule?.setAlgoMode?.(false);
+                  // 发送全停保压帧，让所有气囊进入保压状态
+                  SerialModule?.sendStopAllFrame?.().then(() => {
+                    console.log('[AlgoMode] 进入自定义气囊调节，已发送全停保压帧');
+                  }).catch((e: any) => {
+                    console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
+                  });
+                  console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
+                  onNavigateToCustomize();
+                }}
+                activeOpacity={0.7}>
+                <View style={styles.customizeLinkRow}>
+                  <IconFont
+                    name="keshihuatiaojie"
+                    size={14}
+                    color={Colors.primary}
                   />
                   <Text style={styles.customizeLink}>自定义气囊调节</Text>
-                </TouchableOpacity>
-              </View>
+                </View>
+              </TouchableOpacity>
             </View>
           </View>
+
+          {/* 气囊控制指令 */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <IconFont name="bianji" size={14} color={Colors.textGray} />
+              <Text style={styles.sectionTitle}>控制指令</Text>
+            </View>
+            <View style={styles.cmdCard}>
+              {ALL_AIRBAG_ZONES.map((zone, i) => {
+                const cmd = commandStates[zone];
+                const label = ZONE_CN_LABELS[zone] || zone;
+                const cmdLabel = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
+                const cmdColor = cmd === 3 ? Colors.primary : cmd === 4 ? Colors.warning : Colors.textGray;
+                return (
+                  <View key={zone} style={styles.cmdRow}>
+                    <Text style={styles.cmdZoneText}>{i + 1}. {label}</Text>
+                    <Text style={[styles.cmdValueText, {color: cmdColor}]}>{cmdLabel}</Text>
+                  </View>
+                );
+              })}
+              {rawCommand && rawCommand.length > 0 && (
+                <View style={styles.cmdHexRow}>
+                  <Text style={styles.cmdHexText}>
+                    {rawCommand.map(v => v.toString(16).padStart(2, '0').toUpperCase()).join(' ')}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </ScrollView>
         </View>
 
         {/* ─── 右侧面板 ─── */}
-        <View style={styles.rightPanel} pointerEvents="box-none">
+        <View style={styles.rightPanel}>
           {/* 自适应调节开关 */}
           <View style={styles.adaptiveSection}>
             <View style={styles.sectionHeader}>
-              <Image source={iconSetting} style={styles.sectionIcon} resizeMode="contain" />
+              <IconFont name="bianji" size={14} color={Colors.textGray} />
               <Text style={styles.sectionTitle}>自适应调节</Text>
             </View>
             <View style={styles.toggleContainer}>
@@ -1107,7 +973,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 onPress={() => {
                   onAdaptiveChange(true);
                   SerialModule?.setAlgoMode?.(true);
-                  // console.log('[AlgoMode] 自适应调节已开启');
+                  console.log('[AlgoMode] 自适应调节已开启');
                 }}
                 activeOpacity={0.7}>
                 <Text
@@ -1128,11 +994,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   SerialModule?.setAlgoMode?.(false);
                   // 发送全停保压帧
                   SerialModule?.sendStopAllFrame?.().then(() => {
-                    // console.log('[AlgoMode] 自适应调节关闭，已发送全停保压帧');
+                    console.log('[AlgoMode] 自适应调节关闭，已发送全停保压帧');
                   }).catch((e: any) => {
-                    // console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
+                    console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
                   });
-                  // console.log('[AlgoMode] 自适应调节已关闭');
+                  console.log('[AlgoMode] 自适应调节已关闭');
                 }}
                 activeOpacity={0.7}>
                 <Text
@@ -1146,9 +1012,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             </View>
           </View>
 
-          {/* 悬浮按钮组 - 右上角（点击Logo切换显示） */}
-          {showDebugPanel && (
-          <View style={styles.floatingBtnGroupWrapper}>
+          {/* 3D 座椅模型 */}
+          <View style={styles.seat3DContainer}>
+            <CarAirRN
+              ref={carAirRef}
+              data={sensorData as unknown as never[]}
+              style={styles.carAir3D}
+            />
+            {/* 悬浮按钮组 - 3D 视图右上角 */}
             <View style={styles.floatingBtnGroup}>
               <TouchableOpacity
                 style={styles.matrixToggleBtn}
@@ -1174,15 +1045,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 activeOpacity={0.7}>
                 <Text style={styles.matrixToggleBtnText}>回传{nonStdFramesRef.current.length > 0 ? `(${nonStdFramesRef.current.length})` : ''}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.matrixToggleBtn, {marginLeft: 6}]}
-                onPress={() => setShowCommandModal(true)}
-                activeOpacity={0.7}>
-                <Text style={styles.matrixToggleBtnText}>指令</Text>
-              </TouchableOpacity>
             </View>
           </View>
-          )}
         </View>
       </View>
 
@@ -1844,61 +1708,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           <Text style={styles.errorHintText}>{connectionErrorMessage}</Text>
         </View>
       ) : null}
-
-      {/* 控制指令弹窗 */}
-      {showCommandModal && (
-      <Modal
-        visible={showCommandModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowCommandModal(false)}>
-        <View style={styles.matrixModalOverlay}>
-          <View style={[styles.matrixModalContent, {maxWidth: 400, maxHeight: '70%'}]}>
-            <View style={styles.matrixModalHeader}>
-              <Text style={styles.matrixModalTitle}>控制指令</Text>
-              <TouchableOpacity
-                onPress={() => setShowCommandModal(false)}
-                activeOpacity={0.7}
-                style={styles.matrixModalClose}>
-                <Text style={styles.matrixModalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
-              {ALL_AIRBAG_ZONES.map((zone, i) => {
-                const cmd = commandStates[zone];
-                const label = ZONE_CN_LABELS[zone] || zone;
-                const cmdLabel = cmd === 3 ? '↑充' : cmd === 4 ? '↓放' : '--';
-                const cmdColor = cmd === 3 ? Colors.primary : cmd === 4 ? Colors.warning : Colors.textGray;
-                return (
-                  <View key={zone} style={styles.cfgRow}>
-                    <View style={{flex: 1}}>
-                      <Text style={styles.cfgKey}>{i + 1}. {label}</Text>
-                    </View>
-                    <Text style={[styles.cfgValueText, {color: cmdColor, fontWeight: '600'}]}>{cmdLabel}</Text>
-                  </View>
-                );
-              })}
-              {rawCommand && rawCommand.length > 0 && (
-                <View style={{paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)'}}>
-                  <Text style={{fontSize: 10, color: Colors.textGray, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 14}} selectable>
-                    {rawCommand.map(v => v.toString(16).padStart(2, '0').toUpperCase()).join(' ')}
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-      )}
-
-      {/* 入座定时充气提示 */}
-      <Toast
-        visible={seatedInflateToast}
-        message="检测到您已进行长时间驾驶，自动为您调节坐垫软硬度，如感到不舒适请进入自定义气囊调节界面进行相应气囊自我调节"
-        type="info"
-        duration={6000}
-        onHide={() => setSeatedInflateToast(false)}
-      />
     </View>
   );
 };
@@ -1908,35 +1717,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  fullscreen3DBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 0,
-  },
   content: {
     flex: 1,
     flexDirection: 'row',
     paddingHorizontal: Spacing.xxl,
     paddingBottom: Spacing.lg,
-    zIndex: 1,
   },
   // ─── 左侧面板 ───
   leftPanel: {
-    width: SCREEN_WIDTH * 0.30,
-    maxWidth: SCREEN_WIDTH * 0.30,
+    width: SCREEN_WIDTH * 0.35,
+    maxWidth: SCREEN_WIDTH * 0.35,
     flexShrink: 0,
     flexGrow: 0,
-    paddingRight: Spacing.sm,
-    paddingBottom: SCREEN_HEIGHT * 0.04,
-  },
-  leftPanelContent: {
-    paddingBottom: Spacing.xxl,
+    paddingRight: Spacing.md,
+    overflow: 'hidden' as const,
   },
   section: {
-    marginBottom: SCREEN_HEIGHT * 0.02,
+    marginBottom: Spacing.lg,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1946,21 +1743,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: FontSize.md,
-    color: 'rgba(142, 142, 160, 0.9)',
+    color: Colors.textGray,
     fontWeight: '500',
-  },
-  sectionIcon: {
-    width: 16,
-    height: 16,
-    tintColor: Colors.primary,
-  },
-  seatIcon: {
-    width: 48,
-    height: 48,
-  },
-  customizeLinkIcon: {
-    width: 14,
-    height: 14,
   },
   // ─── 座椅状态 ───
   seatStatusRow: {
@@ -1969,22 +1753,22 @@ const styles = StyleSheet.create({
   },
   seatStatusCard: {
     flex: 1,
-    height: 100,
-    backgroundColor: 'rgba(60, 60, 67, 0.45)',
+    height: 80,
+    backgroundColor: Colors.cardBackground,
     borderRadius: BorderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: Colors.transparent,
   },
   seatStatusCardActive: {
     borderColor: Colors.primary,
-    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    backgroundColor: 'rgba(0, 122, 255, 0.08)',
   },
   seatStatusText: {
-    fontSize: FontSize.lg,
+    fontSize: FontSize.md,
     color: Colors.textGray,
-    marginTop: Spacing.md,
+    marginTop: Spacing.sm,
     fontWeight: '500',
   },
   seatStatusTextActive: {
@@ -2124,54 +1908,28 @@ const styles = StyleSheet.create({
   },
   // ─── 气囊状态 ───
   airbagStatusCard: {
-    backgroundColor: 'rgba(41, 45, 50, 0.85)',
+    backgroundColor: Colors.cardBackground,
     borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingTop: SCREEN_HEIGHT * 0.04,
-    paddingBottom: SCREEN_HEIGHT * 0.04,
+    padding: Spacing.lg,
   },
   airbagStatusText: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.md,
     color: Colors.textWhite,
     fontWeight: '600',
-    marginBottom: Spacing.xs,
-    textAlign: 'center',
+    marginBottom: Spacing.md,
   },
-  seatDiagramContainer: {
-    flex: 1,
+  seatThumbnail: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 2,
+    paddingVertical: Spacing.md,
   },
   divider: {
     height: 1,
     backgroundColor: Colors.borderGray,
-    marginVertical: Spacing.sm,
-  },
-  customizeBtnWrapper: {
-    marginTop: SCREEN_HEIGHT * 0.04,
-    alignItems: 'center',
-  },
-  customizeDivider: {
-    width: '90%',
-    height: 1,
-    backgroundColor: Colors.borderGray,
-    marginBottom: SCREEN_HEIGHT * 0.02,
-  },
-  customizeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    marginVertical: Spacing.md,
   },
   customizeLinkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: Spacing.xs,
   },
   customizeLink: {
@@ -2218,18 +1976,21 @@ const styles = StyleSheet.create({
   toggleTextInactive: {
     color: Colors.textGray,
   },
+  seat3DContainer: {
+    flex: 1,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+  },
   carAir3D: {
     flex: 1,
   },
   // ─── 悬浮按钮组 ───
-  floatingBtnGroupWrapper: {
-    position: 'absolute',
-    top: 50,
-    right: 8,
-    zIndex: 10,
-  },
   floatingBtnGroup: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
     flexDirection: 'row',
+    zIndex: 10,
   },
   matrixToggleBtn: {
     backgroundColor: 'rgba(0,0,0,0.55)',

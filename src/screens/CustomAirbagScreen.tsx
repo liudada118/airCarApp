@@ -2,14 +2,12 @@ import React, {useState, useCallback, useRef, useEffect, useMemo} from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   NativeModules,
   NativeEventEmitter,
   ScrollView,
   Animated,
-  Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
@@ -23,23 +21,17 @@ import {
   Toast,
 } from '../components';
 import IconFont from '../components/IconFont';
-
-// icon 图片资源
-const iconCustomAirbag = require('../assets/icons/icon-customAirbag.png');
 import type {
   CustomAirbagZone,
   CustomAirbagValues,
   CustomAirbagZoneConfig,
   ModalType,
   ConnectionStatus,
-  BodyShape,
-  AirbagCommandStates,
 } from '../types';
-import {DEFAULT_CUSTOM_AIRBAG_VALUES, ALL_CUSTOM_AIRBAG_ZONES, parseAirbagCommand, DEFAULT_AIRBAG_COMMAND_STATES} from '../types';
+import {DEFAULT_CUSTOM_AIRBAG_VALUES, ALL_CUSTOM_AIRBAG_ZONES} from '../types';
 
-/** AsyncStorage 缓存 key 前缀，按体型分类存储 */
-const ASYNC_STORAGE_KEY_PREFIX = 'custom_airbag_values_';
-const LEGACY_ASYNC_STORAGE_KEY = 'custom_airbag_values';
+/** AsyncStorage 缓存 key */
+const ASYNC_STORAGE_KEY = 'custom_airbag_values';
 
 const sm = NativeModules.SerialModule;
 const serialEmitter = sm ? new NativeEventEmitter(sm as never) : null;
@@ -73,17 +65,12 @@ const ZONE_SHORT_LABELS: Record<string, string> = {
   legRest: '腿托',
 };
 
-const MAX_VALUE = 3;
-const MIN_VALUE = -3;
+const MAX_VALUE = 10;
+const MIN_VALUE = 0;
 const MAX_LOG_LINES = 50;
 
-/** 根据气囊区域获取锁定持续时间（毫秒）：腰部和臀部 3秒，其他 2秒 */
-function getLockDuration(zone: string): number {
-  if (zone === 'lumbar' || zone === 'hipFirm') {
-    return 3000;
-  }
-  return 2000;
-}
+/** 锁定持续时间（毫秒） */
+const LOCK_DURATION_MS = 1000;
 
 interface CmdLog {
   id: number;
@@ -99,9 +86,6 @@ interface CustomAirbagScreenProps {
   onSaveSuccess: (values: CustomAirbagValues) => void;
   initialValues?: CustomAirbagValues;
   adaptiveEnabled?: boolean;
-  bodyShape?: BodyShape;
-  /** 手动调节气囊时的回调，用于重置入座定时充气 */
-  onManualAdjust?: () => void;
 }
 
 const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
@@ -109,14 +93,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   onSaveSuccess,
   initialValues,
   adaptiveEnabled = true,
-  bodyShape = '',
-  onManualAdjust,
 }) => {
-  /** 根据体型获取存储 key */
-  const storageKey = bodyShape ? `${ASYNC_STORAGE_KEY_PREFIX}${bodyShape}` : LEGACY_ASYNC_STORAGE_KEY;
   const [connectionStatus] = useState<ConnectionStatus>('connected');
   const [selectedZone, setSelectedZone] = useState<CustomAirbagZone>('lumbar');
-  const [commandStates, setCommandStates] = useState<AirbagCommandStates>(DEFAULT_AIRBAG_COMMAND_STATES);
 
   // ━━━ 同步初始化：用 initialValues 作为初始值，确保首次渲染就有正确的值 ━━━
   const initValues = initialValues || DEFAULT_CUSTOM_AIRBAG_VALUES;
@@ -127,7 +106,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   // 异步兑底：从存储中读取，如果存储中的值与 initValues 不同则更新
   useEffect(() => {
     const loadSavedValues = async () => {
-      // if (__DEV__) console.log('[CustomAirbag] 异步加载气囊值...');
+      if (__DEV__) console.log('[CustomAirbag] 异步加载气囊值...');
 
       // 加载成功后同时更新 airbagValues 和 cmdCounts
       const applyLoadedValues = (values: CustomAirbagValues) => {
@@ -142,38 +121,40 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
       };
 
-      // 1. 尝试从 SharedPreferences 读取（按体型）
-      if (sm?.loadAirbagSettingsForShape && bodyShape) {
+      // 1. 尝试从 SharedPreferences 读取
+      if (sm?.loadAirbagSettings) {
         try {
-          const json = await sm.loadAirbagSettingsForShape(bodyShape);
+          const json = await sm.loadAirbagSettings();
+
           if (json) {
             const parsed = JSON.parse(json) as CustomAirbagValues;
+            const hasNonZero = Object.values(parsed).some(v => v !== 0);
+
             applyLoadedValues(parsed);
-            AsyncStorage.setItem(storageKey, json).catch(() => {});
+            AsyncStorage.setItem(ASYNC_STORAGE_KEY, json).catch(() => {});
             setStorageLoaded(true);
-            // if (__DEV__) console.log('[CustomAirbag] SP加载成功:', bodyShape, parsed);
             return;
           }
         } catch (e: any) {
-          // if (__DEV__) console.warn('[CustomAirbag] SP加载失败:', e?.message || e);
+          if (__DEV__) console.warn('[CustomAirbag] SP加载失败:', e?.message || e);
         }
       }
 
-      // 2. 尝试从 AsyncStorage 读取（按体型）
+      // 2. 尝试从 AsyncStorage 读取
       try {
-        const json = await AsyncStorage.getItem(storageKey);
+        const json = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
         if (json) {
           const parsed = JSON.parse(json) as CustomAirbagValues;
+
           applyLoadedValues(parsed);
-          if (sm?.saveAirbagSettingsForShape && bodyShape) {
-            sm.saveAirbagSettingsForShape(bodyShape, json).catch(() => {});
+          if (sm?.saveAirbagSettings) {
+            sm.saveAirbagSettings(json).catch(() => {});
           }
           setStorageLoaded(true);
-          // if (__DEV__) console.log('[CustomAirbag] AS加载成功:', bodyShape, parsed);
           return;
         }
       } catch (e: any) {
-          // if (__DEV__) console.warn('[CustomAirbag] AS加载失败:', e?.message || e);
+          if (__DEV__) console.warn('[CustomAirbag] AS加载失败:', e?.message || e);
       }
 
 
@@ -189,16 +170,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     type: 'success' as 'success' | 'info' | 'error',
   });
   const [cmdLogs, setCmdLogs] = useState<CmdLog[]>([]);
-  const [showLog, setShowLog] = useState(false);
+  const [showLog, setShowLog] = useState(true);
   const logIdRef = useRef(0);
   const logScrollRef = useRef<ScrollView>(null);
-
-  // ─── 座椅图自适应高度 ───
-  // 使用屏幕高度的60%计算座椅图片的scale，保证图片足够大且标签不会被挤开
-  const SCREEN_H = Dimensions.get('window').height;
-  const SEAT_AREA_H = SCREEN_H * 0.6;
-  const BASE_H = 327;
-  const seatScale = SEAT_AREA_H / BASE_H;
 
   // ─── 1秒锁定机制 ───
   const [isLocked, setIsLocked] = useState(false);
@@ -292,24 +266,22 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     // 并行写入 SharedPreferences + AsyncStorage，等待两者都完成
     const saveResults: {sp: boolean; as: boolean} = {sp: false, as: false};
 
-    // 1. 写入 SharedPreferences（Native 层，按体型）
-    if (sm?.saveAirbagSettingsForShape && bodyShape) {
+    // 1. 写入 SharedPreferences（Native 层）
+    if (sm?.saveAirbagSettings) {
       try {
-        await sm.saveAirbagSettingsForShape(bodyShape, jsonStr);
+        await sm.saveAirbagSettings(jsonStr);
         saveResults.sp = true;
-        // if (__DEV__) console.log('[AirbagStorage] SP保存成功:', bodyShape);
       } catch (e: any) {
-        // if (__DEV__) console.warn('[AirbagStorage] SP保存失败:', e?.message || e);
+        if (__DEV__) console.warn('[AirbagStorage] SP保存失败:', e?.message || e);
       }
     }
 
-    // 2. 写入 AsyncStorage（JS 层兑底，按体型）
+    // 2. 写入 AsyncStorage（JS 层兑底）
     try {
-      await AsyncStorage.setItem(storageKey, jsonStr);
+      await AsyncStorage.setItem(ASYNC_STORAGE_KEY, jsonStr);
       saveResults.as = true;
-      // if (__DEV__) console.log('[AirbagStorage] AS保存成功:', bodyShape, 'key:', storageKey);
     } catch (e: any) {
-      // if (__DEV__) console.warn('[AirbagStorage] AS保存失败:', e?.message || e);
+      if (__DEV__) console.warn('[AirbagStorage] AS保存失败:', e?.message || e);
     }
 
     // 保存后回读验证已移除（性能优化，减少不必要的 IO 操作）
@@ -334,39 +306,18 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     return () => sub.remove();
   }, [addLog]);
 
-  // 监听51字节回传指令，解析气囊充放气状态
-  useEffect(() => {
-    if (!sm || !serialEmitter) {
-      return;
-    }
-    const sub = serialEmitter.addListener('onNonStandardFrame', (event: any) => {
-      try {
-        const csv = event?.data;
-        if (!csv || typeof csv !== 'string') return;
-        const bytes = csv.split(',').map((s: string) => parseInt(s.trim(), 10));
-        if (bytes.length >= 21) {
-          const newStates = parseAirbagCommand(bytes);
-          setCommandStates(newStates);
-        }
-      } catch (e) {
-        // 静默忽略解析错误
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
   // 发送气囊控制指令
   const sendAirbagCmd = useCallback(
     async (zone: CustomAirbagZone, action: 'inflate' | 'deflate' | 'stop') => {
       if (!sm?.sendAirbagCommand) {
-        // if (__DEV__) console.warn('[AirbagCmd] sendAirbagCommand not available');
+        if (__DEV__) console.warn('[AirbagCmd] sendAirbagCommand not available');
         addLog(zone, action, 'N/A (模块不可用)', 0);
         return;
       }
       try {
         await sm.sendAirbagCommand(zone, action);
       } catch (e: any) {
-        // if (__DEV__) console.warn('[AirbagCmd] Error:', e?.message || e);
+        if (__DEV__) console.warn('[AirbagCmd] Error:', e?.message || e);
         addLog(zone, `${action}(失败)`, e?.message || 'error', 0);
       }
     },
@@ -388,27 +339,25 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       // 锁定所有按钮
       setIsLocked(true);
 
-      // 根据气囊区域获取锁定时长
-      const duration = getLockDuration(zone);
-
-      // 启动进度条动画（0 → 1，持续 duration）
+      // 启动进度条动画（0 → 1，持续 LOCK_DURATION_MS）
       lockProgressAnim.setValue(0);
       Animated.timing(lockProgressAnim, {
         toValue: 1,
-        duration: duration,
+        duration: LOCK_DURATION_MS,
         useNativeDriver: false,
       }).start();
 
-      // duration 后发送保压（stop）指令并解锁
+      // 1秒后发送保压（stop）指令并解锁
       lockTimerRef.current = setTimeout(() => {
         const targetZone = lastCmdZoneRef.current;
         if (targetZone) {
           sendAirbagCmd(targetZone, 'stop');
+
         }
         setIsLocked(false);
         lockTimerRef.current = null;
         lastCmdZoneRef.current = null;
-      }, duration);
+      }, LOCK_DURATION_MS);
     },
     [sendAirbagCmd, lockProgressAnim],
   );
@@ -429,10 +378,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     if (!selectedZone || isLocked) {
       return;
     }
-    // 最多加 MAX_VALUE 次
-    if (cmdCounts[selectedZone] >= MAX_VALUE) {
-      return;
-    }
     setAirbagValues(prev => {
       const newVal = prev[selectedZone] + 1;
 
@@ -441,19 +386,13 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] + 1}));
     // 发送充气指令
     sendAirbagCmd(selectedZone, 'inflate');
-    // 启动锁定
+    // 启动1秒锁定
     startLockAndHoldPressure(selectedZone);
-    // 重置入座定时充气
-    onManualAdjust?.();
-  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure, onManualAdjust]);
+  }, [selectedZone, isLocked, sendAirbagCmd, startLockAndHoldPressure]);
 
   // 减少气囊值（放气）
   const handleDecrease = useCallback(() => {
     if (!selectedZone || isLocked) {
-      return;
-    }
-    // 最多减 MIN_VALUE 次
-    if (cmdCounts[selectedZone] <= MIN_VALUE) {
       return;
     }
     setAirbagValues(prev => {
@@ -464,11 +403,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] - 1}));
     // 发送放气指令
     sendAirbagCmd(selectedZone, 'deflate');
-    // 启动锁定
+    // 启动1秒锁定
     startLockAndHoldPressure(selectedZone);
-    // 重置入座定时充气
-    onManualAdjust?.();
-  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure, onManualAdjust]);
+  }, [selectedZone, isLocked, sendAirbagCmd, startLockAndHoldPressure]);
 
   // 点击保存按钮
   const handleSavePress = useCallback(() => {
@@ -516,10 +453,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       legRest: 0,
     });
     AIRBAG_ZONES.forEach(z => sendAirbagCmd(z.key, 'stop'));
-    // 恢复默认时清除当前体型的本地缓存
-    AsyncStorage.removeItem(storageKey).catch(() => {});
-    if (sm?.saveAirbagSettingsForShape && bodyShape) {
-      sm.saveAirbagSettingsForShape(bodyShape, JSON.stringify(DEFAULT_CUSTOM_AIRBAG_VALUES)).catch(() => {});
+    // 恢复默认时清除本地缓存（下次进入将使用默认值）
+    AsyncStorage.removeItem(ASYNC_STORAGE_KEY).catch(() => {});
+    if (sm?.saveAirbagSettings) {
+      sm.saveAirbagSettings(JSON.stringify(DEFAULT_CUSTOM_AIRBAG_VALUES)).catch(() => {});
     }
     setToast({
       visible: true,
@@ -553,12 +490,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     // 2. 发送停止指令给所有气囊
     AIRBAG_ZONES.forEach(z => sendAirbagCmd(z.key, 'stop'));
 
-    // 3. 清除当前体型的本地缓存（同时写入全零值到存储）
+    // 3. 清除本地缓存（同时写入全零值到存储）
     const zeroJson = JSON.stringify(zeroValues);
-    await AsyncStorage.setItem(storageKey, zeroJson).catch(() => {});
-    if (sm?.saveAirbagSettingsForShape && bodyShape) {
-      sm.saveAirbagSettingsForShape(bodyShape, zeroJson).catch(() => {});
-    }
+    await AsyncStorage.setItem(ASYNC_STORAGE_KEY, zeroJson).catch(() => {});
+    sm?.saveAirbagSettings?.(zeroJson)?.catch?.(() => {});
 
     setToast({
       visible: true,
@@ -614,10 +549,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         {/* 标题栏 */}
         <View style={styles.titleBar}>
           <View style={styles.titleLeft}>
-            <Image
-              source={iconCustomAirbag}
-              style={{width: 20, height: 20, tintColor: Colors.textWhite}}
-              resizeMode="contain"
+            <IconFont
+              name="keshihuatiaojie"
+              size={20}
+              color={Colors.textWhite}
             />
             <Text style={styles.title}>自定义气囊调节</Text>
             {/* 锁定状态指示 */}
@@ -672,13 +607,15 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
               <AdjustButtons
                 onIncrease={handleIncrease}
                 onDecrease={handleDecrease}
-                canIncrease={!selectedZone ? false : cmdCounts[selectedZone] < MAX_VALUE}
-                canDecrease={!selectedZone ? false : cmdCounts[selectedZone] > MIN_VALUE}
+                canIncrease={true}
+                canDecrease={true}
                 disabled={!selectedZone || isLocked}
               />
               {/* 锁定遮罩层提示 */}
               {isLocked && (
-                <View style={styles.lockOverlay} />
+                <View style={styles.lockOverlay}>
+                  <Text style={styles.lockOverlayText}>1s</Text>
+                </View>
               )}
             </View>
 
@@ -701,9 +638,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             <View style={styles.seatContainer}>
               <CustomSeatDiagram
                 activeZone={selectedZone}
-                scale={seatScale}
+                scale={0.85}
                 values={airbagValues}
-                commandStates={commandStates}
               />
             </View>
 
@@ -868,6 +804,12 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             <Text style={styles.restoreButtonText}>恢复默认</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={styles.resetButton}
+            onPress={handleResetPress}
+            activeOpacity={0.7}>
+            <Text style={styles.resetButtonText}>归零</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.saveButton}
             onPress={handleSavePress}
             activeOpacity={0.7}>
@@ -933,7 +875,7 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
-    backgroundColor: 'rgba(60, 60, 67, 0.85)',
+    backgroundColor: Colors.surfaceBackground,
     marginHorizontal: Spacing.xxl,
     marginBottom: Spacing.lg,
     borderRadius: BorderRadius.xl,
@@ -1074,24 +1016,18 @@ const styles = StyleSheet.create({
   },
   leftLabels: {
     justifyContent: 'space-around',
-    height: 360,
-    paddingRight: 0,
-    position: 'relative',
-    right: -120,
-    zIndex: 1,
+    height: 280,
+    paddingRight: Spacing.sm,
   },
   rightLabels: {
     justifyContent: 'space-around',
-    height: 260,
-    paddingLeft: 0,
-    position: 'relative',
-    left: -120,
-    zIndex: 1,
+    height: 200,
+    paddingLeft: Spacing.sm,
   },
   seatContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 0,
+    paddingHorizontal: Spacing.md,
   },
   // ─── 右侧面板 ───
   rightPanel: {

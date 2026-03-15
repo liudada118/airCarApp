@@ -147,11 +147,11 @@ class BodyShapeClassifier:
         # 加载模型
         self._load_model(model_path)
 
-        # print(f"[体型三分类器] 初始化完成")
-        # print(f"  - 采集帧数: {self.collect_frames} ({self.collect_time_sec:.1f}秒 @{self.hz}Hz)")
-        # print(f"  - 入座阈值: {self.seated_threshold}")
-        # print(f"  - 超时帧数: {self.timeout_frames}")
-        # print(f"  - 推理后端: {self._backend or '未加载'}")
+        print(f"[体型三分类器] 初始化完成")
+        print(f"  - 采集帧数: {self.collect_frames} ({self.collect_time_sec:.1f}秒 @{self.hz}Hz)")
+        print(f"  - 入座阈值: {self.seated_threshold}")
+        print(f"  - 超时帧数: {self.timeout_frames}")
+        print(f"  - 推理后端: {self._backend or '未加载'}")
 
     def _load_model(self, model_path: Optional[str] = None):
         """
@@ -169,31 +169,9 @@ class BodyShapeClassifier:
         model_dir = os.path.join(base_dir, 'model')
 
         # 始终优先尝试 JSON 后端（纯 numpy，无外部依赖）
-        # 搜索多个可能的路径
-        json_candidates = [
-            os.path.join(model_dir, 'model_params.json'),
-        ]
-        # 如果 model_path 指定了，也从其父目录查找
-        if model_path:
-            json_candidates.append(
-                os.path.join(os.path.dirname(os.path.abspath(model_path)), 'model_params.json')
-            )
-        # HOME 目录 fallback
-        home_model_dir = os.path.join(os.path.expanduser('~'), 'model')
-        json_candidates.append(os.path.join(home_model_dir, 'model_params.json'))
-
-        for params_path in json_candidates:
-            if os.path.exists(params_path):
-                # print(f"[体型三分类器] 找到JSON参数文件: {params_path}")
-                pass
-                self._try_load_json(params_path)
-                if self._backend is not None:
-                    return
-
-        # print(f"[体型三分类器] JSON参数文件未找到，尝试的路径:")
-        for p in json_candidates:
-            pass
-            # print(f"  - {p} (exists={os.path.exists(p)})")
+        params_path = os.path.join(model_dir, 'model_params.json')
+        if os.path.exists(params_path):
+            self._try_load_json(params_path)
 
         if self._backend is not None:
             return
@@ -206,8 +184,7 @@ class BodyShapeClassifier:
             elif model_path.endswith('.pkl'):
                 self._try_load_pkl(model_path)
             else:
-                # print(f"[体型三分类器] 不支持的模型格式: {model_path}")
-                pass
+                print(f"[体型三分类器] 不支持的模型格式: {model_path}")
         else:
             # 自动查找：ONNX -> PKL
             onnx_path = os.path.join(model_dir, 'body_shape_model.onnx')
@@ -220,30 +197,16 @@ class BodyShapeClassifier:
                 self._try_load_pkl(pkl_path)
 
             if self._backend is None:
-                # print(f"[体型三分类器] 未找到可用模型")
-                pass
-                # print(f"  查找路径: {params_path}")
-                # print(f"  查找路径: {onnx_path}")
-                # print(f"  查找路径: {pkl_path}")
+                print(f"[体型三分类器] 未找到可用模型")
+                print(f"  查找路径: {params_path}")
+                print(f"  查找路径: {onnx_path}")
+                print(f"  查找路径: {pkl_path}")
 
     def _try_load_json(self, params_path: str):
         """尝试加载 JSON 后端（纯 numpy KNN 推理，无需 sklearn/onnxruntime）"""
         try:
-            # 尝试直接读取，如果失败（AssetFinder问题）则复制到HOME目录
-            try:
-                with open(params_path, 'r', encoding='utf-8') as f:
-                    params = json.load(f)
-            except Exception as read_err:
-                # print(f"[体型三分类器] 直接读取JSON失败({read_err})，尝试复制到HOME目录")
-                pass
-                import shutil
-                home_model_dir = os.path.join(os.path.expanduser('~'), 'model')
-                os.makedirs(home_model_dir, exist_ok=True)
-                real_path = os.path.join(home_model_dir, 'model_params.json')
-                shutil.copy2(params_path, real_path)
-                # print(f"[体型三分类器] JSON已复制到: {real_path}")
-                with open(real_path, 'r', encoding='utf-8') as f:
-                    params = json.load(f)
+            with open(params_path, 'r', encoding='utf-8') as f:
+                params = json.load(f)
 
             # 检查是否包含 KNN 训练数据
             required_keys = ['knn_X_train', 'knn_y_train', 'knn_n_neighbors',
@@ -251,8 +214,7 @@ class BodyShapeClassifier:
                              'feature_columns_order']
             missing = [k for k in required_keys if k not in params]
             if missing:
-                # print(f"[体型三分类器] JSON参数文件缺少字段: {missing}，跳过JSON后端")
-                pass
+                print(f"[体型三分类器] JSON参数文件缺少字段: {missing}，跳过JSON后端")
                 return
 
             # 加载特征工程参数
@@ -272,15 +234,14 @@ class BodyShapeClassifier:
             self._json_knn_classes = np.array(params.get('knn_classes', [0, 1, 2]), dtype=np.int64)
 
             self._backend = 'json'
-            # print(f"[体型三分类器] JSON模型已加载（纯numpy KNN）: {params_path}")
-            # print(f"  - 特征维度: {params['n_features_in']} -> 选择{params['n_features_selected']}")
-            # print(f"  - KNN训练样本: {self._json_knn_X_train.shape[0]}")
-            # print(f"  - KNN邻居数: {self._json_knn_n_neighbors}")
-            # print(f"  - 模型版本: {params.get('version', '未知')}")
+            print(f"[体型三分类器] JSON模型已加载（纯numpy KNN）: {params_path}")
+            print(f"  - 特征维度: {params['n_features_in']} -> 选择{params['n_features_selected']}")
+            print(f"  - KNN训练样本: {self._json_knn_X_train.shape[0]}")
+            print(f"  - KNN邻居数: {self._json_knn_n_neighbors}")
+            print(f"  - 模型版本: {params.get('version', '未知')}")
 
         except Exception as e:
-            # print(f"[体型三分类器] JSON后端加载失败: {e}")
-            pass
+            print(f"[体型三分类器] JSON后端加载失败: {e}")
             import traceback
             traceback.print_exc()
 
@@ -292,8 +253,7 @@ class BodyShapeClassifier:
             # 加载参数文件
             params_path = os.path.join(model_dir, 'model_params.json')
             if not os.path.exists(params_path):
-                # print(f"[体型三分类器] ONNX参数文件不存在: {params_path}")
-                pass
+                print(f"[体型三分类器] ONNX参数文件不存在: {params_path}")
                 return
 
             with open(params_path, 'r', encoding='utf-8') as f:
@@ -314,16 +274,14 @@ class BodyShapeClassifier:
             self._onnx_input_name = self._onnx_session.get_inputs()[0].name
 
             self._backend = 'onnx'
-            # print(f"[体型三分类器] ONNX模型已加载: {onnx_path}")
-            # print(f"  - 特征维度: {params['n_features_in']}")
-            # print(f"  - 模型版本: {params.get('version', '未知')}")
+            print(f"[体型三分类器] ONNX模型已加载: {onnx_path}")
+            print(f"  - 特征维度: {params['n_features_in']}")
+            print(f"  - 模型版本: {params.get('version', '未知')}")
 
         except ImportError:
-            # print(f"[体型三分类器] onnxruntime 未安装，跳过 ONNX 加载")
-            pass
+            print(f"[体型三分类器] onnxruntime 未安装，跳过 ONNX 加载")
         except Exception as e:
-            # print(f"[体型三分类器] ONNX 加载失败: {e}")
-            pass
+            print(f"[体型三分类器] ONNX 加载失败: {e}")
 
     def _try_load_pkl(self, pkl_path: str):
         """尝试加载 pkl 模型（fallback）"""
@@ -332,11 +290,10 @@ class BodyShapeClassifier:
             self.model = BodyTypeClassifier.load_model(pkl_path)
             self.feature_engineer = self.model.feature_engineer
             self._backend = 'pkl'
-            # print(f"[体型三分类器] PKL模型已加载（fallback）: {pkl_path}")
-            # print(f"  - 模型类型: {self.model.best_model_name}")
+            print(f"[体型三分类器] PKL模型已加载（fallback）: {pkl_path}")
+            print(f"  - 模型类型: {self.model.best_model_name}")
         except Exception as e:
-            # print(f"[体型三分类器] PKL模型加载失败: {e}")
-            pass
+            print(f"[体型三分类器] PKL模型加载失败: {e}")
             self.model = None
             self.feature_engineer = None
 
@@ -624,8 +581,8 @@ class BodyShapeClassifier:
         self.state = ClassifierState.COLLECTING
         self.latest_result = None
 
-        # print(f"[体型三分类器] 触发采集，需要 {self.collect_frames} 个有效入座帧 "
-              # f"(约 {self.collect_time_sec:.1f} 秒)")
+        print(f"[体型三分类器] 触发采集，需要 {self.collect_frames} 个有效入座帧 "
+              f"(约 {self.collect_time_sec:.1f} 秒)")
 
         return {
             'success': True,
@@ -678,8 +635,8 @@ class BodyShapeClassifier:
         if self._consecutive_seated >= self.stable_frames:
             if not self._is_stable:
                 self._is_stable = True
-                # print(f"[体型三分类器] 稳定入座检测成功（连续{self.stable_frames}帧，"
-                      # f"阈值={self._adaptive_threshold:.0f}，当前压力={cushion_sum:.0f}）")
+                print(f"[体型三分类器] 稳定入座检测成功（连续{self.stable_frames}帧，"
+                      f"阈值={self._adaptive_threshold:.0f}，当前压力={cushion_sum:.0f}）")
 
         return self._is_stable and above_threshold
 
@@ -723,8 +680,7 @@ class BodyShapeClassifier:
         if self.total_frame_count >= self.timeout_frames:
             # 即使未满，如果有足够的帧也尝试分类
             if self.collected_count >= self.collect_frames // 2:
-                # print(f"[体型三分类器] 超时但有 {self.collected_count} 帧，尝试分类")
-                pass
+                print(f"[体型三分类器] 超时但有 {self.collected_count} 帧，尝试分类")
                 return self._classify()
             return self._timeout()
 
@@ -815,11 +771,11 @@ class BodyShapeClassifier:
             self.latest_result = result
             self.state = ClassifierState.COMPLETED
 
-            # print(f"[体型三分类器] 分类完成 #{self.classification_count} ({self._backend}): "
-                  # f"{result['body_shape']} (置信度={confidence:.0%})")
-            # print(f"  概率分布: 瘦小={proba[0]:.2%} 中等={proba[1]:.2%} 高大={proba[2]:.2%}")
-            # print(f"  有效帧/总帧: {len(self.frame_buffer)}/{self.total_frame_count} "
-                  # f"(跳过{self.skipped_count}帧)")
+            print(f"[体型三分类器] 分类完成 #{self.classification_count} ({self._backend}): "
+                  f"{result['body_shape']} (置信度={confidence:.0%})")
+            print(f"  概率分布: 瘦小={proba[0]:.2%} 中等={proba[1]:.2%} 高大={proba[2]:.2%}")
+            print(f"  有效帧/总帧: {len(self.frame_buffer)}/{self.total_frame_count} "
+                  f"(跳过{self.skipped_count}帧)")
 
             return result
 
@@ -833,7 +789,7 @@ class BodyShapeClassifier:
             }
             self.latest_result = error_result
             self.state = ClassifierState.COMPLETED
-            # print(f"[体型三分类器] 分类失败: {e}")
+            print(f"[体型三分类器] 分类失败: {e}")
             import traceback
             traceback.print_exc()
             return error_result
@@ -967,8 +923,8 @@ class BodyShapeClassifier:
         }
         self.latest_result = error_result
         self.state = ClassifierState.COMPLETED
-        # print(f"[体型三分类器] 采集超时: {self.total_frame_count}帧内只有"
-              # f"{self.collected_count}个有效帧")
+        print(f"[体型三分类器] 采集超时: {self.total_frame_count}帧内只有"
+              f"{self.collected_count}个有效帧")
         return error_result
 
     def get_result(self) -> Optional[Dict]:
@@ -1001,8 +957,7 @@ class BodyShapeClassifier:
             status['skipped_frames'] = self.skipped_count
             status['remaining_sec'] = (self.collect_frames - self.collected_count) / self.hz
 
-        # 只要有分类结果就返回（不再仅限 COMPLETED 状态）
-        if self.latest_result:
+        if self.state == ClassifierState.COMPLETED and self.latest_result:
             status['result'] = self.latest_result
 
         return status
@@ -1019,4 +974,4 @@ class BodyShapeClassifier:
         self._consecutive_seated = 0
         self._is_stable = False
         self.latest_result = None
-        # print("[体型三分类器] 已重置")
+        print("[体型三分类器] 已重置")

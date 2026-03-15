@@ -3,27 +3,19 @@ import {
   StyleSheet,
   Text,
   View,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
-
-const {height: SCREEN_HEIGHT} = Dimensions.get('window');
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
+import IconFont from './IconFont';
 import type {ConnectionStatus} from '../types';
-
-// icon 图片资源
-const iconLogo = require('../assets/icons/icon-logo.png');
-const iconConnection = require('../assets/icons/icon-connection.png');
 
 interface TopBarProps {
   connectionStatus: ConnectionStatus;
   onRetry?: () => void;
-  onLogoPress?: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({connectionStatus, onRetry, onLogoPress}) => {
+const TopBar: React.FC<TopBarProps> = ({connectionStatus, onRetry}) => {
   const statusText =
     connectionStatus === 'connected'
       ? '已连接'
@@ -48,15 +40,9 @@ const TopBar: React.FC<TopBarProps> = ({connectionStatus, onRetry, onLogoPress})
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={onLogoPress} activeOpacity={0.7}>
-        <Image source={iconLogo} style={styles.logoImage} resizeMode="contain" />
-      </TouchableOpacity>
+      <Text style={styles.logo}>SHROOM</Text>
       <View style={styles.statusContainer}>
-        <Image
-          source={iconConnection}
-          style={[styles.connectionIcon, {tintColor: statusColor}]}
-          resizeMode="contain"
-        />
+        <IconFont name="lujing2" size={18} color={statusColor} />
         <Text style={[styles.statusText, {color: statusColor}]}>
           {statusText}
         </Text>
@@ -86,20 +72,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.xxl,
-    marginTop: SCREEN_HEIGHT * 0.04,
-    paddingTop: Spacing.md,
-    paddingBottom: 0,
-    marginBottom: SCREEN_HEIGHT * 0.04,
-    backgroundColor: 'transparent',
-    zIndex: 2,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.background,
   },
-  logoImage: {
-    width: 120,
-    height: 30,
-  },
-  connectionIcon: {
-    width: 18,
-    height: 18,
+  logo: {
+    fontSize: FontSize.xxl,
+    fontWeight: '800',
+    color: Colors.textWhite,
+    letterSpacing: 2,
+    fontStyle: 'italic',
   },
   statusContainer: {
     flexDirection: 'row',

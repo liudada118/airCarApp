@@ -33,59 +33,32 @@ def _check_dependencies():
     for dep in deps:
         try:
             __import__(dep)
-            # print(f"[server.py] 依赖检查 OK: {dep}")
+            print(f"[server.py] 依赖检查 OK: {dep}")
         except ImportError as e:
-            # print(f"[server.py] 依赖检查 FAIL: {dep} -> {e}")
-            pass
+            print(f"[server.py] 依赖检查 FAIL: {dep} -> {e}")
 
 _check_dependencies()
 
 from integrated_system import IntegratedSeatSystem
 
-# ─── 持久化配置路径 ─────────────────────────────────────────
-# Chaquopy 在 Android 上会将 HOME 设置为 /data/data/<包名>/files
-# 将用户修改过的配置保存到 HOME 目录，避免 APP 更新时被 extractPackages 覆盖
-_default_config_path = os.path.join(_release_dir, "sensor_config.yaml")
-_persistent_dir = os.environ.get("HOME", os.path.join(_base_dir, "_user_config"))
-_persistent_config_path = os.path.join(_persistent_dir, "sensor_config.yaml")
-
-import shutil
-
-def _ensure_persistent_config():
-    """确保持久化配置文件存在：不存在则从默认配置拷贝"""
-    if not os.path.exists(_persistent_config_path):
-        os.makedirs(_persistent_dir, exist_ok=True)
-        if os.path.exists(_default_config_path):
-            shutil.copy2(_default_config_path, _persistent_config_path)
-            # print(f"[server.py] 首次运行，已拷贝默认配置到: {_persistent_config_path}")
-        else:
-            # print(f"[server.py] 警告: 默认配置文件不存在: {_default_config_path}")
-            pass
-    else:
-        # print(f"[server.py] 使用持久化配置: {_persistent_config_path}")
-        pass
-
-_ensure_persistent_config()
-_config_path = _persistent_config_path if os.path.exists(_persistent_config_path) else _default_config_path
-# print(f"[server.py] 配置文件路径: {_config_path}")
-# print(f"[server.py] 配置文件存在: {os.path.exists(_config_path)}")
+_config_path = os.path.join(_release_dir, "sensor_config.yaml")
+print(f"[server.py] 配置文件路径: {_config_path}")
+print(f"[server.py] 配置文件存在: {os.path.exists(_config_path)}")
 
 try:
     _system = IntegratedSeatSystem(_config_path)
     # 打印体型三分类器状态
     if hasattr(_system, 'body_shape_classifier') and _system.body_shape_classifier is not None:
-        # print(f"[server.py] 体型三分类器: 已初始化")
-        pass
-        # print(f"[server.py]   模型已加载: {_system.body_shape_classifier._backend is not None}")
-        # print(f"[server.py]   推理后端: {_system.body_shape_classifier._backend or '未加载'}")
-        # print(f"[server.py]   自动触发: {_system.auto_trigger_body_shape}")
+        print(f"[server.py] 体型三分类器: 已初始化")
+        print(f"[server.py]   模型已加载: {_system.body_shape_classifier._backend is not None}")
+        print(f"[server.py]   推理后端: {_system.body_shape_classifier._backend or '未加载'}")
+        print(f"[server.py]   自动触发: {_system.auto_trigger_body_shape}")
     else:
-        # print(f"[server.py] 体型三分类器: 未初始化（body_shape_classifier is None）")
-        pass
-        # print(f"[server.py]   enabled配置: {_system.config.get('body_shape_classification.enabled', 'NOT_FOUND')}")
+        print(f"[server.py] 体型三分类器: 未初始化（body_shape_classifier is None）")
+        print(f"[server.py]   enabled配置: {_system.config.get('body_shape_classification.enabled', 'NOT_FOUND')}")
 except Exception as e:
     import traceback
-    # print(f"[server.py] IntegratedSeatSystem 初始化失败: {e}")
+    print(f"[server.py] IntegratedSeatSystem 初始化失败: {e}")
     traceback.print_exc()
     raise
 
@@ -204,9 +177,10 @@ def set_config(key_path, value_json):
     """
     try:
         value = json.loads(str(value_json))
-        # 使用 set_param 统一更新：同时更新 config + 运行时变量 + 持久化
-        # set_param 内部会自动处理参数映射、嵌套属性更新和文件保存
-        _system.set_param(str(key_path), value, auto_save=True)
+        _system.config.set(str(key_path), value)
+        _system.config.save_to_file()
+        # 同步运行时变量（针对常用阈值）
+        _sync_runtime(str(key_path), value)
         return json.dumps({"ok": True}, ensure_ascii=False)
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
@@ -215,20 +189,29 @@ def set_config(key_path, value_json):
 def reset_config():
     """
     重置配置到初始状态并持久化。
-    会从默认配置重新拷贝到持久化目录，然后重新加载。
     返回 JSON 字符串：{"ok": true} 或 {"error": "..."}
     """
     try:
-        # 从默认配置重新拷贝到持久化目录
-        if os.path.exists(_default_config_path) and _config_path == _persistent_config_path:
-            shutil.copy2(_default_config_path, _persistent_config_path)
-            # print(f"[server.py] 配置已重置，从默认配置拷贝到: {_persistent_config_path}")
-        _system.config.reload()
+        _system.config.reset()
+        _system.config.save_to_file()
         return json.dumps({"ok": True}, ensure_ascii=False)
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+def _sync_runtime(key_path, value):
+    """将配置变更同步到 _system 运行时变量（热更新）"""
+    _map = {
+        'integrated_system.cushion_sum_threshold': 'cushion_sum_threshold',
+        'integrated_system.backrest_sum_threshold': 'backrest_sum_threshold',
+        'integrated_system.off_seat_frames_threshold': 'off_seat_frames_threshold',
+        'integrated_system.reset_frames_threshold': 'reset_frames_threshold',
+        'integrated_system.reset_deflate_frames': 'reset_deflate_frames',
+        'integrated_system.use_filtered_sum': 'use_filtered_sum',
+    }
+    attr = _map.get(key_path)
+    if attr and hasattr(_system, attr):
+        setattr(_system, attr, value)
 
 
 # ─── 品味记录接口（供 Chaquopy / Native 桥接调用） ─────────────
