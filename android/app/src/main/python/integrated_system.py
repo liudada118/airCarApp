@@ -733,7 +733,7 @@ class IntegratedSeatSystem:
         _cls_exists = self.body_shape_classifier is not None
         _already_triggered = self._body_shape_auto_triggered
         _cls_state = self.body_shape_classifier.state.name if _cls_exists else 'None'
-        _model_loaded = (self.body_shape_classifier.model is not None) if _cls_exists else False
+        _model_loaded = (self.body_shape_classifier._backend is not None) if _cls_exists else False
         print(f"[集成系统] _try_auto_trigger({trigger_source}): "
               f"auto_cfg={_auto_cfg}, cls_exists={_cls_exists}, "
               f"already_triggered={_already_triggered}, cls_state={_cls_state}, "
