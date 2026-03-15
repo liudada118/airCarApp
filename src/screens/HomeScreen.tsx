@@ -1889,7 +1889,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         visible={seatedInflateToast}
         message="检测到您已进行长时间驾驶，自动为您调节坐垫软硬度，如感到不舒适请进入自定义气囊调节界面进行相应气囊自我调节"
         type="info"
-        duration={2000}
+        duration={6000}
         onHide={() => setSeatedInflateToast(false)}
       />
     </View>

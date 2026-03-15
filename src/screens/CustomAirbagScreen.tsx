@@ -676,9 +676,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
               />
               {/* 锁定遮罩层提示 */}
               {isLocked && (
-                <View style={styles.lockOverlay}>
-                  <Text style={styles.lockOverlayText}>3s</Text>
-                </View>
+                <View style={styles.lockOverlay} />
               )}
             </View>
 
