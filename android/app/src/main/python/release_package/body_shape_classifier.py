@@ -140,11 +140,37 @@ class BodyShapeClassifier:
             model_path = default_model_path
         
         if os.path.exists(model_path):
+            # Chaquopy AssetFinder 下的文件可能不是真实文件系统文件，
+            # pickle.load 需要真实文件，先复制到 HOME 目录
+            real_model_path = model_path
+            try:
+                import shutil
+                home_dir = os.path.expanduser('~')
+                real_model_dir = os.path.join(home_dir, 'model')
+                real_model_file = os.path.join(real_model_dir, 'body_shape_model.pkl')
+                # 只在目标文件不存在或大小不同时复制
+                need_copy = not os.path.exists(real_model_file)
+                if not need_copy:
+                    try:
+                        src_size = os.path.getsize(model_path)
+                        dst_size = os.path.getsize(real_model_file)
+                        need_copy = (src_size != dst_size)
+                    except:
+                        need_copy = True
+                if need_copy:
+                    os.makedirs(real_model_dir, exist_ok=True)
+                    shutil.copy2(model_path, real_model_file)
+                    print(f"[体型三分类器] 模型已复制到真实路径: {real_model_file}")
+                real_model_path = real_model_file
+            except Exception as copy_err:
+                print(f"[体型三分类器] 复制模型失败(将尝试直接加载): {copy_err}")
+                real_model_path = model_path
+            
             try:
                 from body_type_classifier.classifier import BodyTypeClassifier
-                self.model = BodyTypeClassifier.load_model(model_path)
+                self.model = BodyTypeClassifier.load_model(real_model_path)
                 self.feature_engineer = self.model.feature_engineer
-                print(f"[体型三分类器] 模型已加载: {model_path}")
+                print(f"[体型三分类器] 模型已加载: {real_model_path}")
                 print(f"  - 模型类型: {self.model.best_model_name}")
             except Exception as e:
                 print(f"[体型三分类器] 模型加载失败: {e}")
