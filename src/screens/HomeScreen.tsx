@@ -937,13 +937,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 {adaptiveEnabled
                   ? (bodyShapeInfo.body_shape
                       ? `当前为\u201C${getBodyShapeLabel(bodyShapeInfo.body_shape)}\u201D体型自适应调节`
-                      : '当前为自适应调节状态')
+                      : '当前为体型自适应调节')
                   : '自适应调节已关闭'}
               </Text>
               <View style={styles.seatDiagramContainer}>
                 <SeatDiagram
                   activeZone={null}
-                  scale={1.0}
+                  scale={0.85}
                   commandStates={commandStates}
                 />
               </View>
@@ -1795,58 +1795,58 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     flexDirection: 'row',
-    paddingHorizontal: Spacing.xxl,
-    paddingBottom: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
     zIndex: 1,
   },
   // ─── 左侧面板 ───
   leftPanel: {
-    width: SCREEN_WIDTH * 0.30,
-    maxWidth: SCREEN_WIDTH * 0.30,
+    width: SCREEN_WIDTH * 0.25,
+    maxWidth: SCREEN_WIDTH * 0.25,
     flexShrink: 0,
     flexGrow: 0,
     paddingRight: Spacing.sm,
   },
   leftPanelContent: {
-    paddingBottom: Spacing.xxl,
+    paddingBottom: Spacing.lg,
   },
   section: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
   sectionTitle: {
-    fontSize: FontSize.md,
+    fontSize: FontSize.sm,
     color: 'rgba(142, 142, 160, 0.9)',
     fontWeight: '500',
   },
   sectionIcon: {
-    width: 16,
-    height: 16,
+    width: 13,
+    height: 13,
     tintColor: Colors.primary,
   },
   seatIcon: {
-    width: 48,
-    height: 48,
+    width: 32,
+    height: 32,
   },
   customizeLinkIcon: {
-    width: 14,
-    height: 14,
+    width: 12,
+    height: 12,
   },
   // ─── 座椅状态 ───
   seatStatusRow: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   seatStatusCard: {
     flex: 1,
-    height: 100,
+    height: 72,
     backgroundColor: 'rgba(60, 60, 67, 0.45)',
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -1857,9 +1857,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 122, 255, 0.1)',
   },
   seatStatusText: {
-    fontSize: FontSize.lg,
+    fontSize: FontSize.sm,
     color: Colors.textGray,
-    marginTop: Spacing.md,
+    marginTop: Spacing.xs,
     fontWeight: '500',
   },
   seatStatusTextActive: {
@@ -2001,23 +2001,23 @@ const styles = StyleSheet.create({
   airbagStatusCard: {
     backgroundColor: 'rgba(41, 45, 50, 0.85)',
     borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    paddingBottom: Spacing.sm,
+    padding: Spacing.sm,
+    paddingBottom: Spacing.xs,
   },
   airbagStatusText: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.xs,
     color: Colors.textWhite,
     fontWeight: '600',
-    marginBottom: Spacing.xs,
+    marginBottom: 2,
   },
   seatDiagramContainer: {
     alignItems: 'center',
-    paddingVertical: 2,
+    paddingVertical: 0,
   },
   divider: {
     height: 1,
     backgroundColor: Colors.borderGray,
-    marginVertical: Spacing.sm,
+    marginVertical: Spacing.xs,
   },
   customizeLinkRow: {
     flexDirection: 'row',
@@ -2025,7 +2025,7 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   customizeLink: {
-    fontSize: FontSize.md,
+    fontSize: FontSize.sm,
     color: Colors.primary,
     fontWeight: '500',
   },
