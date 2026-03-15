@@ -27,11 +27,11 @@ def main():
     run_duration = 5
     total_frames = fps * run_duration
 
-    # print("=" * 60)
-    # print(f"Input: constant matrix, shape={sensor_data.shape}")
-    # print(f"FPS: {fps}, frame interval {frame_interval * 1000:.1f}ms")
-    # print(f"Planned run: {run_duration}s, total frames {total_frames}")
-    # print("=" * 60)
+    print("=" * 60)
+    print(f"Input: constant matrix, shape={sensor_data.shape}")
+    print(f"FPS: {fps}, frame interval {frame_interval * 1000:.1f}ms")
+    print(f"Planned run: {run_duration}s, total frames {total_frames}")
+    print("=" * 60)
 
     start_time = time.time()
 
@@ -40,12 +40,12 @@ def main():
 
         result = system.process_frame(sensor_data)
 
-        # print(f"\n--- frame {result['frame_count']} ---")
+        print(f"\n--- frame {result['frame_count']} ---")
 
         if result['control_command']:
-            # print(f"  Control command: {result['control_command']}")
+            print(f"  Control command: {result['control_command']}")
         else:
-            # print("  Control command: none")
+            print("  Control command: none")
 
         # FPS control
         elapsed = time.time() - frame_start
@@ -54,9 +54,9 @@ def main():
             time.sleep(sleep_time)
 
     total_time = time.time() - start_time
-    # print("\n" + "=" * 60)
-    # print(f"Finished: {total_time:.2f}s, total frames {total_frames}")
-    # print(f"Actual FPS: {total_frames / total_time:.1f}")
+    print("\n" + "=" * 60)
+    print(f"Finished: {total_time:.2f}s, total frames {total_frames}")
+    print(f"Actual FPS: {total_frames / total_time:.1f}")
  
 
 # if __name__ == '__main__':

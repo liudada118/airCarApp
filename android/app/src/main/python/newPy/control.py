@@ -62,10 +62,10 @@ class LivingDetector:
         # 最新检测结果
         self.latest_result = None
 
-        # print(f"[活体检测器] 初始化完成")
-        # print(f"  - 时间窗口: {self.window_size} 帧")
-        # print(f"  - 检测周期: {self.detection_interval} 帧")
-        # print(f"  - SAD判定阈值: {config.get('living_detection.sad_threshold', 0.6)}")
+        print(f"[活体检测器] 初始化完成")
+        print(f"  - 时间窗口: {self.window_size} 帧")
+        print(f"  - 检测周期: {self.detection_interval} 帧")
+        print(f"  - SAD判定阈值: {config.get('living_detection.sad_threshold', 0.6)}")
 
     def update(self, cushion_matrix: np.ndarray, backrest_matrix: np.ndarray) -> Optional[Dict]:
         """
@@ -187,15 +187,15 @@ class LivingDetector:
         confidence = result['confidence']
         threshold = result['threshold']
 
-        # print(f"\n[活体检测] 帧{result['frame_count']} | 检测周期#{result['detection_count']}")
-        # print(f"  → 状态: {status} | 置信度: {confidence:.3f}")
+        print(f"\n[活体检测] 帧{result['frame_count']} | 检测周期#{result['detection_count']}")
+        print(f"  → 状态: {status} | 置信度: {confidence:.3f}")
 
         if self.config.get('living_detection.debug.log_features', True):
-            # print(f"  → SAD能量: 坐垫={result['sad_cushion']:.2f}, "
+            print(f"  → SAD能量: 坐垫={result['sad_cushion']:.2f}, "
                   f"靠背={result['sad_backrest']:.2f}, "
                   f"最大值={result['sad_energy']:.2f}")
-            # print(f"  → SAD分数: {result['sad_score']:.3f}")
-            # print(f"  → 判定: {status}（阈值: {threshold:.2f}）")
+            print(f"  → SAD分数: {result['sad_score']:.3f}")
+            print(f"  → 判定: {status}（阈值: {threshold:.2f}）")
 
     def get_status(self) -> Optional[Dict]:
         """
@@ -217,7 +217,7 @@ class LivingDetector:
         self.frame_count = 0
         self.detection_count = 0
         self.latest_result = None
-        # print("[活体检测器] 已重置")
+        print("[活体检测器] 已重置")
 
 
 class BodyTypeDetector:
@@ -260,11 +260,11 @@ class BodyTypeDetector:
         # 最新检测结果
         self.latest_result = None
 
-        # print(f"[体型检测器] 初始化完成")
-        # print(f"  - 检测间隔: {self.detection_interval} 帧")
-        # print(f"  - 压力阈值: {self.threshold}")
-        # print(f"  - 最小连通区域: {self.min_component_size} 点")
-        # print(f"  - 体型判断: 大人>={self.body_size_adult_threshold}, 小孩>={self.body_size_child_threshold}")
+        print(f"[体型检测器] 初始化完成")
+        print(f"  - 检测间隔: {self.detection_interval} 帧")
+        print(f"  - 压力阈值: {self.threshold}")
+        print(f"  - 最小连通区域: {self.min_component_size} 点")
+        print(f"  - 体型判断: 大人>={self.body_size_adult_threshold}, 小孩>={self.body_size_child_threshold}")
 
     def update(self, cushion_matrix: np.ndarray, backrest_matrix: np.ndarray) -> Optional[Dict]:
         """
@@ -469,19 +469,19 @@ class BodyTypeDetector:
 
     def _print_detection_result(self, result: Dict):
         """打印检测结果"""
-        # print(f"\n[体型检测] 帧{result['frame_count']}")
-        # print(f"  ★ 体型判断: {result['body_size_type']}")
+        print(f"\n[体型检测] 帧{result['frame_count']}")
+        print(f"  ★ 体型判断: {result['body_size_type']}")
 
         for region in ['cushion', 'backrest']:
             features = result[region]
             region_name = "坐垫" if region == "cushion" else "靠背"
 
-            # print(f"  → {region_name}:")
-            # print(f"     原始掩码点数: {features['original_mask_points']}")
-            # print(f"     原始sum: {features['original_sum']:.2f}, 均值: {features['original_mean']:.2f}")
-            # print(f"     滤波后点数: {features['filtered_mask_points']}")
-            # print(f"     滤波后sum: {features['filtered_sum']:.2f}, 均值: {features['filtered_mean']:.2f}")
-            # print(f"     最大连通区域: {features['max_connected_component_size']} 点")
+            print(f"  → {region_name}:")
+            print(f"     原始掩码点数: {features['original_mask_points']}")
+            print(f"     原始sum: {features['original_sum']:.2f}, 均值: {features['original_mean']:.2f}")
+            print(f"     滤波后点数: {features['filtered_mask_points']}")
+            print(f"     滤波后sum: {features['filtered_sum']:.2f}, 均值: {features['filtered_mean']:.2f}")
+            print(f"     最大连通区域: {features['max_connected_component_size']} 点")
 
     def get_status(self) -> Optional[Dict]:
         """
@@ -496,4 +496,4 @@ class BodyTypeDetector:
         """重置检测器"""
         self.frame_count = 0
         self.latest_result = None
-        # print("[体型检测器] 已重置")
+        print("[体型检测器] 已重置")

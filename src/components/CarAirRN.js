@@ -210,16 +210,16 @@ function createWorkBuffers() {
 // ─── 模型加载 ────────────────────────────────────────────────────────────────
 
 async function loadSeatModel(group) {
-  // console.log('[loadSeatModel] 开始加载模型...');
+  console.log('[loadSeatModel] 开始加载模型...');
   const asset = Asset.fromModule(MODEL_ASSET);
-  // console.log('[loadSeatModel] asset hash:', asset.hash, 'downloaded:', asset.downloaded);
+  console.log('[loadSeatModel] asset hash:', asset.hash, 'downloaded:', asset.downloaded);
   await asset.downloadAsync();
   const uri = asset.localUri || asset.uri;
   if (!uri) {
-    // console.warn('[loadSeatModel] 模型 URI 为空，无法加载');
+    console.warn('[loadSeatModel] 模型 URI 为空，无法加载');
     return null;
   }
-  // console.log('[loadSeatModel] 模型 URI:', uri);
+  console.log('[loadSeatModel] 模型 URI:', uri);
 
   const file = new FileSystem.File(uri);
   const buffer = await file.arrayBuffer();
@@ -233,7 +233,7 @@ async function loadSeatModel(group) {
       gltf => {
         const model = gltf.scene || gltf.scenes?.[0];
         if (!model) {
-          // console.warn('glb: parse ok but no scene');
+          console.warn('glb: parse ok but no scene');
           reject(new Error('model missing'));
           return;
         }
@@ -270,7 +270,7 @@ async function loadSeatModel(group) {
         resolve(model);
       },
       err => {
-        // console.warn('glb: parse error', err);
+        console.warn('glb: parse error', err);
         reject(err);
       },
     );
@@ -815,7 +815,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     /** 算法判断离座时调用：立即清零 3D 图所有点位数据，并冻结数据更新 */
     resetToZero() {
       const fs = stateRef.current;
-      // console.log('[CarAirRN] resetToZero 调用, smoothBig存在:', !!fs.smoothBig, 'pointMeshes存在:', !!fs.pointMeshes);
+      console.log('[CarAirRN] resetToZero 调用, smoothBig存在:', !!fs.smoothBig, 'pointMeshes存在:', !!fs.pointMeshes);
       // 冻结数据更新：渲染循环不再用传感器数据更新 smoothBig
       fs._frozen = true;
       // 将 smoothBig 所有区域填 0
@@ -1094,7 +1094,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       rotation: [viewParams.modelRx, viewParams.modelRy, viewParams.modelRz],
       scale: viewParams.modelScale,
     };
-    // console.log('[CarAirRN] 当前参数:', JSON.stringify(output, null, 2));
+    console.log('[CarAirRN] 当前参数:', JSON.stringify(output, null, 2));
   }, [layout, viewParams]);
 
   // 手势响应器：单指旋转 + 双指缩放
@@ -1291,9 +1291,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     setLoadError(null);
     loadSeatModel(rootGroup)
       .then(model => {
-        // console.log('[CarAirRN] 模型加载完成, mounted:', mountedRef.current, 'model:', !!model);
+        console.log('[CarAirRN] 模型加载完成, mounted:', mountedRef.current, 'model:', !!model);
         if (!mountedRef.current) {
-          // console.warn('[CarAirRN] 组件已卸载，放弃模型加载结果');
+          console.warn('[CarAirRN] 组件已卸载，放弃模型加载结果');
           return;
         }
         stateRef.current.model = model;
@@ -1315,7 +1315,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         }
       })
       .catch(err => {
-        // console.warn('[CarAirRN] 模型加载失败:', err?.message || String(err));
+        console.warn('[CarAirRN] 模型加载失败:', err?.message || String(err));
         if (!mountedRef.current) return;
         setLoading(false);
         setLoadError(err?.message || String(err));

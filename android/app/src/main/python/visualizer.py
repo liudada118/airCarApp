@@ -353,7 +353,7 @@ class ConfigWindow:
             return
 
         try:
-            # print("\n[配置] 批量应用修改...")
+            print("\n[配置] 批量应用修改...")
             count = len(self.pending_changes)
 
             # 批量应用（最后一个才保存）
@@ -361,9 +361,9 @@ class ConfigWindow:
             for i, (key_path, value) in enumerate(items):
                 is_last = (i == count - 1)
                 self.integrated_system.set_param(key_path, value, auto_save=is_last)
-                # print(f"  [{i+1}/{count}] {key_path} = {value}")
+                print(f"  [{i+1}/{count}] {key_path} = {value}")
 
-            # print(f"[配置] 应用完成，共 {count} 项")
+            print(f"[配置] 应用完成，共 {count} 项")
 
             # 清空缓存
             self.pending_changes.clear()
@@ -583,7 +583,7 @@ class HeatmapWindow:
         except queue.Empty:
             pass
         except Exception as e:
-            # print(f"热力图更新错误: {e}")
+            print(f"热力图更新错误: {e}")
 
         self.window.after(60, self.update_heatmaps)
 
@@ -755,7 +755,7 @@ class TapMassageWindow:
                 self._update_status_text(vis_data)
 
         except Exception as e:
-            # print(f"[拍打按摩窗口] 更新错误: {e}")
+            print(f"[拍打按摩窗口] 更新错误: {e}")
 
         # 每100ms更新一次
         if self.window and self.window.winfo_exists():
@@ -1733,9 +1733,9 @@ class SensorVisualizer:
                 if hold_cmd and self.serial_port and self.serial_port.is_open:
                     try:
                         self.serial_port.write(bytes(hold_cmd))
-                        # print("[模式切换] 已发送全部保持指令，终止自适应遗留指令")
+                        print("[模式切换] 已发送全部保持指令，终止自适应遗留指令")
                     except Exception as e:
-                        # print(f"[模式切换] 发送保持指令失败: {e}")
+                        print(f"[模式切换] 发送保持指令失败: {e}")
             else:
                 self.mode_label.config(text="自适应", foreground="green")
                 self.mode_toggle_btn.config(text="切换到手动模式")
@@ -1779,7 +1779,7 @@ class SensorVisualizer:
             try:
                 self.serial_port.write(bytes(frame))
             except Exception as e:
-                # print(f"[手动控制] 串口发送失败: {e}")
+                print(f"[手动控制] 串口发送失败: {e}")
 
         # 更新气囊显示
         self._update_airbag_display_from_command(frame)
@@ -1808,7 +1808,7 @@ class SensorVisualizer:
             try:
                 self.serial_port.write(bytes(hold_frame))
             except Exception as e:
-                # print(f"[手动控制] 保持指令发送失败: {e}")
+                print(f"[手动控制] 保持指令发送失败: {e}")
 
         # 更新气囊显示
         self._update_airbag_display_from_command(hold_frame)
@@ -1820,7 +1820,7 @@ class SensorVisualizer:
         self.manual_deflate_btn.config(state="normal")
         self.manual_action_label.config(text="已保持", foreground="green")
 
-        # print("[手动控制] 动作完成，已发送保持指令")
+        print("[手动控制] 动作完成，已发送保持指令")
 
     def _batch_airbag_action(self, action: str):
         """一键操作全部气囊（充气/放气/停止）"""
@@ -1854,10 +1854,10 @@ class SensorVisualizer:
                     text=f"✓ {label}",
                     foreground=color_map.get(action, 'gray')
                 )
-                # print(f"[手动控制] 已发送{label}指令")
+                print(f"[手动控制] 已发送{label}指令")
             except Exception as e:
                 self.batch_action_label.config(text=f"发送失败", foreground="red")
-                # print(f"[手动控制] {label}指令发送失败: {e}")
+                print(f"[手动控制] {label}指令发送失败: {e}")
         else:
             self.batch_action_label.config(text="串口未连接", foreground="red")
 
@@ -2119,9 +2119,9 @@ class SensorVisualizer:
             self.is_running = True
 
             # 初始化集成系统
-            # print("[集成模式] 初始化集成系统...")
+            print("[集成模式] 初始化集成系统...")
             self.integrated_system = IntegratedSeatSystem('sensor_config.yaml')
-            # print("[集成模式] 集成系统已初始化")
+            print("[集成模式] 集成系统已初始化")
 
             # 更新UI
             self.connect_btn.config(text="断开")
@@ -2146,7 +2146,7 @@ class SensorVisualizer:
         # 清理集成系统
         if self.integrated_system:
             self.integrated_system = None
-            # print("[集成模式] 集成系统已清理")
+            print("[集成模式] 集成系统已清理")
 
         self.connect_btn.config(text="连接")
         self.config_btn.config(state="disabled")
@@ -2174,7 +2174,7 @@ class SensorVisualizer:
                 else:
                     time.sleep(0.001)
             except Exception as e:
-                # print(f"读取错误: {e}")
+                print(f"读取错误: {e}")
                 break
 
     def _process_buffer(self):
@@ -2421,7 +2421,7 @@ class SensorVisualizer:
                                 command_bytes = bytes(last_cmd['command'])
                                 self.serial_port.write(command_bytes)
                             except Exception as e:
-                                # print(f"[自适应] 串口发送失败: {e}")
+                                print(f"[自适应] 串口发送失败: {e}")
                 elif result['control_command']:
                     # 无新指令但有缓存指令：显示"延续"状态
                     self.command_status_label.config(text="延续中", foreground="blue")
@@ -2676,14 +2676,14 @@ class SensorVisualizer:
             orig_frame = cmd_info.get('frame_count', self.frame_count)
             orig_cmd_count = cmd_info.get('command_count', self.command_count)
             state = cmd_info.get('state', 'UNKNOWN')
-            # print(f"\n[Visualizer] 帧{orig_frame} | 系统指令#{orig_cmd_count} | 状态={state} | GUI指令#{self.command_count}")
+            print(f"\n[Visualizer] 帧{orig_frame} | 系统指令#{orig_cmd_count} | 状态={state} | GUI指令#{self.command_count}")
         else:
-            # print(f"\n[Visualizer] 帧{self.frame_count} | GUI指令#{self.command_count}")
-        # print(f"  → 指令长度: {len(command)} 元素")
+            print(f"\n[Visualizer] 帧{self.frame_count} | GUI指令#{self.command_count}")
+        print(f"  → 指令长度: {len(command)} 元素")
         if active_airbags:
-            # print(f"  → 动作气囊: {', '.join(active_airbags)}")
+            print(f"  → 动作气囊: {', '.join(active_airbags)}")
         else:
-            # print(f"  → 所有气囊保持状态")
+            print(f"  → 所有气囊保持状态")
 
     def _update_airbag_display_from_command(self, command: list[int] | None):
         """根据控制指令更新气囊状态显示
@@ -2738,20 +2738,20 @@ class SensorVisualizer:
     def _trigger_body_shape(self):
         """触发体型三分类识别"""
         if not self.integrated_system:
-            # print("[可视化] 集成系统未连接")
+            print("[可视化] 集成系统未连接")
             return
 
         try:
             result = self.integrated_system.trigger_body_shape_classification()
             if result.get('success'):
-                # print(f"[可视化] 体型识别已触发: {result.get('message', '')}")
+                print(f"[可视化] 体型识别已触发: {result.get('message', '')}")
                 # 更新按钮状态
                 self.body_shape_btn.config(state='disabled')
                 self.body_shape_state_label.config(text="采集中", foreground="blue")
             else:
-                # print(f"[可视化] 体型识别触发失败: {result.get('message', '')}")
+                print(f"[可视化] 体型识别触发失败: {result.get('message', '')}")
         except Exception as e:
-            # print(f"[可视化] 体型识别触发异常: {e}")
+            print(f"[可视化] 体型识别触发异常: {e}")
 
     def _reset_body_shape(self):
         """重置体型三分类检测器"""
@@ -2761,7 +2761,7 @@ class SensorVisualizer:
         try:
             if self.integrated_system.body_shape_classifier:
                 self.integrated_system.body_shape_classifier.reset()
-                # print("[可视化] 体型三分类已重置")
+                print("[可视化] 体型三分类已重置")
                 # 恢复按钮状态
                 self.body_shape_btn.config(state='normal')
                 # 重置状态面板显示
@@ -2773,7 +2773,7 @@ class SensorVisualizer:
                 self.body_shape_prob_medium_label.config(text="中等: -")
                 self.body_shape_prob_large_label.config(text="高大: -")
         except Exception as e:
-            # print(f"[可视化] 体型三分类重置异常: {e}")
+            print(f"[可视化] 体型三分类重置异常: {e}")
 
     def _update_body_shape_display(self, result: dict):
         """更新体型三分类状态面板显示"""

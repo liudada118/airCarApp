@@ -173,11 +173,11 @@ class BodyTypeClassifier:
         results = {}
         
         if verbose:
-            # print(f"\n{'='*70}")
-            # print(f"LOSO-CV + 概率软投票评估")
-            # print(f"特征数: {X.shape[1]}, 样本数: {X.shape[0]}, "
+            print(f"\n{'='*70}")
+            print(f"LOSO-CV + 概率软投票评估")
+            print(f"特征数: {X.shape[1]}, 样本数: {X.shape[0]}, "
                   f"受试者数: {len(np.unique(groups))}")
-            # print(f"{'='*70}")
+            print(f"{'='*70}")
         
         for name, model_template in models.items():
             try:
@@ -255,18 +255,18 @@ class BodyTypeClassifier:
                 }
                 
                 if verbose:
-                    # print(f"\n  {name:25s}  受试者={person_accuracy:.0%}({n_correct}/{n_total})  "
+                    print(f"\n  {name:25s}  受试者={person_accuracy:.0%}({n_correct}/{n_total})  "
                           f"帧F1={frame_f1_macro:.3f}  帧Acc={frame_acc:.3f}")
                     for p in sorted(person_results.keys()):
                         r = person_results[p]
                         mark = "✓" if r['correct'] else "✗"
-                        # print(f"    {mark} {p}: 真实={self.LABEL_CN[r['true_label']]} "
+                        print(f"    {mark} {p}: 真实={self.LABEL_CN[r['true_label']]} "
                               f"预测={self.LABEL_CN[r['voted_label']]} "
                               f"置信度={r['confidence']:.0%}")
                 
             except Exception as e:
                 if verbose:
-                    # print(f"\n  {name:25s}  ERROR: {e}")
+                    print(f"\n  {name:25s}  ERROR: {e}")
                 results[name] = {'error': str(e)}
         
         self.evaluation_results = results

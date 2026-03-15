@@ -293,7 +293,7 @@ async def websocket_endpoint(websocket: WebSocket):
     - {"action": "config_get_comment", "key": "xxx"} -> {"comment": "..."}
     """
     await websocket.accept()
-    # print(f"[WebSocket] 客户端已连接")
+    print(f"[WebSocket] 客户端已连接")
 
     try:
         while True:
@@ -394,16 +394,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"error": str(e)})
 
     except WebSocketDisconnect:
-        # print(f"[WebSocket] 客户端已断开")
+        print(f"[WebSocket] 客户端已断开")
     except Exception as e:
-        # print(f"[WebSocket] 错误: {e}")
+        print(f"[WebSocket] 错误: {e}")
 
 
 # ========== 启动入口 ==========
 if __name__ == "__main__":
     import uvicorn
-    # print("=" * 50)
-    # print("座椅控制服务启动中...")
-    # print("API 文档: http://localhost:8000/docs")
-    # print("=" * 50)
+    print("=" * 50)
+    print("座椅控制服务启动中...")
+    print("API 文档: http://localhost:8000/docs")
+    print("=" * 50)
     uvicorn.run(app, host="0.0.0.0", port=8000)

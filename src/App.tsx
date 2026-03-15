@@ -63,7 +63,7 @@ const App: React.FC = () => {
   // 当体型变化时，加载对应体型的气囊设置
   const loadSettingsForShape = useCallback(async (shape: BodyShape) => {
     const storageKey = getStorageKey(shape);
-    // console.log('[AirbagStorage] 加载体型缓存:', shape || '默认', 'key:', storageKey);
+    console.log('[AirbagStorage] 加载体型缓存:', shape || '默认', 'key:', storageKey);
 
     // 1. 尝试从 SharedPreferences 加载（按体型）
     if (sm?.loadAirbagSettingsForShape && shape) {
@@ -74,7 +74,7 @@ const App: React.FC = () => {
           setSavedAirbagValues(parsed);
           savedAirbagValuesRef.current = parsed;
           AsyncStorage.setItem(storageKey, json).catch(() => {});
-          // console.log('[AirbagStorage] SP加载成功:', shape, parsed);
+          console.log('[AirbagStorage] SP加载成功:', shape, parsed);
           return;
         }
       } catch (_) {}
@@ -90,7 +90,7 @@ const App: React.FC = () => {
         if (sm?.saveAirbagSettingsForShape && shape) {
           sm.saveAirbagSettingsForShape(shape, json).catch(() => {});
         }
-        // console.log('[AirbagStorage] AS加载成功:', shape, parsed);
+        console.log('[AirbagStorage] AS加载成功:', shape, parsed);
         return;
       }
     } catch (_) {}
@@ -103,7 +103,7 @@ const App: React.FC = () => {
           const parsed = JSON.parse(legacyJson) as CustomAirbagValues;
           setSavedAirbagValues(parsed);
           savedAirbagValuesRef.current = parsed;
-          // console.log('[AirbagStorage] 从旧缓存迁移:', shape, parsed);
+          console.log('[AirbagStorage] 从旧缓存迁移:', shape, parsed);
           return;
         }
       } catch (_) {}
@@ -112,7 +112,7 @@ const App: React.FC = () => {
     // 4. 无任何缓存，使用默认值
     setSavedAirbagValues(null);
     savedAirbagValuesRef.current = null;
-    // console.log('[AirbagStorage] 无缓存，使用默认值:', shape);
+    console.log('[AirbagStorage] 无缓存，使用默认值:', shape);
   }, []);
 
   // 应用启动时加载（兼容旧缓存）
@@ -123,7 +123,7 @@ const App: React.FC = () => {
   // 体型变化时重新加载对应缓存
   const handleBodyShapeChange = useCallback((shape: BodyShape) => {
     if (shape === currentBodyShapeRef.current) return;
-    // console.log('[BodyShape] 体型变化:', currentBodyShapeRef.current, '->', shape);
+    console.log('[BodyShape] 体型变化:', currentBodyShapeRef.current, '->', shape);
     setCurrentBodyShape(shape);
     currentBodyShapeRef.current = shape;
     if (shape) {
@@ -170,7 +170,7 @@ const App: React.FC = () => {
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* HomeScreen 始终挂载，通过 opacity+position 控制显隐，避免 GL 上下文被销毁 */}
+        {/* HomeScreen 始终挂载，通过 display 控制显隐，避免 3D 模型重新加载 */}
         <View
           style={[styles.screenContainer, !isHome && styles.hidden]}
           pointerEvents={isHome ? 'auto' : 'none'}
@@ -219,12 +219,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   hidden: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0,
+    display: 'none',
   },
 });
 

@@ -10,7 +10,7 @@
 
 使用方式:
     from version import __version__
-    # print(__version__)  # "1.0.0"
+    print(__version__)  # "1.0.0"
 
 版本号更新规则:
     1. 修复bug（不改变接口）: 递增 PATCH (1.0.0 → 1.0.1)
