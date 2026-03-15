@@ -131,8 +131,9 @@ const App: React.FC = () => {
     }
   }, [loadSettingsForShape]);
 
-  // 导航到自定义气囊调节页面
+  // 导航到自定义气囊调节页面（同时重置定时充气）
   const navigateToCustomize = useCallback(() => {
+    resetSeatedInflateRef.current?.();
     setCurrentScreen('customAirbag');
   }, []);
 
