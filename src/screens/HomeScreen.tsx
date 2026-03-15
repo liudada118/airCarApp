@@ -972,7 +972,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
       <View style={styles.content} pointerEvents="box-none">
         {/* ─── 左侧面板 ─── */}
-        <ScrollView style={styles.leftPanel} showsVerticalScrollIndicator={false} contentContainerStyle={styles.leftPanelContent}>
+        <View style={styles.leftPanel}>
           {/* 座椅状态 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -1021,12 +1021,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           </View>
 
           {/* 气囊状态 */}
-          <View style={styles.section}>
+          <View style={[styles.section, {flex: 1, marginBottom: 0}]}>
             <View style={styles.sectionHeader}>
               <Image source={iconAirStatus} style={styles.sectionIcon} resizeMode="contain" />
               <Text style={styles.sectionTitle}>气囊状态</Text>
             </View>
-            <View style={styles.airbagStatusCard}>
+            <View style={[styles.airbagStatusCard, {flex: 1}]}>
               <Text style={styles.airbagStatusText}>
                 {adaptiveEnabled
                   ? (bodyShapeInfo.body_shape
@@ -1067,7 +1067,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               </TouchableOpacity>
             </View>
           </View>
-        </ScrollView>
+        </View>
 
         {/* ─── 右侧面板 ─── */}
         <View style={styles.rightPanel} pointerEvents="box-none">
@@ -1900,12 +1900,13 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flexGrow: 0,
     paddingRight: Spacing.sm,
+    paddingBottom: SCREEN_HEIGHT * 0.04,
   },
   leftPanelContent: {
     paddingBottom: Spacing.xxl,
   },
   section: {
-    marginBottom: Spacing.lg,
+    marginBottom: SCREEN_HEIGHT * 0.02,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -2103,9 +2104,12 @@ const styles = StyleSheet.create({
     color: Colors.textWhite,
     fontWeight: '600',
     marginBottom: Spacing.xs,
+    textAlign: 'center',
   },
   seatDiagramContainer: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 2,
   },
   divider: {
@@ -2116,6 +2120,7 @@ const styles = StyleSheet.create({
   customizeLinkRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: Spacing.xs,
   },
   customizeLink: {

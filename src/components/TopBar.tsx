@@ -6,7 +6,10 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
+
+const {height: SCREEN_HEIGHT} = Dimensions.get('window');
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 import type {ConnectionStatus} from '../types';
 
@@ -83,7 +86,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.xxl,
-    paddingVertical: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: 0,
+    marginBottom: SCREEN_HEIGHT * 0.04,
     backgroundColor: 'transparent',
     zIndex: 2,
   },
