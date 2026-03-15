@@ -22,7 +22,7 @@ import {addSide, lineInterpnew, jetWhite3} from '../../util/util';
 const SEPARATION = 100;
 const POINT_SCALE = 0.005;
 const HIDE_THRESHOLD_RATIO = 0.3;
-const ENABLE_POINT_HIDE = true;
+const ENABLE_POINT_HIDE = false;
 const MODEL_ASSET = require('../../image/chair3.glb');
 const DEFAULT_SETTINGS = {
   gauss: 1,
