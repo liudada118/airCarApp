@@ -860,24 +860,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
         seatedInflateCountRef.current += 1;
         const count = seatedInflateCountRef.current;
-        console.log(`[SeatedInflate] 第${count}次充气开始 (cushionFL + cushionFR)`);
+        console.log(`[SeatedInflate] 第${count}次充气开始 (hipFirm)`);
 
-        // 发送充气指令
-        sm.sendAirbagCommand('cushionFL', 'inflate').catch(e =>
-          console.warn('[SeatedInflate] cushionFL inflate error:', e?.message || e),
-        );
-        sm.sendAirbagCommand('cushionFR', 'inflate').catch(e =>
-          console.warn('[SeatedInflate] cushionFR inflate error:', e?.message || e),
+        // 发送臀部气囊充气指令
+        sm.sendAirbagCommand('hipFirm', 'inflate').catch(e =>
+          console.warn('[SeatedInflate] hipFirm inflate error:', e?.message || e),
         );
 
         // 3秒后发送停止（保压）指令
         seatedInflateStopTimerRef.current = setTimeout(() => {
           console.log(`[SeatedInflate] 第${count}次充气结束，发送stop`);
-          sm.sendAirbagCommand('cushionFL', 'stop').catch(e =>
-            console.warn('[SeatedInflate] cushionFL stop error:', e?.message || e),
-          );
-          sm.sendAirbagCommand('cushionFR', 'stop').catch(e =>
-            console.warn('[SeatedInflate] cushionFR stop error:', e?.message || e),
+          sm.sendAirbagCommand('hipFirm', 'stop').catch(e =>
+            console.warn('[SeatedInflate] hipFirm stop error:', e?.message || e),
           );
           seatedInflateStopTimerRef.current = null;
         }, 3000);
