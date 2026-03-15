@@ -22,14 +22,14 @@ import {addSide, lineInterpnew, jetWhite3} from '../../util/util';
 const SEPARATION = 100;
 const POINT_SCALE = 0.005;
 const HIDE_THRESHOLD_RATIO = 0.3;
-const ENABLE_POINT_HIDE = false;
+const ENABLE_POINT_HIDE = true;
 const MODEL_ASSET = require('../../image/chair3.glb');
 const DEFAULT_SETTINGS = {
-  gauss: 1,
-  color: 350, // 色阶映射范围
-  height: 1,
+  gauss: 1.5,
+  color: 325, // 色阶映射范围
+  height: 0.3,
   coherent: 1.3, // 第二层平滑（插值后）：轻度平滑，新值占 77%
-  rawSmooth: 1.3, // 第一层平滑（插值前）：轻度平滑，新值占 77%
+  rawSmooth: 1.5, // 第一层平滑（插值前）：轻度平滑，新值占 77%
   deadZone: 0, // 死区阈值：0=不启用死区
   zeroFrameThreshold: 10, // 全 0 帧检测：帧总和低于此值视为气囊动作干扰帧，直接跳过
 };
@@ -44,10 +44,10 @@ const IDLE_RENDER_FRAMES = 3;
 
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
 const DEFAULT_POINT_FIT_LAYOUT = {
-  center: {position: [12, -61, 46], rotation: [3.09, 0, 0], scale: 3.8},
-  centersit: {position: [42, 38, -42], rotation: [1.32, 0, 0], scale: 3.2},
-  leftsit: {position: [54, -20, -19], rotation: [1.35, 0, 0], scale: 3.1},
-  rightsit: {position: [-29, -20, -19], rotation: [1.35, 0, 0], scale: 3.1},
+  center: {position: [16, -58, 45], rotation: [2.96, 0, 0], scale: 5.2},
+  centersit: {position: [52, 38, -43], rotation: [1.32, 0, 0], scale: 3.9},
+  leftsit: {position: [-33, -20, -13], rotation: [1.35, 0, 0], scale: 3.3},
+  rightsit: {position: [61, -20, -13], rotation: [1.35, 0, 0], scale: 3.3},
 };
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
