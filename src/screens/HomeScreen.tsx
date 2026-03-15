@@ -56,6 +56,8 @@ interface HomeScreenProps {
   connectionStatus: ConnectionStatus;
   onConnectionStatusChange: (status: ConnectionStatus) => void;
   onBodyShapeChange?: (shape: BodyShape) => void;
+  /** 注册重置入座定时充气的回调，供外部调用 */
+  onRegisterResetSeatedInflate?: (resetFn: () => void) => void;
 }
 
 interface SerialDevice {
@@ -405,7 +407,7 @@ function matrixCellColor(val: number): string {
 
 // ─── 组件 ────────────────────────────────────────────────────────────
 
-const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange, onBodyShapeChange}) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange, onBodyShapeChange, onRegisterResetSeatedInflate}) => {
   // 合并所有算法结果为单个状态对象，减少 setState 调用（8→1），大幅降低重渲染次数
   const [algoState, setAlgoState] = useState({
     seatStatus: 'away' as SeatStatus,
@@ -891,6 +893,27 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       clearAllTimers();
     };
   }, [seatStatus]);
+
+  // 重置入座定时充气的函数（供外部调用，如手动调节气囊时）
+  const resetSeatedInflate = useCallback(() => {
+    if (seatedInflateTimerRef.current) {
+      clearInterval(seatedInflateTimerRef.current);
+      seatedInflateTimerRef.current = null;
+    }
+    if (seatedInflateStopTimerRef.current) {
+      clearTimeout(seatedInflateStopTimerRef.current);
+      seatedInflateStopTimerRef.current = null;
+    }
+    seatedInflateCountRef.current = 0;
+    console.log('[SeatedInflate] 手动调节气囊，重置定时充气');
+  }, []);
+
+  // 注册重置函数供外部调用
+  useEffect(() => {
+    if (onRegisterResetSeatedInflate) {
+      onRegisterResetSeatedInflate(resetSeatedInflate);
+    }
+  }, [onRegisterResetSeatedInflate, resetSeatedInflate]);
 
   // ─── 渲染辅助助 ──────────────────────────────────────────
 

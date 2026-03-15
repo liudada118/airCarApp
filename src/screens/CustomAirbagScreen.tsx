@@ -99,6 +99,8 @@ interface CustomAirbagScreenProps {
   initialValues?: CustomAirbagValues;
   adaptiveEnabled?: boolean;
   bodyShape?: BodyShape;
+  /** 手动调节气囊时的回调，用于重置入座定时充气 */
+  onManualAdjust?: () => void;
 }
 
 const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
@@ -107,6 +109,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   initialValues,
   adaptiveEnabled = true,
   bodyShape = '',
+  onManualAdjust,
 }) => {
   /** 根据体型获取存储 key */
   const storageKey = bodyShape ? `${ASYNC_STORAGE_KEY_PREFIX}${bodyShape}` : LEGACY_ASYNC_STORAGE_KEY;
@@ -430,9 +433,11 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] + 1}));
     // 发送充气指令
     sendAirbagCmd(selectedZone, 'inflate');
-    // 启动3秒锁定
+    // 启动锁定
     startLockAndHoldPressure(selectedZone);
-  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure]);
+    // 重置入座定时充气
+    onManualAdjust?.();
+  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure, onManualAdjust]);
 
   // 减少气囊值（放气）
   const handleDecrease = useCallback(() => {
@@ -451,9 +456,11 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] - 1}));
     // 发送放气指令
     sendAirbagCmd(selectedZone, 'deflate');
-    // 启动3秒锁定
+    // 启动锁定
     startLockAndHoldPressure(selectedZone);
-  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure]);
+    // 重置入座定时充气
+    onManualAdjust?.();
+  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure, onManualAdjust]);
 
   // 点击保存按钮
   const handleSavePress = useCallback(() => {

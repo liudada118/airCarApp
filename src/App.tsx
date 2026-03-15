@@ -51,6 +51,12 @@ const App: React.FC = () => {
   const [savedAirbagValues, setSavedAirbagValues] = useState<CustomAirbagValues | null>(null);
   const savedAirbagValuesRef = useRef<CustomAirbagValues | null>(null);
 
+  // 入座定时充气重置函数（由 HomeScreen 注册）
+  const resetSeatedInflateRef = useRef<(() => void) | null>(null);
+  const handleRegisterResetSeatedInflate = useCallback((resetFn: () => void) => {
+    resetSeatedInflateRef.current = resetFn;
+  }, []);
+
   // 当体型变化时，加载对应体型的气囊设置
   const loadSettingsForShape = useCallback(async (shape: BodyShape) => {
     const storageKey = getStorageKey(shape);
@@ -167,6 +173,7 @@ const App: React.FC = () => {
               connectionStatus={connectionStatus}
               onConnectionStatusChange={setConnectionStatus}
               onBodyShapeChange={handleBodyShapeChange}
+              onRegisterResetSeatedInflate={handleRegisterResetSeatedInflate}
             />
             {/* 首页级别的 Toast（保存成功后显示） */}
             <Toast
@@ -183,6 +190,7 @@ const App: React.FC = () => {
             initialValues={savedAirbagValues || undefined}
             adaptiveEnabled={adaptiveEnabled}
             bodyShape={currentBodyShape}
+            onManualAdjust={() => resetSeatedInflateRef.current?.()}
           />
         )}
       </SafeAreaView>
