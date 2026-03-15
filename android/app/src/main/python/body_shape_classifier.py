@@ -13,6 +13,7 @@
 """
 
 import os
+import sys
 import numpy as np
 from typing import Optional, Dict, List
 from enum import Enum
@@ -167,9 +168,57 @@ class BodyShapeClassifier:
                 real_model_path = model_path
             
             try:
-                from body_type_classifier.classifier import BodyTypeClassifier
-                self.model = BodyTypeClassifier.load_model(real_model_path)
-                self.feature_engineer = self.model.feature_engineer
+                import pickle as _pickle
+                import importlib
+                import importlib.util
+                
+                # 手动从真实文件系统加载 body_type_classifier 包
+                # 解决 Chaquopy AssetFinder 不支持 extract_packages 的问题
+                _btc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'body_type_classifier')
+                _modules_to_load = [
+                    ('body_type_classifier', os.path.join(_btc_dir, '__init__.py'), True),
+                    ('body_type_classifier.feature_engineer', os.path.join(_btc_dir, 'feature_engineer.py'), False),
+                    ('body_type_classifier.data_loader', os.path.join(_btc_dir, 'data_loader.py'), False),
+                    ('body_type_classifier.classifier', os.path.join(_btc_dir, 'classifier.py'), False),
+                ]
+                for mod_name, mod_path, is_pkg in _modules_to_load:
+                    if mod_name not in sys.modules and os.path.exists(mod_path):
+                        try:
+                            spec = importlib.util.spec_from_file_location(
+                                mod_name, mod_path,
+                                submodule_search_locations=[_btc_dir] if is_pkg else None
+                            )
+                            mod = importlib.util.module_from_spec(spec)
+                            sys.modules[mod_name] = mod
+                            spec.loader.exec_module(mod)
+                        except Exception as _e:
+                            print(f"[体型三分类器] 手动加载 {mod_name} 失败: {_e}")
+                print(f"[体型三分类器] 依赖模块加载完成")
+                
+                # 直接用 pickle.load 加载 dict
+                with open(real_model_path, 'rb') as f:
+                    save_dict = _pickle.load(f)
+                
+                # 手动构造对象，避免再次触发 import
+                self.feature_engineer = save_dict.get('feature_engineer')
+                # 创建一个轻量级模型包装器，代理 BodyTypeClassifier 的接口
+                class _ModelWrapper:
+                    def __init__(self, model, name, fe):
+                        self.best_model = model
+                        self.best_model_name = name
+                        self.feature_engineer = fe
+                    def predict_proba(self, X):
+                        """代理 predict_proba 到 best_model"""
+                        return self.best_model.predict_proba(X)
+                    def predict(self, X):
+                        """代理 predict 到 best_model"""
+                        return self.best_model.predict(X)
+                
+                self.model = _ModelWrapper(
+                    save_dict['model'],
+                    save_dict.get('model_name', 'unknown'),
+                    self.feature_engineer
+                )
                 print(f"[体型三分类器] 模型已加载: {real_model_path}")
                 print(f"  - 模型类型: {self.model.best_model_name}")
             except Exception as e:
