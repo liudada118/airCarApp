@@ -170,9 +170,9 @@ const App: React.FC = () => {
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* HomeScreen 始终挂载，通过 display 控制显隐，避免 3D 模型重新加载 */}
+        {/* HomeScreen 始终挂载，通过 opacity+zIndex 控制显隐，避免 GL 上下文被销毁 */}
         <View
-          style={[styles.screenContainer, !isHome && styles.hidden]}
+          style={[styles.screenLayer, { opacity: isHome ? 1 : 0, zIndex: isHome ? 1 : 0 }]}
           pointerEvents={isHome ? 'auto' : 'none'}
         >
           <HomeScreen
@@ -195,6 +195,7 @@ const App: React.FC = () => {
 
         {/* CustomAirbagScreen 仅在需要时挂载 */}
         {!isHome && (
+          <View style={[styles.screenLayer, { zIndex: 2 }]}>
           <CustomAirbagScreen
             onClose={navigateToHome}
             onSaveSuccess={handleSaveSuccess}
@@ -203,6 +204,7 @@ const App: React.FC = () => {
             bodyShape={currentBodyShape}
             onManualAdjust={() => resetSeatedInflateRef.current?.()}
           />
+          </View>
         )}
       </SafeAreaView>
     </SafeAreaProvider>
@@ -214,17 +216,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  screenContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  hidden: {
+  screenLayer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    opacity: 0,
   },
 });
 
