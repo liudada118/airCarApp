@@ -1080,6 +1080,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
+    height: '70%',
   },
   // ─── 右侧面板 ───
   rightPanel: {
