@@ -194,9 +194,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const logScrollRef = useRef<ScrollView>(null);
 
   // ─── 座椅图自适应高度 ───
-  // 直接使用屏幕高度的70%计算座椅图片的scale，避免依赖容器布局
+  // 使用屏幕高度的60%计算座椅图片的scale，保证图片足够大且标签不会被挤开
   const SCREEN_H = Dimensions.get('window').height;
-  const SEAT_AREA_H = SCREEN_H * 0.7;
+  const SEAT_AREA_H = SCREEN_H * 0.6;
   const BASE_H = 327;
   const seatScale = SEAT_AREA_H / BASE_H;
 
@@ -1075,17 +1075,23 @@ const styles = StyleSheet.create({
   leftLabels: {
     justifyContent: 'space-around',
     height: 360,
-    paddingRight: Spacing.md,
+    paddingRight: 0,
+    position: 'relative',
+    right: -40,
+    zIndex: 1,
   },
   rightLabels: {
     justifyContent: 'space-around',
     height: 260,
-    paddingLeft: Spacing.md,
+    paddingLeft: 0,
+    position: 'relative',
+    left: -40,
+    zIndex: 1,
   },
   seatContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: 0,
   },
   // ─── 右侧面板 ───
   rightPanel: {

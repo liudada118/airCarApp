@@ -74,17 +74,6 @@ const CustomAirbagLabel: React.FC<CustomAirbagLabelProps> = ({
           {countText}
         </Text>
       )}
-      {/* 连接线 */}
-      <View
-        style={[
-          styles.line,
-          {
-            backgroundColor: isActive
-              ? Colors.primary
-              : 'rgba(150, 150, 170, 0.4)',
-          },
-        ]}
-      />
     </View>
   );
 };
@@ -131,10 +120,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
     minWidth: 20,
     textAlign: 'center',
-  },
-  line: {
-    width: 60,
-    height: 2,
   },
 });
 
