@@ -848,12 +848,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       }
     };
 
-    if (seatStatus === 'seated') {
-      // 入座：启动每60秒一次的定时器
+    if (seatStatus === 'seated' && adaptiveEnabled) {
+      // 入座且自适应开启：启动每60秒一次的定时器
       if (seatedInflateTimerRef.current) return; // 已在运行，不重复启动
       seatedInflateCountRef.current = 0; // 重置计数
 
       const doInflate = () => {
+        // 检查自适应是否仍然开启（使用 ref 获取最新值，避免闭包陈旧）
+        if (!adaptiveEnabledRef.current) {
+          clearAllTimers();
+          console.log('[SeatedInflate] 自适应已关闭，停止定时充气');
+          return;
+        }
+
         if (seatedInflateCountRef.current >= 3) {
           // 已达最大次数，停止定时器
           clearAllTimers();
@@ -890,20 +897,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
       // 第一次在入座后60秒触发
       seatedInflateTimerRef.current = setInterval(doInflate, 60000);
-      console.log('[SeatedInflate] 入座，启动定时充气（每60s一次，最多3次）');
+      console.log('[SeatedInflate] 入座且自适应开启，启动定时充气（每60s一次，最多3次）');
     } else {
-      // 离座：重置一切
+      // 离座 或 自适应关闭：重置一切
       clearAllTimers();
       seatedInflateCountRef.current = 0;
       // 清除 override 覆盖层
       SerialModule?.clearAirbagOverride?.().catch(() => {});
-      console.log('[SeatedInflate] 离座，重置定时充气并清除override');
+      console.log('[SeatedInflate] 离座或自适应关闭，重置定时充气并清除override');
     }
 
     return () => {
       clearAllTimers();
     };
-  }, [seatStatus]);
+  }, [seatStatus, adaptiveEnabled]);
 
   // 重置入座定时充气的函数（供外部调用，如手动调节气囊时）
   const resetSeatedInflate = useCallback(() => {
