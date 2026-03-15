@@ -821,6 +821,83 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const {seatStatus, algoSeatStatus, bodyShapeInfo, commandStates, rawCommand, livingStatus, bodyType, realtimeData} = algoState;
   const sensorData = sensorDataRef.current;
 
+  // ─── 入座定时充气逻辑（cushionFL + cushionFR，每分钟充气3s，最多3次，离座重置）───
+  const seatedInflateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const seatedInflateCountRef = useRef<number>(0);
+  const seatedInflateStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // 清理辅助函数
+    const clearAllTimers = () => {
+      if (seatedInflateTimerRef.current) {
+        clearInterval(seatedInflateTimerRef.current);
+        seatedInflateTimerRef.current = null;
+      }
+      if (seatedInflateStopTimerRef.current) {
+        clearTimeout(seatedInflateStopTimerRef.current);
+        seatedInflateStopTimerRef.current = null;
+      }
+    };
+
+    if (seatStatus === 'seated') {
+      // 入座：启动每60秒一次的定时器
+      if (seatedInflateTimerRef.current) return; // 已在运行，不重复启动
+      seatedInflateCountRef.current = 0; // 重置计数
+
+      const doInflate = () => {
+        if (seatedInflateCountRef.current >= 3) {
+          // 已达最大次数，停止定时器
+          clearAllTimers();
+          console.log('[SeatedInflate] 已完成3次充气，停止定时任务');
+          return;
+        }
+
+        const sm = NativeModules.SerialModule as SerialModuleType | undefined;
+        if (!sm?.sendAirbagCommand) {
+          console.warn('[SeatedInflate] sendAirbagCommand 不可用');
+          return;
+        }
+
+        seatedInflateCountRef.current += 1;
+        const count = seatedInflateCountRef.current;
+        console.log(`[SeatedInflate] 第${count}次充气开始 (cushionFL + cushionFR)`);
+
+        // 发送充气指令
+        sm.sendAirbagCommand('cushionFL', 'inflate').catch(e =>
+          console.warn('[SeatedInflate] cushionFL inflate error:', e?.message || e),
+        );
+        sm.sendAirbagCommand('cushionFR', 'inflate').catch(e =>
+          console.warn('[SeatedInflate] cushionFR inflate error:', e?.message || e),
+        );
+
+        // 3秒后发送停止（保压）指令
+        seatedInflateStopTimerRef.current = setTimeout(() => {
+          console.log(`[SeatedInflate] 第${count}次充气结束，发送stop`);
+          sm.sendAirbagCommand('cushionFL', 'stop').catch(e =>
+            console.warn('[SeatedInflate] cushionFL stop error:', e?.message || e),
+          );
+          sm.sendAirbagCommand('cushionFR', 'stop').catch(e =>
+            console.warn('[SeatedInflate] cushionFR stop error:', e?.message || e),
+          );
+          seatedInflateStopTimerRef.current = null;
+        }, 3000);
+      };
+
+      // 第一次在入座后60秒触发
+      seatedInflateTimerRef.current = setInterval(doInflate, 60000);
+      console.log('[SeatedInflate] 入座，启动定时充气（每60s一次，最多3次）');
+    } else {
+      // 离座：重置一切
+      clearAllTimers();
+      seatedInflateCountRef.current = 0;
+      console.log('[SeatedInflate] 离座，重置定时充气');
+    }
+
+    return () => {
+      clearAllTimers();
+    };
+  }, [seatStatus]);
+
   // ─── 渲染辅助 ──────────────────────────────────────────
 
   /** 体型概率条 */
