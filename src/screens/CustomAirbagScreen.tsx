@@ -192,6 +192,12 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const logIdRef = useRef(0);
   const logScrollRef = useRef<ScrollView>(null);
 
+  // ─── 座椅图自适应高度 ───
+  const [seatContainerHeight, setSeatContainerHeight] = useState(0);
+  // 基准高度 327（CustomSeatDiagram 中 H = 327 * scale），根据容器实际高度动态计算 scale
+  const BASE_H = 327;
+  const seatScale = seatContainerHeight > 0 ? seatContainerHeight / BASE_H : 1.15;
+
   // ─── 1秒锁定机制 ───
   const [isLocked, setIsLocked] = useState(false);
   const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -692,10 +698,17 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             </View>
 
             {/* 中间座椅图 */}
-            <View style={styles.seatContainer}>
+            <View
+              style={styles.seatContainer}
+              onLayout={e => {
+                const h = e.nativeEvent.layout.height;
+                if (h > 0 && Math.abs(h - seatContainerHeight) > 2) {
+                  setSeatContainerHeight(h);
+                }
+              }}>
               <CustomSeatDiagram
                 activeZone={selectedZone}
-                scale={1.15}
+                scale={seatScale}
                 values={airbagValues}
                 commandStates={commandStates}
               />
