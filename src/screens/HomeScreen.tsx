@@ -943,7 +943,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               <View style={styles.seatDiagramContainer}>
                 <SeatDiagram
                   activeZone={null}
-                  scale={0.85}
+                  scale={0.95}
                   commandStates={commandStates}
                 />
               </View>
@@ -1822,20 +1822,20 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FontSize.sm,
     color: 'rgba(142, 142, 160, 0.9)',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   sectionIcon: {
-    width: 13,
-    height: 13,
+    width: 15,
+    height: 15,
     tintColor: Colors.primary,
   },
   seatIcon: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
   },
   customizeLinkIcon: {
-    width: 12,
-    height: 12,
+    width: 14,
+    height: 14,
   },
   // ─── 座椅状态 ───
   seatStatusRow: {
@@ -1843,8 +1843,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   seatStatusCard: {
-    flex: 1,
-    height: 72,
+    width: 100,
+    height: 80,
     backgroundColor: 'rgba(60, 60, 67, 0.45)',
     borderRadius: BorderRadius.md,
     justifyContent: 'center',
@@ -2001,14 +2001,14 @@ const styles = StyleSheet.create({
   airbagStatusCard: {
     backgroundColor: 'rgba(41, 45, 50, 0.85)',
     borderRadius: BorderRadius.lg,
-    padding: Spacing.sm,
-    paddingBottom: Spacing.xs,
+    padding: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   airbagStatusText: {
-    fontSize: FontSize.xs,
+    fontSize: FontSize.sm,
     color: Colors.textWhite,
     fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: Spacing.xs,
   },
   seatDiagramContainer: {
     alignItems: 'center',
@@ -2017,7 +2017,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Colors.borderGray,
-    marginVertical: Spacing.xs,
+    marginVertical: Spacing.sm,
   },
   customizeLinkRow: {
     flexDirection: 'row',
@@ -2025,7 +2025,7 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   customizeLink: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.md,
     color: Colors.primary,
     fontWeight: '500',
   },
