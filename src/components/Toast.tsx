@@ -73,9 +73,16 @@ const Toast: React.FC<ToastProps> = ({
 }) => {
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  // 用 ref 保存 onHide 回调，避免内联函数引用变化导致 useEffect 反复重置 timer
+  const onHideRef = useRef(onHide);
+  onHideRef.current = onHide;
 
   useEffect(() => {
     if (visible) {
+      // 重置动画值
+      translateY.setValue(-100);
+      opacity.setValue(0);
+
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: 0,
@@ -102,13 +109,13 @@ const Toast: React.FC<ToastProps> = ({
             useNativeDriver: true,
           }),
         ]).start(() => {
-          onHide?.();
+          onHideRef.current?.();
         });
       }, duration);
 
       return () => clearTimeout(timer);
     }
-  }, [visible, duration, onHide, translateY, opacity]);
+  }, [visible, duration, translateY, opacity]);
 
   if (!visible) {
     return null;

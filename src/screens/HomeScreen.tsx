@@ -857,30 +857,38 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           return;
         }
 
-        const sm = NativeModules.SerialModule as SerialModuleType | undefined;
-        if (!sm?.sendAirbagCommand) {
-          console.warn('[SeatedInflate] sendAirbagCommand 不可用');
+        // 使用模块级 SerialModule 引用（与连接/断开逻辑一致）
+        if (!SerialModule?.sendAirbagCommand) {
+          console.warn('[SeatedInflate] sendAirbagCommand 不可用, SerialModule:', !!SerialModule);
           return;
         }
 
         seatedInflateCountRef.current += 1;
         const count = seatedInflateCountRef.current;
-        console.log(`[SeatedInflate] 第${count}次充气开始 (hipFirm)`);
+        console.log(`[SeatedInflate] 第${count}次充气开始 (hipFirm inflate)`);
 
         // 发送臀部气囊充气指令
-        sm.sendAirbagCommand('hipFirm', 'inflate').catch(e =>
-          console.warn('[SeatedInflate] hipFirm inflate error:', e?.message || e),
-        );
+        SerialModule.sendAirbagCommand('hipFirm', 'inflate')
+          .then(hex => {
+            console.log(`[SeatedInflate] 第${count}次 hipFirm inflate 发送成功, hex: ${hex}`);
+          })
+          .catch(e => {
+            console.warn(`[SeatedInflate] 第${count}次 hipFirm inflate 发送失败:`, e?.message || e);
+          });
 
         // 显示提示弹窗
         setSeatedInflateToast(true);
 
         // 3秒后发送停止（保压）指令
         seatedInflateStopTimerRef.current = setTimeout(() => {
-          console.log(`[SeatedInflate] 第${count}次充气结束，发送stop`);
-          sm.sendAirbagCommand('hipFirm', 'stop').catch(e =>
-            console.warn('[SeatedInflate] hipFirm stop error:', e?.message || e),
-          );
+          console.log(`[SeatedInflate] 第${count}次充气结束，发送 hipFirm stop`);
+          SerialModule?.sendAirbagCommand?.('hipFirm', 'stop')
+            ?.then(hex => {
+              console.log(`[SeatedInflate] 第${count}次 hipFirm stop 发送成功, hex: ${hex}`);
+            })
+            ?.catch(e => {
+              console.warn(`[SeatedInflate] 第${count}次 hipFirm stop 发送失败:`, e?.message || e);
+            });
           seatedInflateStopTimerRef.current = null;
         }, 3000);
       };
