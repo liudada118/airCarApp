@@ -232,7 +232,7 @@ class DataLoader:
             info = self.extract_person_info(fpath)
             if info is None:
                 if verbose:
-                    print(f"  跳过（无法解析文件名）: {fpath}")
+                    # print(f"  跳过（无法解析文件名）: {fpath}")
                 continue
             
             df = None
@@ -244,7 +244,7 @@ class DataLoader:
                     continue
             if df is None:
                 if verbose:
-                    print(f"  跳过（无法读取）: {fpath}")
+                    # print(f"  跳过（无法读取）: {fpath}")
                 continue
             
             file_rows = []
@@ -265,14 +265,14 @@ class DataLoader:
             if file_rows:
                 kept_rows, segments = self.filter_seated_frames(file_rows)
                 if verbose:
-                    print(f"  {info['person_name']}（{info['body_type_cn']}"
+                    # print(f"  {info['person_name']}（{info['body_type_cn']}"
                           f"{',' + str(int(info['weight_kg'])) + 'kg' if info['weight_kg'] else ''}"
                           f"）: {len(file_rows)} → {len(kept_rows)} 帧"
                           f"（{len(segments)} 个入座片段）")
                 all_rows.extend(kept_rows)
         
         if verbose:
-            print(f"\n总计加载 {len(all_rows)} 个样本")
+            # print(f"\n总计加载 {len(all_rows)} 个样本")
         return all_rows
     
     def load_single_frame(self, sensor_json: str) -> Optional[Dict]:

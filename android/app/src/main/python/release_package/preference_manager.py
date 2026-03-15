@@ -103,12 +103,12 @@ class PreferenceManager:
         # 从文件加载已有品味
         self._load_from_file()
 
-        print(f"[品味管理] 初始化完成 | 持久化文件: {self.preference_file}")
+        # print(f"[品味管理] 初始化完成 | 持久化文件: {self.preference_file}")
         if self.preferences:
             for shape, pref in self.preferences.items():
-                print(f"[品味管理] 已加载品味: {shape} (记录于 {pref.get('timestamp', '未知')})")
+                # print(f"[品味管理] 已加载品味: {shape} (记录于 {pref.get('timestamp', '未知')})")
         else:
-            print(f"[品味管理] 无已保存的品味数据")
+            # print(f"[品味管理] 无已保存的品味数据")
 
     def _load_config(self):
         """从配置文件加载品味相关参数"""
@@ -173,16 +173,16 @@ class PreferenceManager:
             old_shape = self.active_body_shape
             self.active_body_shape = None
             if old_shape is not None:
-                print(f"[品味管理] 体型已清除: {old_shape} → None")
+                # print(f"[品味管理] 体型已清除: {old_shape} → None")
         elif body_shape in self.BODY_SHAPES:
             old_shape = self.active_body_shape
             self.active_body_shape = body_shape
             if old_shape != body_shape:
                 has_pref = body_shape in self.preferences
-                print(f"[品味管理] 体型切换: {old_shape} → {body_shape} | "
+                # print(f"[品味管理] 体型切换: {old_shape} → {body_shape} | "
                       f"品味数据: {'已加载' if has_pref else '使用默认区间'}")
         else:
-            print(f"[品味管理] 警告: 未知体型 '{body_shape}'，忽略")
+            # print(f"[品味管理] 警告: 未知体型 '{body_shape}'，忽略")
 
     # ========================================
     # 鲁棒品味记录核心逻辑
@@ -302,7 +302,7 @@ class PreferenceManager:
                 original = clamped[key]
                 clamped[key] = max(lower, min(upper, original))
                 if clamped[key] != original:
-                    print(f"[品味管理] 截断: {key} {original:.4f} → {clamped[key]:.4f} "
+                    # print(f"[品味管理] 截断: {key} {original:.4f} → {clamped[key]:.4f} "
                           f"(置信区间 [{lower:.4f}, {upper:.4f}])")
         return clamped
 
@@ -363,7 +363,7 @@ class PreferenceManager:
             state['P'] = P_fused
 
             if abs(z - x_fused) > 0.01:
-                print(f"[品味管理] 卡尔曼融合: {key} 观测={z:.4f} → 融合={x_fused:.4f} "
+                # print(f"[品味管理] 卡尔曼融合: {key} 观测={z:.4f} → 融合={x_fused:.4f} "
                       f"(K={K:.3f}, R={R:.4f})")
 
             fused[key] = x_fused
@@ -453,18 +453,18 @@ class PreferenceManager:
             if self.robust_filter_mode == 'kalman':
                 self._init_kalman_state(expected_ratios)
 
-            print(f"[品味管理] 鲁棒品味记录 | 模式: {self.robust_filter_mode}")
-            print(f"  充放气操作: {airbag_ops}")
-            print(f"  基线中心: { {k: f'{v:.3f}' for k, v in baseline_centers.items()} }")
-            print(f"  预期比例: { {k: f'{v:.3f}' for k, v in expected_ratios.items()} }")
+            # print(f"[品味管理] 鲁棒品味记录 | 模式: {self.robust_filter_mode}")
+            # print(f"  充放气操作: {airbag_ops}")
+            # print(f"  基线中心: { {k: f'{v:.3f}' for k, v in baseline_centers.items()} }")
+            # print(f"  预期比例: { {k: f'{v:.3f}' for k, v in expected_ratios.items()} }")
             for key, (lo, hi) in self.recording_confidence_intervals.items():
-                print(f"  置信区间 {key}: [{lo:.3f}, {hi:.3f}]")
+                # print(f"  置信区间 {key}: [{lo:.3f}, {hi:.3f}]")
         else:
             self.recording_confidence_intervals = None
             self._kalman_state = None
-            print(f"[品味管理] 普通品味记录（无充放气信息，不过滤）")
+            # print(f"[品味管理] 普通品味记录（无充放气信息，不过滤）")
 
-        print(f"[品味管理] 开始记录品味 | 体型: {target_shape} | "
+        # print(f"[品味管理] 开始记录品味 | 体型: {target_shape} | "
               f"需采集 {self.record_sample_frames} 帧")
 
         return {
@@ -514,7 +514,7 @@ class PreferenceManager:
 
         # 每10帧打印一次进度
         if current_count % 10 == 0:
-            print(f"[品味管理] 记录进度: {current_count}/{self.record_sample_frames}")
+            # print(f"[品味管理] 记录进度: {current_count}/{self.record_sample_frames}")
 
         # 检查是否采集够帧数
         if current_count >= self.record_sample_frames:
@@ -625,10 +625,10 @@ class PreferenceManager:
                 'left_leg_ratio': self._kalman_state['left_leg_ratio']['x'],
                 'right_leg_ratio': self._kalman_state['right_leg_ratio']['x'],
             }
-            print(f"[品味管理] 卡尔曼最终收敛值:")
+            # print(f"[品味管理] 卡尔曼最终收敛值:")
             for key in ['lumbar_ratio', 'wing_ratio', 'left_leg_ratio', 'right_leg_ratio']:
                 state = self._kalman_state[key]
-                print(f"  {key}: {state['x']:.4f} (方差: {state['P']:.6f})")
+                # print(f"  {key}: {state['x']:.4f} (方差: {state['P']:.6f})")
         else:
             # 截断模式或普通模式：取平均值
             avg_ratios = {
@@ -665,14 +665,14 @@ class PreferenceManager:
         self.recording_confidence_intervals = None
         self._kalman_state = None
 
-        print(f"[品味管理] 品味记录完成 | 体型: {target_shape}")
-        print(f"  腰托比例: {avg_ratios['lumbar_ratio']:.3f} → "
+        # print(f"[品味管理] 品味记录完成 | 体型: {target_shape}")
+        # print(f"  腰托比例: {avg_ratios['lumbar_ratio']:.3f} → "
               f"区间 [{thresholds['lumbar']['deflate']:.3f}, {thresholds['lumbar']['inflate']:.3f}]")
-        print(f"  侧翼比例: {avg_ratios['wing_ratio']:.3f} → "
+        # print(f"  侧翼比例: {avg_ratios['wing_ratio']:.3f} → "
               f"区间 [{thresholds['side_wings']['inflate_left']:.3f}, {thresholds['side_wings']['deflate_left']:.3f}]")
-        print(f"  左腿托比例: {avg_ratios['left_leg_ratio']:.3f} → "
+        # print(f"  左腿托比例: {avg_ratios['left_leg_ratio']:.3f} → "
               f"区间 [{thresholds['leg_support']['left_inflate']:.3f}, {thresholds['leg_support']['left_deflate']:.3f}]")
-        print(f"  右腿托比例: {avg_ratios['right_leg_ratio']:.3f} → "
+        # print(f"  右腿托比例: {avg_ratios['right_leg_ratio']:.3f} → "
               f"区间 [{thresholds['leg_support']['right_inflate']:.3f}, {thresholds['leg_support']['right_deflate']:.3f}]")
 
         return {
@@ -808,7 +808,7 @@ class PreferenceManager:
             count = len(self.preferences)
             self.preferences.clear()
             self._save_to_file()
-            print(f"[品味管理] 已清除所有品味数据（共{count}条）")
+            # print(f"[品味管理] 已清除所有品味数据（共{count}条）")
             return {
                 'success': True,
                 'message': f'已清除所有品味数据（共{count}条）',
@@ -818,7 +818,7 @@ class PreferenceManager:
         if body_shape in self.preferences:
             del self.preferences[body_shape]
             self._save_to_file()
-            print(f"[品味管理] 已清除体型 '{body_shape}' 的品味数据")
+            # print(f"[品味管理] 已清除体型 '{body_shape}' 的品味数据")
             return {
                 'success': True,
                 'message': f'已清除体型 "{body_shape}" 的品味数据',
@@ -929,7 +929,7 @@ class PreferenceManager:
         self.recording_confidence_intervals = None
         self._kalman_state = None
 
-        print(f"[品味管理] 品味记录已取消 | 体型: {target}")
+        # print(f"[品味管理] 品味记录已取消 | 体型: {target}")
         return {
             'success': True,
             'message': f'品味记录已取消，体型: {target}',
@@ -945,7 +945,7 @@ class PreferenceManager:
         self.recording_airbag_ops = None
         self.recording_confidence_intervals = None
         self._kalman_state = None
-        print(f"[品味管理] 状态已重置（品味数据保留）")
+        # print(f"[品味管理] 状态已重置（品味数据保留）")
 
     # ========================================
     # 持久化
@@ -960,9 +960,9 @@ class PreferenceManager:
             }
             with open(self.preference_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            print(f"[品味管理] 品味数据已保存到 {self.preference_file}")
+            # print(f"[品味管理] 品味数据已保存到 {self.preference_file}")
         except Exception as e:
-            print(f"[品味管理] 保存品味数据失败: {e}")
+            # print(f"[品味管理] 保存品味数据失败: {e}")
 
     def _load_from_file(self):
         """从JSON文件加载品味数据"""
@@ -975,8 +975,8 @@ class PreferenceManager:
 
             if 'preferences' in data:
                 self.preferences = data['preferences']
-                print(f"[品味管理] 从 {self.preference_file} 加载了 {len(self.preferences)} 条品味数据")
+                # print(f"[品味管理] 从 {self.preference_file} 加载了 {len(self.preferences)} 条品味数据")
             else:
-                print(f"[品味管理] 品味文件格式不正确，跳过加载")
+                # print(f"[品味管理] 品味文件格式不正确，跳过加载")
         except Exception as e:
-            print(f"[品味管理] 加载品味数据失败: {e}")
+            # print(f"[品味管理] 加载品味数据失败: {e}")

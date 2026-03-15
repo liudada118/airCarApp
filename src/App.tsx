@@ -170,7 +170,7 @@ const App: React.FC = () => {
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* HomeScreen 始终挂载，通过 display 控制显隐，避免 3D 模型重新加载 */}
+        {/* HomeScreen 始终挂载，通过 opacity+position 控制显隐，避免 GL 上下文被销毁 */}
         <View
           style={[styles.screenContainer, !isHome && styles.hidden]}
           pointerEvents={isHome ? 'auto' : 'none'}
@@ -219,7 +219,12 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   hidden: {
-    display: 'none',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
   },
 });
 

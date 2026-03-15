@@ -383,25 +383,25 @@ class ClassificationVisualizer:
         """
         paths = []
         
-        print("  生成模型对比图...")
+        # print("  生成模型对比图...")
         paths.append(self.plot_model_comparison(eval_summary))
         
-        print("  生成混淆矩阵...")
+        # print("  生成混淆矩阵...")
         paths.append(self.plot_confusion_matrices(eval_results))
         
-        print("  生成PCA分类结果图...")
+        # print("  生成PCA分类结果图...")
         paths.append(self.plot_pca_classification(X, y_true, groups, best_model_name))
         
-        print("  生成t-SNE分类结果图...")
+        # print("  生成t-SNE分类结果图...")
         paths.append(self.plot_tsne_classification(X, y_true, groups, best_model_name))
         
         # 投票结果和概率热力图
         if best_model_name in eval_results and 'person_results' in eval_results[best_model_name]:
-            print("  生成投票结果图...")
+            # print("  生成投票结果图...")
             paths.append(self.plot_voting_results(
                 eval_results[best_model_name], feature_df, best_model_name))
             
-            print("  生成概率热力图...")
+            # print("  生成概率热力图...")
             paths.append(self.plot_probability_heatmap(
                 eval_results[best_model_name], feature_df, best_model_name))
         

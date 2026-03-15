@@ -166,11 +166,11 @@ def process_csv(input_path: str, output_path: str, threshold: int = 20, min_size
         threshold: 压力阈值
         min_size: 最小连通区域大小
     """
-    print(f"读取文件: {input_path}")
+    # print(f"读取文件: {input_path}")
     df = pd.read_csv(input_path)
 
-    print(f"总行数: {len(df)}")
-    print(f"列名: {list(df.columns)}")
+    # print(f"总行数: {len(df)}")
+    # print(f"列名: {list(df.columns)}")
 
     # 原始数据列
     cushion_filtered_sums = []
@@ -233,10 +233,10 @@ def process_csv(input_path: str, output_path: str, threshold: int = 20, min_size
             backrest_corrected_filtered_sums.append(backrest_corrected_filtered_sum)
 
             if (idx + 1) % 100 == 0:
-                print(f"处理进度: {idx + 1}/{len(df)}")
+                # print(f"处理进度: {idx + 1}/{len(df)}")
 
         except Exception as e:
-            print(f"第 {idx} 行处理失败: {e}")
+            # print(f"第 {idx} 行处理失败: {e}")
             # 原始数据
             cushion_original_sums.append(0.0)
             backrest_original_sums.append(0.0)
@@ -264,20 +264,20 @@ def process_csv(input_path: str, output_path: str, threshold: int = 20, min_size
 
     # 保存
     df.to_csv(output_path, index=False, encoding='utf-8-sig')
-    print(f"\n处理完成，已保存到: {output_path}")
+    # print(f"\n处理完成，已保存到: {output_path}")
 
     # 显示统计信息
-    print(f"\n========== 原始数据统计 ==========")
-    print(f"  坐垫原始 sum: min={min(cushion_original_sums):.0f}, max={max(cushion_original_sums):.0f}, avg={np.mean(cushion_original_sums):.0f}")
-    print(f"  坐垫滤波 sum: min={min(cushion_filtered_sums):.0f}, max={max(cushion_filtered_sums):.0f}, avg={np.mean(cushion_filtered_sums):.0f}")
-    print(f"  靠背原始 sum: min={min(backrest_original_sums):.0f}, max={max(backrest_original_sums):.0f}, avg={np.mean(backrest_original_sums):.0f}")
-    print(f"  靠背滤波 sum: min={min(backrest_filtered_sums):.0f}, max={max(backrest_filtered_sums):.0f}, avg={np.mean(backrest_filtered_sums):.0f}")
+    # print(f"\n========== 原始数据统计 ==========")
+    # print(f"  坐垫原始 sum: min={min(cushion_original_sums):.0f}, max={max(cushion_original_sums):.0f}, avg={np.mean(cushion_original_sums):.0f}")
+    # print(f"  坐垫滤波 sum: min={min(cushion_filtered_sums):.0f}, max={max(cushion_filtered_sums):.0f}, avg={np.mean(cushion_filtered_sums):.0f}")
+    # print(f"  靠背原始 sum: min={min(backrest_original_sums):.0f}, max={max(backrest_original_sums):.0f}, avg={np.mean(backrest_original_sums):.0f}")
+    # print(f"  靠背滤波 sum: min={min(backrest_filtered_sums):.0f}, max={max(backrest_filtered_sums):.0f}, avg={np.mean(backrest_filtered_sums):.0f}")
 
-    print(f"\n========== 矫正后数据统计 ==========")
-    print(f"  坐垫原始 sum: min={min(cushion_corrected_original_sums):.0f}, max={max(cushion_corrected_original_sums):.0f}, avg={np.mean(cushion_corrected_original_sums):.0f}")
-    print(f"  坐垫滤波 sum: min={min(cushion_corrected_filtered_sums):.0f}, max={max(cushion_corrected_filtered_sums):.0f}, avg={np.mean(cushion_corrected_filtered_sums):.0f}")
-    print(f"  靠背原始 sum: min={min(backrest_corrected_original_sums):.0f}, max={max(backrest_corrected_original_sums):.0f}, avg={np.mean(backrest_corrected_original_sums):.0f}")
-    print(f"  靠背滤波 sum: min={min(backrest_corrected_filtered_sums):.0f}, max={max(backrest_corrected_filtered_sums):.0f}, avg={np.mean(backrest_corrected_filtered_sums):.0f}")
+    # print(f"\n========== 矫正后数据统计 ==========")
+    # print(f"  坐垫原始 sum: min={min(cushion_corrected_original_sums):.0f}, max={max(cushion_corrected_original_sums):.0f}, avg={np.mean(cushion_corrected_original_sums):.0f}")
+    # print(f"  坐垫滤波 sum: min={min(cushion_corrected_filtered_sums):.0f}, max={max(cushion_corrected_filtered_sums):.0f}, avg={np.mean(cushion_corrected_filtered_sums):.0f}")
+    # print(f"  靠背原始 sum: min={min(backrest_corrected_original_sums):.0f}, max={max(backrest_corrected_original_sums):.0f}, avg={np.mean(backrest_corrected_original_sums):.0f}")
+    # print(f"  靠背滤波 sum: min={min(backrest_corrected_filtered_sums):.0f}, max={max(backrest_corrected_filtered_sums):.0f}, avg={np.mean(backrest_corrected_filtered_sums):.0f}")
 
 
 def process_directory(input_dir: str, output_dir: str = None, threshold: int = 20, min_size: int = 6):
@@ -304,15 +304,15 @@ def process_directory(input_dir: str, output_dir: str = None, threshold: int = 2
     csv_files = [f for f in csv_files if not f.endswith("_with_filtered_sum.csv")]
 
     if not csv_files:
-        print(f"目录 {input_dir} 中未找到 CSV 文件")
+        # print(f"目录 {input_dir} 中未找到 CSV 文件")
         return
 
-    print(f"\n{'='*60}")
-    print(f"批量处理模式")
-    print(f"输入目录: {input_dir}")
-    print(f"输出目录: {output_dir}")
-    print(f"找到 {len(csv_files)} 个 CSV 文件")
-    print(f"{'='*60}\n")
+    # print(f"\n{'='*60}")
+    # print(f"批量处理模式")
+    # print(f"输入目录: {input_dir}")
+    # print(f"输出目录: {output_dir}")
+    # print(f"找到 {len(csv_files)} 个 CSV 文件")
+    # print(f"{'='*60}\n")
 
     success_count = 0
     fail_count = 0
@@ -322,21 +322,21 @@ def process_directory(input_dir: str, output_dir: str = None, threshold: int = 2
         name_without_ext = os.path.splitext(filename)[0]
         output_path = os.path.join(output_dir, f"{name_without_ext}_with_filtered_sum.csv")
 
-        print(f"\n[{i}/{len(csv_files)}] 处理: {filename}")
-        print("-" * 40)
+        # print(f"\n[{i}/{len(csv_files)}] 处理: {filename}")
+        # print("-" * 40)
 
         try:
             process_csv(input_path, output_path, threshold, min_size)
             success_count += 1
         except Exception as e:
-            print(f"处理失败: {e}")
+            # print(f"处理失败: {e}")
             fail_count += 1
 
-    print(f"\n{'='*60}")
-    print(f"批量处理完成")
-    print(f"  成功: {success_count} 个")
-    print(f"  失败: {fail_count} 个")
-    print(f"{'='*60}")
+    # print(f"\n{'='*60}")
+    # print(f"批量处理完成")
+    # print(f"  成功: {success_count} 个")
+    # print(f"  失败: {fail_count} 个")
+    # print(f"{'='*60}")
 
 
 if __name__ == "__main__":
@@ -364,17 +364,17 @@ if __name__ == "__main__":
             output_path = f"{name_without_ext}_with_filtered_sum.csv"
             process_csv(input_path, output_path, THRESHOLD, MIN_SIZE)
         else:
-            print(f"路径不存在: {input_path}")
+            # print(f"路径不存在: {input_path}")
             sys.exit(1)
     else:
         # 交互式选择模式
-        print("="*60)
-        print("座椅压力数据处理工具（支持分压矫正）")
-        print("="*60)
-        print("\n选择处理模式:")
-        print("  1. 处理单个 CSV 文件")
-        print("  2. 批量处理目录下所有 CSV 文件")
-        print()
+        # print("="*60)
+        # print("座椅压力数据处理工具（支持分压矫正）")
+        # print("="*60)
+        # print("\n选择处理模式:")
+        # print("  1. 处理单个 CSV 文件")
+        # print("  2. 批量处理目录下所有 CSV 文件")
+        # print()
 
         choice = input("请输入选项 (1/2，默认2): ").strip() or "2"
 
@@ -382,11 +382,11 @@ if __name__ == "__main__":
             # 单文件模式
             input_path = input(f"请输入 CSV 文件路径: ").strip()
             if not input_path:
-                print("未输入文件路径，退出")
+                # print("未输入文件路径，退出")
                 sys.exit(1)
 
             if not os.path.isfile(input_path):
-                print(f"文件不存在: {input_path}")
+                # print(f"文件不存在: {input_path}")
                 sys.exit(1)
 
             name_without_ext = os.path.splitext(input_path)[0]
@@ -398,7 +398,7 @@ if __name__ == "__main__":
             input_dir = input(f"请输入目录路径 (默认: {default_dir}): ").strip() or default_dir
 
             if not os.path.isdir(input_dir):
-                print(f"目录不存在: {input_dir}")
+                # print(f"目录不存在: {input_dir}")
                 sys.exit(1)
 
             process_directory(input_dir, None, THRESHOLD, MIN_SIZE)
