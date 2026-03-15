@@ -1294,19 +1294,19 @@ class IntegratedSeatSystem:
             left_inflate_threshold = self.config.get('side_wings.left_right_ratio_inflate_left', 0.7)
             left_deflate_threshold = self.config.get('side_wings.left_right_ratio_deflate_left', 1.3)
 
-        # 判断动作（新逻辑）
+        # 判断动作
         if wing_ratio > left_deflate_threshold:
-            # 左侧压力占比大（> 1.3）：左侧充气，右侧放气
+            # 左侧压力占比大：左侧充气，右侧放气
             left_action = 'INFLATE'
             right_action = 'DEFLATE'
         elif wing_ratio < left_inflate_threshold:
-            # 右侧压力占比大（< 0.7）：右侧充气，左侧放气
+            # 右侧压力占比大：右侧充气，左侧放气
             left_action = 'DEFLATE'
             right_action = 'INFLATE'
         else:
-            # 在合理区间（0.7 ~ 1.3）：左右都放气
-            left_action = 'DEFLATE'
-            right_action = 'DEFLATE'
+            # 在合理区间：左右都保持
+            left_action = 'HOLD'
+            right_action = 'HOLD'
 
         # 腿托数据（基于重心划分+前3后3比方案）
         front3 = regions['cushion_front3']
@@ -1489,7 +1489,7 @@ class IntegratedSeatSystem:
         逻辑说明：
         - 左侧压力占比大：左侧充气，右侧放气
         - 右侧压力占比大：右侧充气，左侧放气
-        - 在合理区间：左右都放气
+        - 在合理区间：左右都保持（保留当前支撑力）
 
         支持品味区间覆盖：如果当前体型有品味数据，使用品味区间替代默认阈值
         """
@@ -1523,9 +1523,9 @@ class IntegratedSeatSystem:
             left_action = ControlAction.DEFLATE
             right_action = ControlAction.INFLATE
         else:
-            # 在合理区间：左右都放气
-            left_action = ControlAction.DEFLATE
-            right_action = ControlAction.DEFLATE
+            # 在合理区间：左右都保持
+            left_action = ControlAction.HOLD
+            right_action = ControlAction.HOLD
 
         return left_action, right_action
 
@@ -1736,7 +1736,14 @@ class IntegratedSeatSystem:
         return modified_commands
 
     def _generate_protocol_frame(self, commands: Dict[int, int]) -> list:
-        """生成55字节协议帧（返回10进制数组）"""
+        """生成55字节协议帧（返回10进制数组）
+        
+        安全保护：按摩气囊（11-24）始终强制保持状态，
+        不管任何模式或指令来源，都不会对按摩气囊发送充放气指令。
+        """
+        # 按摩气囊保护集合（靠背按摩11-18 + 坐垫按摩19-24）
+        massage_airbags = set(self.backrest_massage_airbags + self.cushion_massage_airbags)
+        
         frame = []
 
         # 帧头
@@ -1745,8 +1752,12 @@ class IntegratedSeatSystem:
         # 24个气囊 × 2字节
         for airbag_id in range(1, 25):
             frame.append(airbag_id)
-            gear = commands.get(airbag_id, self.gear_stop)
-            frame.append(gear)
+            if airbag_id in massage_airbags:
+                # 按摩气囊强制保持，忽略任何指令
+                frame.append(self.gear_stop)
+            else:
+                gear = commands.get(airbag_id, self.gear_stop)
+                frame.append(gear)
 
         # 工作模式
         frame.append(self.mode_auto)

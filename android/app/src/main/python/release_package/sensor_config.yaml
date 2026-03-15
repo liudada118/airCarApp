@@ -15,15 +15,15 @@ control:
 
 lumbar:
   back_total_threshold: 15.0  # 背部总压力阈值，低于此值不调节腰托
-  upper_lower_ratio_inflate: 0.9  # 上部/下部压力比 > 1.5 时充气腰托
-  upper_lower_ratio_deflate: 0.35  # 上部/下部压力比 < 0.7 时放气腰托
+  upper_lower_ratio_inflate: 0.85 # 上部/下部压力比 > 1.5 时充气腰托
+  upper_lower_ratio_deflate: 0.5   # 上部/下部压力比 < 0.7 时放气腰托
   airbags:  # 腰托气囊编号
   - 5
   - 6
 
 side_wings:
-  left_right_ratio_inflate_left: 0.8  # 左/右压力比 < 0.5 时左侧放气、右侧充气
-  left_right_ratio_deflate_left: 1.3 # 左/右压力比 > 2 时左侧充气、右侧放气
+  left_right_ratio_inflate_left: 0.9  # 左/右压力比 < 0.5 时左侧放气、右侧充气
+  left_right_ratio_deflate_left: 1.35 # 左/右压力比 > 2 时左侧充气、右侧放气
   left_airbags:  # 左侧翼气囊编号
   - 2
   - 4
