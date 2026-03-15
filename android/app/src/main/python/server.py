@@ -199,10 +199,9 @@ def set_config(key_path, value_json):
     """
     try:
         value = json.loads(str(value_json))
-        _system.config.set(str(key_path), value)
-        _system.config.save_to_file()
-        # 同步运行时变量（针对常用阈值）
-        _sync_runtime(str(key_path), value)
+        # 使用 set_param 统一更新：同时更新 config + 运行时变量 + 持久化
+        # set_param 内部会自动处理参数映射、嵌套属性更新和文件保存
+        _system.set_param(str(key_path), value, auto_save=True)
         return json.dumps({"ok": True}, ensure_ascii=False)
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
@@ -225,19 +224,6 @@ def reset_config():
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-def _sync_runtime(key_path, value):
-    """将配置变更同步到 _system 运行时变量（热更新）"""
-    _map = {
-        'integrated_system.cushion_sum_threshold': 'cushion_sum_threshold',
-        'integrated_system.backrest_sum_threshold': 'backrest_sum_threshold',
-        'integrated_system.off_seat_frames_threshold': 'off_seat_frames_threshold',
-        'integrated_system.reset_frames_threshold': 'reset_frames_threshold',
-        'integrated_system.reset_deflate_frames': 'reset_deflate_frames',
-        'integrated_system.use_filtered_sum': 'use_filtered_sum',
-    }
-    attr = _map.get(key_path)
-    if attr and hasattr(_system, attr):
-        setattr(_system, attr, value)
 
 
 # ─── 品味记录接口（供 Chaquopy / Native 桥接调用） ─────────────
