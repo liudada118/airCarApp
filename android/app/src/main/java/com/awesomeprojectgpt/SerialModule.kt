@@ -80,6 +80,13 @@ class SerialModule(
     @Volatile private var lastAutoWriteHex: String? = null
     private val logTag = "SerialModule"
 
+    // ─── 气囊覆盖层（overlay）：定时充气指令与算法指令合并 ───
+    private val overrideLock = Any()
+    /** 气囊ID → 档位，会在 autoWrite 发送前合并到算法帧中 */
+    @Volatile private var airbagOverrideMap: Map<Int, Int> = emptyMap()
+    /** override 过期时间戳（ms） */
+    @Volatile private var airbagOverrideExpireAt: Long = 0
+
     /** autoWrite 连续写入失败计数器 */
     private val autoWriteFailCount = AtomicInteger(0)
     /** autoWrite 连续失败阈值，超过后通知 JS 层连接异常 */
@@ -442,6 +449,98 @@ class SerialModule(
             frame.add(b)
         }
         return ByteArray(frame.size) { frame[it].toByte() }
+    }
+
+    /**
+     * JS 端调用：设置气囊覆盖层，在指定时间内将某个 zone 的指令合并到算法帧中发送
+     * 用于定时充气等场景，避免与算法指令互相覆盖
+     *
+     * @param zone    气囊区域名（如 "hipFirm"）
+     * @param action  动作（"inflate" / "deflate" / "stop"）
+     * @param durationMs 持续时间（毫秒），过期后自动清除 override
+     */
+    @ReactMethod
+    fun setAirbagOverride(zone: String, action: String, durationMs: Int, promise: Promise) {
+        try {
+            val airbagIds = zoneToAirbagIds[zone]
+            if (airbagIds == null) {
+                promise.reject("INVALID_ZONE", "Unknown airbag zone: $zone")
+                return
+            }
+            val gear = when (action) {
+                "inflate" -> GEAR_INFLATE
+                "deflate" -> GEAR_DEFLATE
+                "stop"    -> GEAR_STOP
+                else -> {
+                    promise.reject("INVALID_ACTION", "Unknown action: $action")
+                    return
+                }
+            }
+            synchronized(overrideLock) {
+                val map = airbagOverrideMap.toMutableMap()
+                for (id in airbagIds) {
+                    map[id] = gear
+                }
+                airbagOverrideMap = map
+                airbagOverrideExpireAt = System.currentTimeMillis() + durationMs
+            }
+            Log.i(logTag, "[AirbagOverride] SET zone=$zone action=$action ids=$airbagIds gear=0x${Integer.toHexString(gear)} duration=${durationMs}ms")
+            promise.resolve("override_set")
+        } catch (e: Exception) {
+            Log.e(logTag, "[AirbagOverride] Error", e)
+            promise.reject("OVERRIDE_ERROR", e.message ?: "setAirbagOverride failed")
+        }
+    }
+
+    /**
+     * JS 端调用：清除气囊覆盖层
+     */
+    @ReactMethod
+    fun clearAirbagOverride(promise: Promise) {
+        synchronized(overrideLock) {
+            airbagOverrideMap = emptyMap()
+            airbagOverrideExpireAt = 0
+        }
+        Log.i(logTag, "[AirbagOverride] CLEARED")
+        promise.resolve("override_cleared")
+    }
+
+    /**
+     * 将 override 合并到算法帧中
+     * 帧结构：[0x1F, id1, gear1, id2, gear2, ..., id24, gear24, mode, direction, tail...]
+     * 每个气囊占 2 字节（id + gear），偏移 = 1 + (airbagId-1)*2 + 1 = airbagId*2
+     */
+    private fun applyOverrideToFrame(frame: ByteArray): ByteArray {
+        val overrides: Map<Int, Int>
+        synchronized(overrideLock) {
+            // 检查过期
+            if (System.currentTimeMillis() > airbagOverrideExpireAt) {
+                if (airbagOverrideMap.isNotEmpty()) {
+                    Log.i(logTag, "[AirbagOverride] Expired, clearing")
+                    airbagOverrideMap = emptyMap()
+                    airbagOverrideExpireAt = 0
+                }
+                return frame
+            }
+            overrides = airbagOverrideMap
+        }
+        if (overrides.isEmpty() || frame.size < 55) return frame
+
+        // 复制一份避免修改原始数据
+        val merged = frame.copyOf()
+        for ((airbagId, gear) in overrides) {
+            if (airbagId in 1..24) {
+                // 帧结构：byte[0]=header, byte[1]=id1, byte[2]=gear1, byte[3]=id2, byte[4]=gear2...
+                // 气囊ID n 的 gear 在偏移 = 1 + (n-1)*2 + 1 = n*2
+                val gearOffset = airbagId * 2
+                if (gearOffset < merged.size - 6) { // 确保不越界
+                    merged[gearOffset] = gear.toByte()
+                }
+            }
+        }
+        val hex = merged.joinToString("") { "%02X".format(it) }
+        Log.d(logTag, "[AirbagOverride] Merged frame: $hex")
+        return merged
     }
 
     @ReactMethod
@@ -886,9 +985,11 @@ class SerialModule(
                     // 优先使用二进制 ByteArray 发送
                     val bytes = autoWriteBytes
                     if (bytes != null && bytes.isNotEmpty()) {
-                        val hex = autoWriteText ?: bytes.joinToString("") { "%02X".format(it) }
-                        Log.i(logTag, "[SerialWrite] HEX: $hex (${bytes.size} bytes)")
-                        when (val result = manager.writeBytes(bytes)) {
+                        // 合并 override 覆盖层（如定时充气）到算法帧
+                        val finalBytes = applyOverrideToFrame(bytes)
+                        val hex = finalBytes.joinToString("") { "%02X".format(it) }
+                        Log.i(logTag, "[SerialWrite] HEX: $hex (${finalBytes.size} bytes)")
+                        when (val result = manager.writeBytes(finalBytes)) {
                             is SerialManager.OpenResult.Fail -> {
                                 Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
                                 handleAutoWriteFailure()
@@ -902,7 +1003,9 @@ class SerialModule(
                     val payload = autoWriteText
                     if (payload.isNullOrEmpty()) return@scheduleAtFixedRate
                     val fallbackBytes = hexStringToByteArray(payload)
-                    when (val result = manager.writeBytes(fallbackBytes)) {
+                    // 合并 override 覆盖层
+                    val finalFallbackBytes = applyOverrideToFrame(fallbackBytes)
+                    when (val result = manager.writeBytes(finalFallbackBytes)) {
                         is SerialManager.OpenResult.Fail -> {
                             Log.e(logTag, "auto write failed: ${result.code} ${result.message}")
                             handleAutoWriteFailure()

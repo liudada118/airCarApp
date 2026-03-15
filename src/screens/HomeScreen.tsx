@@ -79,6 +79,10 @@ interface SerialModuleType {
   setAlgoMode?: (enabled: boolean) => void;
   sendAirbagCommand?: (zone: string, action: string) => Promise<string>;
   sendStopAllFrame?: () => Promise<string>;
+  /** 设置气囊覆盖层，在指定时间内将某个 zone 的指令合并到算法帧中发送 */
+  setAirbagOverride?: (zone: string, action: string, durationMs: number) => Promise<string>;
+  /** 清除气囊覆盖层 */
+  clearAirbagOverride?: () => Promise<string>;
 }
 
 interface SerialResultEvent {
@@ -857,40 +861,31 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           return;
         }
 
-        // 使用模块级 SerialModule 引用（与连接/断开逻辑一致）
-        if (!SerialModule?.sendAirbagCommand) {
-          console.warn('[SeatedInflate] sendAirbagCommand 不可用, SerialModule:', !!SerialModule);
+        // 使用模块级 SerialModule 引用
+        if (!SerialModule?.setAirbagOverride) {
+          console.warn('[SeatedInflate] setAirbagOverride 不可用, SerialModule:', !!SerialModule);
           return;
         }
 
         seatedInflateCountRef.current += 1;
         const count = seatedInflateCountRef.current;
-        console.log(`[SeatedInflate] 第${count}次充气开始 (hipFirm inflate)`);
+        console.log(`[SeatedInflate] 第${count}次充气开始 (hipFirm override inflate 3000ms)`);
 
-        // 发送臀部气囊充气指令
-        SerialModule.sendAirbagCommand('hipFirm', 'inflate')
-          .then(hex => {
-            console.log(`[SeatedInflate] 第${count}次 hipFirm inflate 发送成功, hex: ${hex}`);
+        // 使用 setAirbagOverride 将 hipFirm 充气指令合并到算法帧中，持续3秒
+        // 这样算法帧中其他气囊的指令不会被覆盖，hipFirm 会被强制设为充气
+        SerialModule.setAirbagOverride('hipFirm', 'inflate', 3000)
+          .then(() => {
+            console.log(`[SeatedInflate] 第${count}次 hipFirm override 设置成功，将3秒后自动过期`);
           })
           .catch(e => {
-            console.warn(`[SeatedInflate] 第${count}次 hipFirm inflate 发送失败:`, e?.message || e);
+            console.warn(`[SeatedInflate] 第${count}次 hipFirm override 设置失败:`, e?.message || e);
           });
 
         // 显示提示弹窗
         setSeatedInflateToast(true);
 
-        // 3秒后发送停止（保压）指令
-        seatedInflateStopTimerRef.current = setTimeout(() => {
-          console.log(`[SeatedInflate] 第${count}次充气结束，发送 hipFirm stop`);
-          SerialModule?.sendAirbagCommand?.('hipFirm', 'stop')
-            ?.then(hex => {
-              console.log(`[SeatedInflate] 第${count}次 hipFirm stop 发送成功, hex: ${hex}`);
-            })
-            ?.catch(e => {
-              console.warn(`[SeatedInflate] 第${count}次 hipFirm stop 发送失败:`, e?.message || e);
-            });
-          seatedInflateStopTimerRef.current = null;
-        }, 3000);
+        // 3秒后无需手动发送 stop，Kotlin 层 override 会自动过期，算法帧恢复原始状态
+        // 不再需要 seatedInflateStopTimerRef
       };
 
       // 第一次在入座后60秒触发
@@ -900,7 +895,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       // 离座：重置一切
       clearAllTimers();
       seatedInflateCountRef.current = 0;
-      console.log('[SeatedInflate] 离座，重置定时充气');
+      // 清除 override 覆盖层
+      SerialModule?.clearAirbagOverride?.().catch(() => {});
+      console.log('[SeatedInflate] 离座，重置定时充气并清除override');
     }
 
     return () => {
@@ -918,8 +915,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       clearTimeout(seatedInflateStopTimerRef.current);
       seatedInflateStopTimerRef.current = null;
     }
+    // 清除 override 覆盖层，避免手动调节时定时充气仍在生效
+    SerialModule?.clearAirbagOverride?.().catch(() => {});
     seatedInflateCountRef.current = 0;
-    console.log('[SeatedInflate] 手动调节气囊，重置定时充气');
+    console.log('[SeatedInflate] 手动调节气囊，重置定时充气并清除override');
   }, []);
 
   // 注册重置函数供外部调用
