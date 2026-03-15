@@ -728,6 +728,17 @@ class IntegratedSeatSystem:
         Args:
             trigger_source: 触发来源描述（用于日志）
         """
+        # 详细调试日志：打印每个条件的状态
+        _auto_cfg = self.auto_trigger_body_shape
+        _cls_exists = self.body_shape_classifier is not None
+        _already_triggered = self._body_shape_auto_triggered
+        _cls_state = self.body_shape_classifier.state.name if _cls_exists else 'None'
+        _model_loaded = (self.body_shape_classifier.model is not None) if _cls_exists else False
+        print(f"[集成系统] _try_auto_trigger({trigger_source}): "
+              f"auto_cfg={_auto_cfg}, cls_exists={_cls_exists}, "
+              f"already_triggered={_already_triggered}, cls_state={_cls_state}, "
+              f"model_loaded={_model_loaded}")
+
         if (self.auto_trigger_body_shape
                 and self.body_shape_classifier is not None
                 and not self._body_shape_auto_triggered
@@ -735,7 +746,21 @@ class IntegratedSeatSystem:
             result = self.body_shape_classifier.trigger()
             if result.get('success'):
                 self._body_shape_auto_triggered = True
-                print(f"[集成系统] 自动触发体型三分类（{trigger_source}，帧{self.frame_count}）")
+                print(f"[集成系统] 自动触发体型三分类成功（{trigger_source}，帧{self.frame_count}）")
+            else:
+                print(f"[集成系统] 自动触发体型三分类失败（{trigger_source}）: {result.get('message', 'unknown')}")
+        else:
+            # 打印哪个条件不满足
+            reasons = []
+            if not _auto_cfg:
+                reasons.append('auto_trigger配置关闭')
+            if not _cls_exists:
+                reasons.append('分类器未初始化')
+            if _already_triggered:
+                reasons.append('本次入座已触发过')
+            if _cls_exists and self.body_shape_classifier.state != ClassifierState.IDLE:
+                reasons.append(f'分类器状态不是IDLE(当前{_cls_state})')
+            print(f"[集成系统] 自动触发跳过（{trigger_source}）: {', '.join(reasons)}")
 
     def _reset_body_shape_auto_trigger(self):
         """重置自动触发标志（离座时调用，下次入座可重新触发）"""
