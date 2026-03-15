@@ -9,6 +9,7 @@ import {
   NativeEventEmitter,
   ScrollView,
   Animated,
+  Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
@@ -193,10 +194,11 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const logScrollRef = useRef<ScrollView>(null);
 
   // ─── 座椅图自适应高度 ───
-  const [seatContainerHeight, setSeatContainerHeight] = useState(0);
-  // 基准高度 327（CustomSeatDiagram 中 H = 327 * scale），根据容器实际高度动态计算 scale
+  // 直接使用屏幕高度的70%计算座椅图片的scale，避免依赖容器布局
+  const SCREEN_H = Dimensions.get('window').height;
+  const SEAT_AREA_H = SCREEN_H * 0.7;
   const BASE_H = 327;
-  const seatScale = seatContainerHeight > 0 ? seatContainerHeight / BASE_H : 1.15;
+  const seatScale = SEAT_AREA_H / BASE_H;
 
   // ─── 1秒锁定机制 ───
   const [isLocked, setIsLocked] = useState(false);
@@ -696,14 +698,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             </View>
 
             {/* 中间座椅图 */}
-            <View
-              style={styles.seatContainer}
-              onLayout={e => {
-                const h = e.nativeEvent.layout.height;
-                if (h > 0 && Math.abs(h - seatContainerHeight) > 2) {
-                  setSeatContainerHeight(h);
-                }
-              }}>
+            <View style={styles.seatContainer}>
               <CustomSeatDiagram
                 activeZone={selectedZone}
                 scale={seatScale}
@@ -1091,7 +1086,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
-    height: '70%',
   },
   // ─── 右侧面板 ───
   rightPanel: {
