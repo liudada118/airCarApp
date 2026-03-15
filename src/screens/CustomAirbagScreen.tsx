@@ -72,12 +72,12 @@ const ZONE_SHORT_LABELS: Record<string, string> = {
   legRest: '腿托',
 };
 
-const MAX_VALUE = 3;
-const MIN_VALUE = -3;
+const MAX_VALUE = 10;
+const MIN_VALUE = 0;
 const MAX_LOG_LINES = 50;
 
 /** 锁定持续时间（毫秒） */
-const LOCK_DURATION_MS = 3000;
+const LOCK_DURATION_MS = 1000;
 
 interface CmdLog {
   id: number;
@@ -380,7 +380,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         useNativeDriver: false,
       }).start();
 
-      // 3秒后发送保压（stop）指令并解锁
+      // 1秒后发送保压（stop）指令并解锁
       lockTimerRef.current = setTimeout(() => {
         const targetZone = lastCmdZoneRef.current;
         if (targetZone) {
@@ -411,10 +411,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     if (!selectedZone || isLocked) {
       return;
     }
-    // 最多加 MAX_VALUE 次
-    if (cmdCounts[selectedZone] >= MAX_VALUE) {
-      return;
-    }
     setAirbagValues(prev => {
       const newVal = prev[selectedZone] + 1;
 
@@ -423,17 +419,13 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] + 1}));
     // 发送充气指令
     sendAirbagCmd(selectedZone, 'inflate');
-    // 启动3秒锁定
+    // 启动1秒锁定
     startLockAndHoldPressure(selectedZone);
-  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure]);
+  }, [selectedZone, isLocked, sendAirbagCmd, startLockAndHoldPressure]);
 
   // 减少气囊值（放气）
   const handleDecrease = useCallback(() => {
     if (!selectedZone || isLocked) {
-      return;
-    }
-    // 最多减 MIN_VALUE 次
-    if (cmdCounts[selectedZone] <= MIN_VALUE) {
       return;
     }
     setAirbagValues(prev => {
@@ -444,9 +436,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] - 1}));
     // 发送放气指令
     sendAirbagCmd(selectedZone, 'deflate');
-    // 启动3秒锁定
+    // 启动1秒锁定
     startLockAndHoldPressure(selectedZone);
-  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure]);
+  }, [selectedZone, isLocked, sendAirbagCmd, startLockAndHoldPressure]);
 
   // 点击保存按钮
   const handleSavePress = useCallback(() => {
@@ -650,14 +642,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
               <AdjustButtons
                 onIncrease={handleIncrease}
                 onDecrease={handleDecrease}
-                canIncrease={!selectedZone ? false : cmdCounts[selectedZone] < MAX_VALUE}
-                canDecrease={!selectedZone ? false : cmdCounts[selectedZone] > MIN_VALUE}
+                canIncrease={true}
+                canDecrease={true}
                 disabled={!selectedZone || isLocked}
               />
               {/* 锁定遮罩层提示 */}
               {isLocked && (
                 <View style={styles.lockOverlay}>
-                  <Text style={styles.lockOverlayText}>3s</Text>
+                  <Text style={styles.lockOverlayText}>1s</Text>
                 </View>
               )}
             </View>
