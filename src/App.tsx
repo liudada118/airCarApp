@@ -32,6 +32,9 @@ type Screen = 'home' | 'customAirbag';
  * 气囊设置持久化:
  * - 通过 SerialModule 的 SharedPreferences 存储
  * - 保存时写入，进入自定义页面时读取
+ *
+ * 注意：HomeScreen 始终保持挂载（不卸载），避免 3D 模型重新加载。
+ * 切换到自定义页面时，HomeScreen 通过 display:'none' 隐藏。
  */
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
@@ -160,30 +163,37 @@ const App: React.FC = () => {
     setHomeToast(prev => ({ ...prev, visible: false }));
   }, []);
 
+  const isHome = currentScreen === 'home';
+
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {currentScreen === 'home' ? (
-          <View style={styles.screenContainer}>
-            <HomeScreen
-              onNavigateToCustomize={navigateToCustomize}
-              adaptiveEnabled={adaptiveEnabled}
-              onAdaptiveChange={setAdaptiveEnabled}
-              connectionStatus={connectionStatus}
-              onConnectionStatusChange={setConnectionStatus}
-              onBodyShapeChange={handleBodyShapeChange}
-              onRegisterResetSeatedInflate={handleRegisterResetSeatedInflate}
-            />
-            {/* 首页级别的 Toast（保存成功后显示） */}
-            <Toast
-              visible={homeToast.visible}
-              message={homeToast.message}
-              type={homeToast.type}
-              onHide={hideHomeToast}
-            />
-          </View>
-        ) : (
+        {/* HomeScreen 始终挂载，通过 display 控制显隐，避免 3D 模型重新加载 */}
+        <View
+          style={[styles.screenContainer, !isHome && styles.hidden]}
+          pointerEvents={isHome ? 'auto' : 'none'}
+        >
+          <HomeScreen
+            onNavigateToCustomize={navigateToCustomize}
+            adaptiveEnabled={adaptiveEnabled}
+            onAdaptiveChange={setAdaptiveEnabled}
+            connectionStatus={connectionStatus}
+            onConnectionStatusChange={setConnectionStatus}
+            onBodyShapeChange={handleBodyShapeChange}
+            onRegisterResetSeatedInflate={handleRegisterResetSeatedInflate}
+          />
+          {/* 首页级别的 Toast（保存成功后显示） */}
+          <Toast
+            visible={homeToast.visible}
+            message={homeToast.message}
+            type={homeToast.type}
+            onHide={hideHomeToast}
+          />
+        </View>
+
+        {/* CustomAirbagScreen 仅在需要时挂载 */}
+        {!isHome && (
           <CustomAirbagScreen
             onClose={navigateToHome}
             onSaveSuccess={handleSaveSuccess}
@@ -206,6 +216,9 @@ const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
     position: 'relative',
+  },
+  hidden: {
+    display: 'none',
   },
 });
 
