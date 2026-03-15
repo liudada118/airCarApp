@@ -33,9 +33,10 @@ def _check_dependencies():
     for dep in deps:
         try:
             __import__(dep)
-            print(f"[server.py] 依赖检查 OK: {dep}")
+            # print(f"[server.py] 依赖检查 OK: {dep}")
         except ImportError as e:
-            print(f"[server.py] 依赖检查 FAIL: {dep} -> {e}")
+            # print(f"[server.py] 依赖检查 FAIL: {dep} -> {e}")
+            pass
 
 _check_dependencies()
 
@@ -56,31 +57,35 @@ def _ensure_persistent_config():
         os.makedirs(_persistent_dir, exist_ok=True)
         if os.path.exists(_default_config_path):
             shutil.copy2(_default_config_path, _persistent_config_path)
-            print(f"[server.py] 首次运行，已拷贝默认配置到: {_persistent_config_path}")
+            # print(f"[server.py] 首次运行，已拷贝默认配置到: {_persistent_config_path}")
         else:
-            print(f"[server.py] 警告: 默认配置文件不存在: {_default_config_path}")
+            # print(f"[server.py] 警告: 默认配置文件不存在: {_default_config_path}")
+            pass
     else:
-        print(f"[server.py] 使用持久化配置: {_persistent_config_path}")
+        # print(f"[server.py] 使用持久化配置: {_persistent_config_path}")
+        pass
 
 _ensure_persistent_config()
 _config_path = _persistent_config_path if os.path.exists(_persistent_config_path) else _default_config_path
-print(f"[server.py] 配置文件路径: {_config_path}")
-print(f"[server.py] 配置文件存在: {os.path.exists(_config_path)}")
+# print(f"[server.py] 配置文件路径: {_config_path}")
+# print(f"[server.py] 配置文件存在: {os.path.exists(_config_path)}")
 
 try:
     _system = IntegratedSeatSystem(_config_path)
     # 打印体型三分类器状态
     if hasattr(_system, 'body_shape_classifier') and _system.body_shape_classifier is not None:
-        print(f"[server.py] 体型三分类器: 已初始化")
-        print(f"[server.py]   模型已加载: {_system.body_shape_classifier._backend is not None}")
-        print(f"[server.py]   推理后端: {_system.body_shape_classifier._backend or '未加载'}")
-        print(f"[server.py]   自动触发: {_system.auto_trigger_body_shape}")
+        # print(f"[server.py] 体型三分类器: 已初始化")
+        pass
+        # print(f"[server.py]   模型已加载: {_system.body_shape_classifier._backend is not None}")
+        # print(f"[server.py]   推理后端: {_system.body_shape_classifier._backend or '未加载'}")
+        # print(f"[server.py]   自动触发: {_system.auto_trigger_body_shape}")
     else:
-        print(f"[server.py] 体型三分类器: 未初始化（body_shape_classifier is None）")
-        print(f"[server.py]   enabled配置: {_system.config.get('body_shape_classification.enabled', 'NOT_FOUND')}")
+        # print(f"[server.py] 体型三分类器: 未初始化（body_shape_classifier is None）")
+        pass
+        # print(f"[server.py]   enabled配置: {_system.config.get('body_shape_classification.enabled', 'NOT_FOUND')}")
 except Exception as e:
     import traceback
-    print(f"[server.py] IntegratedSeatSystem 初始化失败: {e}")
+    # print(f"[server.py] IntegratedSeatSystem 初始化失败: {e}")
     traceback.print_exc()
     raise
 
@@ -217,7 +222,7 @@ def reset_config():
         # 从默认配置重新拷贝到持久化目录
         if os.path.exists(_default_config_path) and _config_path == _persistent_config_path:
             shutil.copy2(_default_config_path, _persistent_config_path)
-            print(f"[server.py] 配置已重置，从默认配置拷贝到: {_persistent_config_path}")
+            # print(f"[server.py] 配置已重置，从默认配置拷贝到: {_persistent_config_path}")
         _system.config.reload()
         return json.dumps({"ok": True}, ensure_ascii=False)
     except Exception as e:

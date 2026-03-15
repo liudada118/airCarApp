@@ -59,11 +59,11 @@ class TapMassageDetector:
         # 当前帧计数（由外部传入）
         self.current_frame = 0
 
-        print(f"[拍打按摩] 检测器初始化完成")
-        print(f"  - 窗口大小: {self.window_size}帧")
-        print(f"  - 拍打阈值: {self.tap_threshold}")
-        print(f"  - 峰间隔: {self.min_peak_distance}帧")
-        print(f"  - 需要拍打: {self.required_taps}次")
+        # print(f"[拍打按摩] 检测器初始化完成")
+        # print(f"  - 窗口大小: {self.window_size}帧")
+        # print(f"  - 拍打阈值: {self.tap_threshold}")
+        # print(f"  - 峰间隔: {self.min_peak_distance}帧")
+        # print(f"  - 需要拍打: {self.required_taps}次")
 
     def update(self, backrest_right_rect: np.ndarray, cushion_right_rect: np.ndarray,
                frame_count: int) -> Dict:
@@ -129,8 +129,8 @@ class TapMassageDetector:
 
                 # 记录事件
                 self.backrest_tap_events.append((frame_count, backrest_tap_count, list(backrest_peaks)))
-                print(f"[拍打按摩] 靠背拍打触发 | 帧{frame_count} | 拍打{backrest_tap_count}次 | "
-                      f"状态: {'开启' if self.backrest_massage_active else '关闭'}")
+                # print(f"[拍打按摩] 靠背拍打触发 | 帧{frame_count} | 拍打{backrest_tap_count}次 | "
+                      # f"状态: {'开启' if self.backrest_massage_active else '关闭'}")
 
             # 判断坐垫是否触发
             if self._check_tap_trigger(cushion_tap_count, cushion_peaks,
@@ -144,8 +144,8 @@ class TapMassageDetector:
 
                 # 记录事件
                 self.cushion_tap_events.append((frame_count, cushion_tap_count, list(cushion_peaks)))
-                print(f"[拍打按摩] 坐垫拍打触发 | 帧{frame_count} | 拍打{cushion_tap_count}次 | "
-                      f"状态: {'开启' if self.cushion_massage_active else '关闭'}")
+                # print(f"[拍打按摩] 坐垫拍打触发 | 帧{frame_count} | 拍打{cushion_tap_count}次 | "
+                      # f"状态: {'开启' if self.cushion_massage_active else '关闭'}")
 
         return result
 
@@ -340,4 +340,4 @@ class TapMassageDetector:
         self.backrest_tap_events.clear()
         self.cushion_tap_events.clear()
 
-        print("[拍打按摩] 检测器已重置")
+        # print("[拍打按摩] 检测器已重置")

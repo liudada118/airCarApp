@@ -22,11 +22,11 @@ def main():
     run_duration = 10  # 运行10秒
     total_frames = fps * run_duration
 
-    print("=" * 60)
-    print(f"输入数据: 全50矩阵, shape={sensor_data.shape}")
-    print(f"帧率: {fps} FPS, 帧间隔: {frame_interval*1000:.1f}ms")
-    print(f"计划运行: {run_duration}秒, 共{total_frames}帧")
-    print("=" * 60)
+    # print("=" * 60)
+    # print(f"输入数据: 全50矩阵, shape={sensor_data.shape}")
+    # print(f"帧率: {fps} FPS, 帧间隔: {frame_interval*1000:.1f}ms")
+    # print(f"计划运行: {run_duration}秒, 共{total_frames}帧")
+    # print("=" * 60)
 
     start_time = time.time()
 
@@ -35,18 +35,20 @@ def main():
 
         result = system.process_frame(sensor_data)
 
-        print(f"\n--- 帧 {frame} ---")
-        print(f"  座椅状态: {result['seat_state']}")
-        print(f"  活体状态: {result['living_status']}")
-        print(f"  体型: {result['body_type']}")
-        print(f"  坐垫sum: {result['cushion_sum']:.1f}")
-        print(f"  靠背sum: {result['backrest_sum']:.1f}")
-        print(f"  活体置信度: {result['living_confidence']:.3f}")
+        # print(f"\n--- 帧 {frame} ---")
+        # print(f"  座椅状态: {result['seat_state']}")
+        # print(f"  活体状态: {result['living_status']}")
+        # print(f"  体型: {result['body_type']}")
+        # print(f"  坐垫sum: {result['cushion_sum']:.1f}")
+        # print(f"  靠背sum: {result['backrest_sum']:.1f}")
+        # print(f"  活体置信度: {result['living_confidence']:.3f}")
 
         if result['control_command']:
-            print(f"  控制指令: {result['control_command']}")
+            # print(f"  控制指令: {result['control_command']}")
+            pass
         else:
-            print(f"  控制指令: 无")
+            # print(f"  控制指令: 无")
+            pass
 
         # 控制帧率：等待剩余时间
         elapsed = time.time() - frame_start
@@ -55,9 +57,9 @@ def main():
             time.sleep(sleep_time)
 
     total_time = time.time() - start_time
-    print("\n" + "=" * 60)
-    print(f"运行完成: 实际耗时 {total_time:.2f}秒, 共处理 {total_frames} 帧")
-    print(f"实际帧率: {total_frames / total_time:.1f} FPS")
+    # print("\n" + "=" * 60)
+    # print(f"运行完成: 实际耗时 {total_time:.2f}秒, 共处理 {total_frames} 帧")
+    # print(f"实际帧率: {total_frames / total_time:.1f} FPS")
 
 
 if __name__ == '__main__':

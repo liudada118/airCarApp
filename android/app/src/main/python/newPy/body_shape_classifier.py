@@ -119,11 +119,11 @@ class BodyShapeClassifier:
         self.feature_engineer = None
         self._load_model(model_path)
         
-        print(f"[体型三分类器] 初始化完成")
-        print(f"  - 采集帧数: {self.collect_frames} ({self.collect_time_sec:.1f}秒 @{self.hz}Hz)")
-        print(f"  - 入座阈值: {self.seated_threshold}")
-        print(f"  - 超时帧数: {self.timeout_frames}")
-        print(f"  - 模型状态: {'已加载' if self.model is not None else '未加载'}")
+        # print(f"[体型三分类器] 初始化完成")
+        # print(f"  - 采集帧数: {self.collect_frames} ({self.collect_time_sec:.1f}秒 @{self.hz}Hz)")
+        # print(f"  - 入座阈值: {self.seated_threshold}")
+        # print(f"  - 超时帧数: {self.timeout_frames}")
+        # print(f"  - 模型状态: {'已加载' if self.model is not None else '未加载'}")
     
     def _load_model(self, model_path: Optional[str] = None):
         """加载预训练模型"""
@@ -136,15 +136,17 @@ class BodyShapeClassifier:
                 from body_type_classifier.classifier import BodyTypeClassifier
                 self.model = BodyTypeClassifier.load_model(model_path)
                 self.feature_engineer = self.model.feature_engineer
-                print(f"[体型三分类器] 模型已加载: {model_path}")
-                print(f"  - 模型类型: {self.model.best_model_name}")
+                # print(f"[体型三分类器] 模型已加载: {model_path}")
+                # print(f"  - 模型类型: {self.model.best_model_name}")
             except Exception as e:
-                print(f"[体型三分类器] 模型加载失败: {e}")
+                # print(f"[体型三分类器] 模型加载失败: {e}")
+                pass
                 self.model = None
                 self.feature_engineer = None
         else:
-            print(f"[体型三分类器] 模型文件不存在: {model_path}")
-            print(f"  请先运行 train_model.py 训练模型")
+            # print(f"[体型三分类器] 模型文件不存在: {model_path}")
+            pass
+            # print(f"  请先运行 train_model.py 训练模型")
     
     def trigger(self) -> Dict:
         """
@@ -180,8 +182,8 @@ class BodyShapeClassifier:
         self.state = ClassifierState.COLLECTING
         self.latest_result = None
         
-        print(f"[体型三分类器] 触发采集，需要 {self.collect_frames} 个有效入座帧 "
-              f"(约 {self.collect_time_sec:.1f} 秒)")
+        # print(f"[体型三分类器] 触发采集，需要 {self.collect_frames} 个有效入座帧 "
+              # f"(约 {self.collect_time_sec:.1f} 秒)")
         
         return {
             'success': True,
@@ -234,8 +236,8 @@ class BodyShapeClassifier:
         if self._consecutive_seated >= self.stable_frames:
             if not self._is_stable:
                 self._is_stable = True
-                print(f"[体型三分类器] 稳定入座检测成功（连续{self.stable_frames}帧，"
-                      f"阈值={self._adaptive_threshold:.0f}，当前压力={cushion_sum:.0f}）")
+                # print(f"[体型三分类器] 稳定入座检测成功（连续{self.stable_frames}帧，"
+                      # f"阈值={self._adaptive_threshold:.0f}，当前压力={cushion_sum:.0f}）")
         
         return self._is_stable and above_threshold
     
@@ -279,7 +281,8 @@ class BodyShapeClassifier:
         if self.total_frame_count >= self.timeout_frames:
             # 即使未满，如果有足够的帧也尝试分类
             if self.collected_count >= self.collect_frames // 2:
-                print(f"[体型三分类器] 超时但有 {self.collected_count} 帧，尝试分类")
+                # print(f"[体型三分类器] 超时但有 {self.collected_count} 帧，尝试分类")
+                pass
                 return self._classify()
             return self._timeout()
         
@@ -365,11 +368,11 @@ class BodyShapeClassifier:
             self.latest_result = result
             self.state = ClassifierState.COMPLETED
             
-            print(f"[体型三分类器] 分类完成 #{self.classification_count}: "
-                  f"{result['body_shape']} (置信度={confidence:.0%})")
-            print(f"  概率分布: 瘦小={proba[0]:.2%} 中等={proba[1]:.2%} 高大={proba[2]:.2%}")
-            print(f"  有效帧/总帧: {len(self.frame_buffer)}/{self.total_frame_count} "
-                  f"(跳过{self.skipped_count}帧)")
+            # print(f"[体型三分类器] 分类完成 #{self.classification_count}: "
+                  # f"{result['body_shape']} (置信度={confidence:.0%})")
+            # print(f"  概率分布: 瘦小={proba[0]:.2%} 中等={proba[1]:.2%} 高大={proba[2]:.2%}")
+            # print(f"  有效帧/总帧: {len(self.frame_buffer)}/{self.total_frame_count} "
+                  # f"(跳过{self.skipped_count}帧)")
             
             return result
             
@@ -383,7 +386,7 @@ class BodyShapeClassifier:
             }
             self.latest_result = error_result
             self.state = ClassifierState.COMPLETED
-            print(f"[体型三分类器] 分类失败: {e}")
+            # print(f"[体型三分类器] 分类失败: {e}")
             return error_result
     
     def _timeout(self) -> Dict:
@@ -406,8 +409,8 @@ class BodyShapeClassifier:
         }
         self.latest_result = error_result
         self.state = ClassifierState.COMPLETED
-        print(f"[体型三分类器] 采集超时: {self.total_frame_count}帧内只有"
-              f"{self.collected_count}个有效帧")
+        # print(f"[体型三分类器] 采集超时: {self.total_frame_count}帧内只有"
+              # f"{self.collected_count}个有效帧")
         return error_result
     
     def get_result(self) -> Optional[Dict]:
@@ -456,4 +459,4 @@ class BodyShapeClassifier:
         self._consecutive_seated = 0
         self._is_stable = False
         self.latest_result = None
-        print("[体型三分类器] 已重置")
+        # print("[体型三分类器] 已重置")

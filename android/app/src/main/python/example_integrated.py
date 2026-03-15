@@ -42,23 +42,23 @@ def server(sensor_data):
 
 def main():
     """主函数"""
-    print("=" * 60)
-    print("集成座椅控制系统使用示例")
-    print("=" * 60)
+    # print("=" * 60)
+    # print("集成座椅控制系统使用示例")
+    # print("=" * 60)
 
 
 
     # ========================================
     # 步骤 1: 初始化系统
     # ========================================
-    print("\n[步骤 1] 初始化集成系统...")
+    # print("\n[步骤 1] 初始化集成系统...")
     system = IntegratedSeatSystem('sensor_config.yaml')
-    print("系统初始化完成\n")
+    # print("系统初始化完成\n")
 
     # ========================================
     # 步骤 2: 模拟数据推送
     # ========================================
-    print("[步骤 2] 开始模拟数据推送...\n")
+    # print("[步骤 2] 开始模拟数据推送...\n")
 
     # 模拟不同场景
     scenarios = [
@@ -70,9 +70,9 @@ def main():
     ]
 
     for scenario_name, start_frame, end_frame in scenarios:
-        print(f"\n{'=' * 40}")
-        print(f"场景: {scenario_name} (帧 {start_frame}-{end_frame})")
-        print(f"{'=' * 40}")
+        # print(f"\n{'=' * 40}")
+        # print(f"场景: {scenario_name} (帧 {start_frame}-{end_frame})")
+        # print(f"{'=' * 40}")
 
         for frame_idx in range(start_frame, end_frame):
             # 生成模拟数据
@@ -88,23 +88,23 @@ def main():
     # ========================================
     # 步骤 3: 演示参数修改
     # ========================================
-    print("\n\n[步骤 3] 演示运行时参数修改...")
-    print("修改坐垫阈值从 500 → 800")
+    # print("\n\n[步骤 3] 演示运行时参数修改...")
+    # print("修改坐垫阈值从 500 → 800")
     system.set_param('cushion_sum_threshold', 800)
 
-    print("修改全座帧数从 130 → 65")
+    # print("修改全座帧数从 130 → 65")
     system.set_param('full_seat_frames_threshold', 65)
 
     # ========================================
     # 步骤 4: 系统重置
     # ========================================
-    print("\n[步骤 4] 重置系统...")
+    # print("\n[步骤 4] 重置系统...")
     system.reset()
-    print("系统已重置")
+    # print("系统已重置")
 
-    print("\n" + "=" * 60)
-    print("示例完成")
-    print("=" * 60)
+    # print("\n" + "=" * 60)
+    # print("示例完成")
+    # print("=" * 60)
 
 
 def generate_simulated_data(scenario: str, frame_idx: int) -> np.ndarray:
@@ -251,7 +251,8 @@ def print_result(result: dict):
     """
     # 只输出控制指令信息
     if result['control_command']:
-        print(f"\n  帧 {result['frame_count']:4d} | ✓ 控制指令: {len(result['control_command'])} 字节")
+        # print(f"\n  帧 {result['frame_count']:4d} | ✓ 控制指令: {len(result['control_command'])} 字节")
+        pass
         # 解析并显示具体气囊动作
         parse_control_command(result['control_command'])
 
@@ -288,7 +289,8 @@ def parse_control_command(command: list[int] | bytes):
         解析并打印正在执行动作的气囊信息（忽略保持状态的气囊）
     """
     if len(command) != 55:
-        print(f"            ✗ 指令长度错误: {len(command)} 元素")
+        # print(f"            ✗ 指令长度错误: {len(command)} 元素")
+        pass
         return
 
     # 解析气囊状态
@@ -301,7 +303,8 @@ def parse_control_command(command: list[int] | bytes):
             active_airbags.append(f"气囊{airbag_id}({action})")
 
     if active_airbags:
-        print(f"            → {', '.join(active_airbags)}")
+        # print(f"            → {', '.join(active_airbags)}")
+        pass
 
 
 if __name__ == '__main__':

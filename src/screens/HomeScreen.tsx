@@ -245,9 +245,9 @@ function parseAlgoResult(resultJson: string): {
       ...DEFAULT_BODY_SHAPE_INFO,
     };
     // 调试：打印离座状态
-    console.log('[SeatStatus] seat_status:', JSON.stringify(parsed.seat_status), 'seat_state:', parsed.seat_state, '=> is_off_seat:', algoSeatStatus.is_off_seat, 'state:', algoSeatStatus.state);
+    // console.log('[SeatStatus] seat_status:', JSON.stringify(parsed.seat_status), 'seat_state:', parsed.seat_state, '=> is_off_seat:', algoSeatStatus.is_off_seat, 'state:', algoSeatStatus.state);
     // 调试：打印 body_shape_info
-    console.log('[BodyShape] raw:', JSON.stringify(parsed.body_shape_info), 'state:', bodyShapeInfo.body_shape_state, 'shape:', bodyShapeInfo.body_shape);
+    // console.log('[BodyShape] raw:', JSON.stringify(parsed.body_shape_info), 'state:', bodyShapeInfo.body_shape_state, 'shape:', bodyShapeInfo.body_shape);
 
     // 映射到简化的 SeatStatus
     const seatStatus: SeatStatus = algoSeatStatus.is_seated
@@ -495,7 +495,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       sensorDataRef.current = INITIAL_SENSOR_FRAME;
       // 立即清零 3D 点位数据并冻结，阻止传感器残留数据重新填充
       if (!frozenRef.current) {
-        console.log('[3D清零] 首次触发清零+冻结! state:', parsed.algoSeatStatus.state, 'carAirRef:', !!carAirRef.current);
+        // console.log('[3D清零] 首次触发清零+冻结! state:', parsed.algoSeatStatus.state, 'carAirRef:', !!carAirRef.current);
       }
       lastResetTimeRef.current = now;
       frozenRef.current = true;
@@ -505,13 +505,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       // 防抖：清零后至少保持2秒冻结，防止状态快速切换导致闪烁
       const timeSinceReset = now - lastResetTimeRef.current;
       if (frozenRef.current && timeSinceReset < 2000) {
-        console.log('[3D清零] 防抖中, 距上次清零:', timeSinceReset, 'ms, 忽略解冻');
+        // console.log('[3D清零] 防抖中, 距上次清零:', timeSinceReset, 'ms, 忽略解冻');
         // 保持冻结，继续调用 resetToZero 确保清零状态
         carAirRef.current?.resetToZero?.();
         return; // 不更新 algoState，保持离座显示
       }
       if (frozenRef.current) {
-        console.log('[3D解冻] 解冻! state:', parsed.algoSeatStatus.state, 'timeSinceReset:', timeSinceReset, 'ms');
+        // console.log('[3D解冻] 解冻! state:', parsed.algoSeatStatus.state, 'timeSinceReset:', timeSinceReset, 'ms');
         frozenRef.current = false;
       }
       carAirRef.current?.unfreeze?.();
@@ -543,30 +543,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         try {
           const parsed = JSON.parse(json);
           if (parsed.error) {
-            console.warn('getConfig error:', parsed.error);
+            // console.warn('getConfig error:', parsed.error);
           } else {
             setConfigData(parsed);
           }
         } catch (e) {
-          console.warn('getConfig parse error:', e);
+          // console.warn('getConfig parse error:', e);
         }
         setConfigLoading(false);
       })
       .catch((e: any) => {
-        console.warn('getConfig failed:', e);
+        // console.warn('getConfig failed:', e);
         setConfigLoading(false);
       });
   }, []);
 
   const handleSetConfig = useCallback((key: string, value: any) => {
     const valueJson = JSON.stringify(value);
-    console.log('[Config] 设置配置:', key, '=', valueJson);
+    // console.log('[Config] 设置配置:', key, '=', valueJson);
     NativeModules.SerialModule?.setConfig?.(key, valueJson)
       .then((json: string) => {
         try {
           const result = JSON.parse(json);
           if (result.ok) {
-            console.log('[Config] 配置写入成功:', key, '=', value);
+            // console.log('[Config] 配置写入成功:', key, '=', value);
             setConfigData(prev => {
               if (!prev) return prev;
               return {
@@ -575,14 +575,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               };
             });
           } else {
-            console.warn('[Config] 配置写入失败:', key, result.error);
+            // console.warn('[Config] 配置写入失败:', key, result.error);
           }
         } catch (e) {
-          console.warn('[Config] 解析响应失败:', e);
+          // console.warn('[Config] 解析响应失败:', e);
         }
       })
       .catch((e: any) => {
-        console.warn('[Config] setConfig 调用失败:', key, e?.message || e);
+        // console.warn('[Config] setConfig 调用失败:', key, e?.message || e);
       });
   }, []);
 
@@ -765,7 +765,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     const disconnectSub = emitter.addListener(
       'onSerialDisconnect',
       (event: {reason?: string}) => {
-        console.warn('[Serial] Disconnected:', event.reason);
+        // console.warn('[Serial] Disconnected:', event.reason);
         setConnectionStatus('error');
         setConnectionErrorMessage(event.reason || '串口连接已断开');
         setShowConnectionError(true);
@@ -776,13 +776,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     const algoErrorSub = emitter.addListener(
       'onAlgoError',
       (event: {error?: string}) => {
-        console.warn('[AlgoError]', event.error);
+        // console.warn('[AlgoError]', event.error);
       },
     );
 
     const modeSub = emitter.addListener('onSerialMode', (event: {data?: string; modeValue?: number; manual?: boolean; auto?: boolean}) => {
       // 模式帧仅记录日志，不控制自适应调节（自适应由用户手动开关控制）
-      console.log('[ModeFrame] modeValue=', event.modeValue, 'auto=', event.auto, 'manual=', event.manual);
+      // console.log('[ModeFrame] modeValue=', event.modeValue, 'auto=', event.auto, 'manual=', event.manual);
     });
 
     const nonStdSub = emitter.addListener('onNonStandardFrame', (event: {data?: string; hex?: string; length?: number; timestamp?: number}) => {
@@ -803,7 +803,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           const bytes = entry.csv.split(',').map(Number);
           if (bytes.length >= 21) {
             const newStates = parseAirbagCommand(bytes);
-            console.log('[NonStdFrame] 解析回传指令, length:', bytes.length, 'states:', JSON.stringify(newStates));
+            // console.log('[NonStdFrame] 解析回传指令, length:', bytes.length, 'states:', JSON.stringify(newStates));
             setAlgoState(prev => ({
               ...prev,
               commandStates: newStates,
@@ -811,7 +811,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             }));
           }
         } catch (e) {
-          console.warn('[NonStdFrame] 解析失败:', e);
+          // console.warn('[NonStdFrame] 解析失败:', e);
         }
       }
     });
@@ -857,35 +857,35 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         // 检查自适应是否仍然开启（使用 ref 获取最新值，避免闭包陈旧）
         if (!adaptiveEnabledRef.current) {
           clearAllTimers();
-          console.log('[SeatedInflate] 自适应已关闭，停止定时充气');
+          // console.log('[SeatedInflate] 自适应已关闭，停止定时充气');
           return;
         }
 
         if (seatedInflateCountRef.current >= 3) {
           // 已达最大次数，停止定时器
           clearAllTimers();
-          console.log('[SeatedInflate] 已完成3次充气，停止定时任务');
+          // console.log('[SeatedInflate] 已完成3次充气，停止定时任务');
           return;
         }
 
         // 使用模块级 SerialModule 引用
         if (!SerialModule?.setAirbagOverride) {
-          console.warn('[SeatedInflate] setAirbagOverride 不可用, SerialModule:', !!SerialModule);
+          // console.warn('[SeatedInflate] setAirbagOverride 不可用, SerialModule:', !!SerialModule);
           return;
         }
 
         seatedInflateCountRef.current += 1;
         const count = seatedInflateCountRef.current;
-        console.log(`[SeatedInflate] 第${count}次充气开始 (hipFirm override inflate 3000ms)`);
+        // console.log(`[SeatedInflate] 第${count}次充气开始 (hipFirm override inflate 3000ms)`);
 
         // 使用 setAirbagOverride 将 hipFirm 充气指令合并到算法帧中，持续3秒
         // 这样算法帧中其他气囊的指令不会被覆盖，hipFirm 会被强制设为充气
         SerialModule.setAirbagOverride('hipFirm', 'inflate', 3000)
           .then(() => {
-            console.log(`[SeatedInflate] 第${count}次 hipFirm override 设置成功，将3秒后自动过期`);
+            // console.log(`[SeatedInflate] 第${count}次 hipFirm override 设置成功，将3秒后自动过期`);
           })
           .catch(e => {
-            console.warn(`[SeatedInflate] 第${count}次 hipFirm override 设置失败:`, e?.message || e);
+            // console.warn(`[SeatedInflate] 第${count}次 hipFirm override 设置失败:`, e?.message || e);
           });
 
         // 显示提示弹窗
@@ -897,14 +897,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
       // 第一次在入座后60秒触发
       seatedInflateTimerRef.current = setInterval(doInflate, 60000);
-      console.log('[SeatedInflate] 入座且自适应开启，启动定时充气（每60s一次，最多3次）');
+      // console.log('[SeatedInflate] 入座且自适应开启，启动定时充气（每60s一次，最多3次）');
     } else {
       // 离座 或 自适应关闭：重置一切
       clearAllTimers();
       seatedInflateCountRef.current = 0;
       // 清除 override 覆盖层
       SerialModule?.clearAirbagOverride?.().catch(() => {});
-      console.log('[SeatedInflate] 离座或自适应关闭，重置定时充气并清除override');
+      // console.log('[SeatedInflate] 离座或自适应关闭，重置定时充气并清除override');
     }
 
     return () => {
@@ -925,7 +925,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     // 清除 override 覆盖层，避免手动调节时定时充气仍在生效
     SerialModule?.clearAirbagOverride?.().catch(() => {});
     seatedInflateCountRef.current = 0;
-    console.log('[SeatedInflate] 手动调节气囊，重置定时充气并清除override');
+    // console.log('[SeatedInflate] 手动调节气囊，重置定时充气并清除override');
   }, []);
 
   // 注册重置函数供外部调用
@@ -1069,11 +1069,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                     SerialModule?.setAlgoMode?.(false);
                     // 发送全停保压帧，让所有气囊进入保压状态
                     SerialModule?.sendStopAllFrame?.().then(() => {
-                      console.log('[AlgoMode] 进入自定义气囊调节，已发送全停保压帧');
+                      // console.log('[AlgoMode] 进入自定义气囊调节，已发送全停保压帧');
                     }).catch((e: any) => {
-                      console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
+                      // console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
                     });
-                    console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
+                    // console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
                     onNavigateToCustomize();
                   }}
                   activeOpacity={0.7}
@@ -1107,7 +1107,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 onPress={() => {
                   onAdaptiveChange(true);
                   SerialModule?.setAlgoMode?.(true);
-                  console.log('[AlgoMode] 自适应调节已开启');
+                  // console.log('[AlgoMode] 自适应调节已开启');
                 }}
                 activeOpacity={0.7}>
                 <Text
@@ -1128,11 +1128,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   SerialModule?.setAlgoMode?.(false);
                   // 发送全停保压帧
                   SerialModule?.sendStopAllFrame?.().then(() => {
-                    console.log('[AlgoMode] 自适应调节关闭，已发送全停保压帧');
+                    // console.log('[AlgoMode] 自适应调节关闭，已发送全停保压帧');
                   }).catch((e: any) => {
-                    console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
+                    // console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
                   });
-                  console.log('[AlgoMode] 自适应调节已关闭');
+                  // console.log('[AlgoMode] 自适应调节已关闭');
                 }}
                 activeOpacity={0.7}>
                 <Text

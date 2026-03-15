@@ -91,7 +91,7 @@ export default function AirHomeRN({data = {}}) {
     const emitter = new NativeEventEmitter(SerialModule);
     const dataSub = emitter.addListener('onSerialData', e => {
       const payload = e?.data ?? '';
-      console.log('serial:data', payload);
+      // console.log('serial:data', payload);
       if (payload) {
         setLastSerial(payload);
         const parsed = parseSerialFrame(payload);
@@ -102,14 +102,14 @@ export default function AirHomeRN({data = {}}) {
     });
     const resultSub = emitter.addListener('onSerialResult', e => {
       if (e?.error) {
-        console.log('serial:error', e.error);
+        // console.log('serial:error', e.error);
       }
       if (e?.result) {
-        console.log('serial:result', e.result);
+        // console.log('serial:result', e.result);
       }
     });
     const modeSub = emitter.addListener('onSerialMode', e => {
-      console.log('serial:mode', e);
+      // console.log('serial:mode', e);
     });
     return () => {
       dataSub.remove();

@@ -127,7 +127,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   // 异步兑底：从存储中读取，如果存储中的值与 initValues 不同则更新
   useEffect(() => {
     const loadSavedValues = async () => {
-      if (__DEV__) console.log('[CustomAirbag] 异步加载气囊值...');
+      // if (__DEV__) console.log('[CustomAirbag] 异步加载气囊值...');
 
       // 加载成功后同时更新 airbagValues 和 cmdCounts
       const applyLoadedValues = (values: CustomAirbagValues) => {
@@ -151,11 +151,11 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             applyLoadedValues(parsed);
             AsyncStorage.setItem(storageKey, json).catch(() => {});
             setStorageLoaded(true);
-            if (__DEV__) console.log('[CustomAirbag] SP加载成功:', bodyShape, parsed);
+            // if (__DEV__) console.log('[CustomAirbag] SP加载成功:', bodyShape, parsed);
             return;
           }
         } catch (e: any) {
-          if (__DEV__) console.warn('[CustomAirbag] SP加载失败:', e?.message || e);
+          // if (__DEV__) console.warn('[CustomAirbag] SP加载失败:', e?.message || e);
         }
       }
 
@@ -169,11 +169,11 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             sm.saveAirbagSettingsForShape(bodyShape, json).catch(() => {});
           }
           setStorageLoaded(true);
-          if (__DEV__) console.log('[CustomAirbag] AS加载成功:', bodyShape, parsed);
+          // if (__DEV__) console.log('[CustomAirbag] AS加载成功:', bodyShape, parsed);
           return;
         }
       } catch (e: any) {
-          if (__DEV__) console.warn('[CustomAirbag] AS加载失败:', e?.message || e);
+          // if (__DEV__) console.warn('[CustomAirbag] AS加载失败:', e?.message || e);
       }
 
 
@@ -297,9 +297,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       try {
         await sm.saveAirbagSettingsForShape(bodyShape, jsonStr);
         saveResults.sp = true;
-        if (__DEV__) console.log('[AirbagStorage] SP保存成功:', bodyShape);
+        // if (__DEV__) console.log('[AirbagStorage] SP保存成功:', bodyShape);
       } catch (e: any) {
-        if (__DEV__) console.warn('[AirbagStorage] SP保存失败:', e?.message || e);
+        // if (__DEV__) console.warn('[AirbagStorage] SP保存失败:', e?.message || e);
       }
     }
 
@@ -307,9 +307,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     try {
       await AsyncStorage.setItem(storageKey, jsonStr);
       saveResults.as = true;
-      if (__DEV__) console.log('[AirbagStorage] AS保存成功:', bodyShape, 'key:', storageKey);
+      // if (__DEV__) console.log('[AirbagStorage] AS保存成功:', bodyShape, 'key:', storageKey);
     } catch (e: any) {
-      if (__DEV__) console.warn('[AirbagStorage] AS保存失败:', e?.message || e);
+      // if (__DEV__) console.warn('[AirbagStorage] AS保存失败:', e?.message || e);
     }
 
     // 保存后回读验证已移除（性能优化，减少不必要的 IO 操作）
@@ -359,14 +359,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const sendAirbagCmd = useCallback(
     async (zone: CustomAirbagZone, action: 'inflate' | 'deflate' | 'stop') => {
       if (!sm?.sendAirbagCommand) {
-        if (__DEV__) console.warn('[AirbagCmd] sendAirbagCommand not available');
+        // if (__DEV__) console.warn('[AirbagCmd] sendAirbagCommand not available');
         addLog(zone, action, 'N/A (模块不可用)', 0);
         return;
       }
       try {
         await sm.sendAirbagCommand(zone, action);
       } catch (e: any) {
-        if (__DEV__) console.warn('[AirbagCmd] Error:', e?.message || e);
+        // if (__DEV__) console.warn('[AirbagCmd] Error:', e?.message || e);
         addLog(zone, `${action}(失败)`, e?.message || 'error', 0);
       }
     },
