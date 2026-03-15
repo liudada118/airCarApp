@@ -1047,30 +1047,31 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   commandStates={commandStates}
                 />
               </View>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                onPress={() => {
-                  // 进入自定义气囊调节前，关闭算法模式（停止透传算法指令）
-                  SerialModule?.setAlgoMode?.(false);
-                  // 发送全停保压帧，让所有气囊进入保压状态
-                  SerialModule?.sendStopAllFrame?.().then(() => {
-                    console.log('[AlgoMode] 进入自定义气囊调节，已发送全停保压帧');
-                  }).catch((e: any) => {
-                    console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
-                  });
-                  console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
-                  onNavigateToCustomize();
-                }}
-                activeOpacity={0.7}>
-                <View style={styles.customizeLinkRow}>
+              <View style={styles.customizeBtnWrapper}>
+                <View style={styles.customizeDivider} />
+                <TouchableOpacity
+                  onPress={() => {
+                    // 进入自定义气囊调节前，关闭算法模式（停止透传算法指令）
+                    SerialModule?.setAlgoMode?.(false);
+                    // 发送全停保压帧，让所有气囊进入保压状态
+                    SerialModule?.sendStopAllFrame?.().then(() => {
+                      console.log('[AlgoMode] 进入自定义气囊调节，已发送全停保压帧');
+                    }).catch((e: any) => {
+                      console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
+                    });
+                    console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
+                    onNavigateToCustomize();
+                  }}
+                  activeOpacity={0.7}
+                  style={styles.customizeBtn}>
                   <Image
                     source={iconCustomAirbag}
                     style={[styles.customizeLinkIcon, {tintColor: Colors.primary}]}
                     resizeMode="contain"
                   />
                   <Text style={styles.customizeLink}>自定义气囊调节</Text>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -2111,8 +2112,9 @@ const styles = StyleSheet.create({
   airbagStatusCard: {
     backgroundColor: 'rgba(41, 45, 50, 0.85)',
     borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingTop: SCREEN_HEIGHT * 0.04,
+    paddingBottom: SCREEN_HEIGHT * 0.04,
   },
   airbagStatusText: {
     fontSize: FontSize.sm,
@@ -2131,6 +2133,26 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.borderGray,
     marginVertical: Spacing.sm,
+  },
+  customizeBtnWrapper: {
+    marginTop: SCREEN_HEIGHT * 0.04,
+    alignItems: 'center',
+  },
+  customizeDivider: {
+    width: '90%',
+    height: 1,
+    backgroundColor: Colors.borderGray,
+    marginBottom: SCREEN_HEIGHT * 0.02,
+  },
+  customizeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
   },
   customizeLinkRow: {
     flexDirection: 'row',
