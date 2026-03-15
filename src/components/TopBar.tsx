@@ -86,6 +86,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.xxl,
+    marginTop: SCREEN_HEIGHT * 0.04,
     paddingTop: Spacing.md,
     paddingBottom: 0,
     marginBottom: SCREEN_HEIGHT * 0.04,
