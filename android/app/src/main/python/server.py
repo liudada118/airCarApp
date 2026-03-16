@@ -283,6 +283,22 @@ def get_preference_status():
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+def clear_preference(body_shape=None):
+    """
+    清除品味数据。
+
+    Args:
+        body_shape: 指定体型（可选，None则清除所有体型的品味数据）
+    Returns:
+        JSON 字符串 - 操作结果
+    """
+    try:
+        result = _system.clear_preference(body_shape)
+        return json.dumps(_to_builtin(result), ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
+
+
 def main():
     return
 

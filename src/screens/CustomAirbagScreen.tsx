@@ -521,6 +521,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     if (sm?.saveAirbagSettingsForShape && bodyShape) {
       sm.saveAirbagSettingsForShape(bodyShape, JSON.stringify(DEFAULT_CUSTOM_AIRBAG_VALUES)).catch(() => {});
     }
+    // 恢复默认时清除品味系数
+    sm?.clearPreference?.(bodyShape || null)?.catch?.(() => {});
     setToast({
       visible: true,
       message: '已恢复默认参数，所有气囊已停止',
