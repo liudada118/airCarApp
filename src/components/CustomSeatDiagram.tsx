@@ -106,8 +106,8 @@ function getZoneStyleByCommand(cmd: AirbagCommandState, isActive: boolean) {
     };
   }
   return {
-    backgroundColor: 'rgba(100, 120, 160, 0.08)',
-    borderColor: 'rgba(150, 160, 180, 0.2)',
+    backgroundColor: 'rgba(100, 120, 160, 0.20)',
+    borderColor: 'rgba(150, 160, 180, 0.35)',
   };
 }
 

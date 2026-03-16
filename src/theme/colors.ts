@@ -24,7 +24,7 @@ export const Colors = {
   modalOverlay: 'rgba(0, 0, 0, 0.6)',
 
   // 边框
-  borderGray: '#2C2C2E',
+  borderGray: '#6C7784',
   borderLight: '#E5E5EA',
   borderBlue: '#007AFF',
 
