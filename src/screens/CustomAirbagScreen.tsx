@@ -124,10 +124,16 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const [airbagValues, setAirbagValues] = useState<CustomAirbagValues>(initValues);
   const [storageLoaded, setStorageLoaded] = useState(false);
 
-  // 异步兑底：从存储中读取，如果存储中的值与 initValues 不同则更新
+  // 异步兑底：仅在没有 initialValues 时从存储中读取，避免闪现
   useEffect(() => {
+    // 如果 App 层已传入 initialValues，直接信任，不再异步加载
+    if (initialValues) {
+      setStorageLoaded(true);
+      return;
+    }
+
     const loadSavedValues = async () => {
-      // if (__DEV__) console.log('[CustomAirbag] 异步加载气囊值...');
+
 
       // 加载成功后同时更新 airbagValues 和 cmdCounts
       const applyLoadedValues = (values: CustomAirbagValues) => {
@@ -523,12 +529,12 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     }
     // 恢复默认时清除品味系数
     sm?.clearPreference?.(bodyShape || null)?.catch?.(() => {});
-    setToast({
-      visible: true,
-      message: '已恢复默认参数，所有气囊已停止',
-      type: 'info',
-    });
-  }, [sendAirbagCmd]);
+    // 恢复默认后直接关闭弹窗，回传默认值给 App 层
+    if (adaptiveEnabled) {
+      sm?.setAlgoMode?.(true);
+    }
+    onSaveSuccess({...DEFAULT_CUSTOM_AIRBAG_VALUES});
+  }, [sendAirbagCmd, adaptiveEnabled, onSaveSuccess]);
 
   // 点击归零按钮
   const handleResetPress = useCallback(() => {
