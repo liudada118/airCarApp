@@ -392,6 +392,23 @@ class SerialModule(
         }
     }
 
+    @ReactMethod
+    fun clearPreference(bodyShape: String?, promise: Promise) {
+        pythonExecutor.execute {
+            try {
+                val module = Python.getInstance().getModule("server")
+                val resultJson = if (bodyShape != null && bodyShape.isNotEmpty()) {
+                    module.callAttr("clear_preference", bodyShape).toString()
+                } else {
+                    module.callAttr("clear_preference").toString()
+                }
+                promise.resolve(resultJson)
+            } catch (e: Exception) {
+                promise.reject("PY_ERROR", e.message ?: "clear_preference failed")
+            }
+        }
+    }
+
     // ─── 气囊手动控制 ─────────────────────────────────────────────────
 
     /** AirbagZone → 协议气囊 ID 列表
