@@ -1,7 +1,7 @@
 # 汽车座椅算法包 - 集成指南
 
-**版本**: 1.1  
-**更新日期**: 2026-03-05
+**版本**: 1.1.0  
+**更新日期**: 2026-03-20
 
 ---
 
@@ -344,6 +344,31 @@ def on_new_sensor_data(raw_144: np.ndarray):
 | `progress_pct` | `float` | 采集进度百分比 |
 | `thresholds` | `Dict` | 仅 `status="completed"` 时存在，生成的品味阈值 |
 
+**`control_mode` — 当前控制模式：**
+
+| 键 | 类型 | 说明 |
+|---|---|---|
+| `control_mode` | `str` | `"mode1"` (体验版) 或 `"mode2"` (量产版) |
+
+**`mode2_status` — Mode2子状态机状态（仅在 `control_mode="mode2"` 时存在，否则为 `None`）：**
+
+| 键 | 类型 | 说明 |
+|---|---|---|
+| `sub_state` | `str` | `"adaptive"` (自适应调节阶段) 或 `"hold"` (保压阶段) |
+| `sub_counter` | `int` | 当前子状态已运行帧数 |
+| `adaptive_frames` | `int` | 自适应阶段总帧数配置 |
+| `hold_frames` | `int` | 保压阶段总帧数配置 |
+
+**`hip_init` — 臀托初始化状态：**
+
+| 键 | 类型 | 说明 |
+|---|---|---|
+| `is_active` | `bool` | 臀托是否正在进行初始化充放气 |
+| `done` | `bool` | 臀托初始化是否已完成 |
+| `action` | `str` | 当前动作：`"inflate"` 或 `"deflate"` |
+| `counter` | `int` | 当前动作已执行帧数 |
+| `total_cycles` | `int` | 需执行的总帧数（基础帧数 + 品味联动帧数） |
+
 ---
 
 ### 3.3. `trigger_preference_recording(self, body_shape=None, airbag_ops=None) -> Dict`
@@ -366,18 +391,22 @@ def on_new_sensor_data(raw_144: np.ndarray):
     "side_wings_right": {"inflate": 0, "deflate": 0},   # 右侧翼未调节
     "leg_left":         {"inflate": 0, "deflate": 2},   # 左腿托放气2次
     "leg_right":        {"inflate": 0, "deflate": 1},   # 右腿托放气1次
+    "hip":              {"inflate": 2, "deflate": 1},   # 臀托充气2次放气1次（V1.1.0新增）
 }
 ```
 
 **`airbag_ops` 支持的区域键名：**
 
-| 键名 | 对应区域 | 影响的比例 |
-|---|---|---|
-| `lumbar` | 腰托 | 靠背上/下比 |
-| `side_wings_left` | 左侧翼 | 左/右压力比 |
-| `side_wings_right` | 右侧翼 | 左/右压力比 |
-| `leg_left` | 左腿托 | 左腿前3/后3比 |
-| `leg_right` | 右腿托 | 右腿前3/后3比 |
+| 键名 | 对应区域 | 对应气囊编号 | 影响的比例 | 说明 |
+|---|---|---|---|---|
+| `lumbar` | 腰托 | 5, 6 | 靠背上/下比 | 充放气次数用于构建置信区间 |
+| `side_wings_left` | 左侧翼 | 2, 4 | 左/右压力比 | 充放气次数用于构建置信区间 |
+| `side_wings_right` | 右侧翼 | 1, 3 | 左/右压力比 | 充放气次数用于构建置信区间 |
+| `leg_left` | 左腿托 | 10 | 左腿前3/后3比 | 充放气次数用于构建置信区间 |
+| `leg_right` | 右腿托 | 9 | 右腿前3/后3比 | 充放气次数用于构建置信区间 |
+| `hip` | 臀托 | 7, 8 | **无**（不参与比例计算） | **V1.1.0新增**。仅记录净充放气次数，用于下次入座时臀托初始化联动 |
+
+> **关于 `hip` 区域的特殊说明**：与其他区域不同，`hip`（臀托）区域的充放气操作**不影响任何压力比例的置信区间计算**。系统仅记录其净充放气次数（`inflate - deflate`），并将该值持久化到品味数据的 `net_ops` 字段中。当用户下次入座时，系统在初始化阶段会读取该净充放气次数，自动调整臀托气囊（7, 8号）的初始化充放气时长，从而实现臀托的品味记忆联动。
 
 **返回值：** `Dict`
 
@@ -646,12 +675,42 @@ def on_new_sensor_data(raw_144: np.ndarray):
     'side_wings_right': {'inflate': 0, 'deflate': 0},
     'leg_left': {'inflate': 0, 'deflate': 2},
     'leg_right': {'inflate': 0, 'deflate': 1},
+    'hip': {'inflate': 2, 'deflate': 1},          # V1.1.0新增：臀托区域（气囊7, 8）
 }
 ```
+
+> **提示**：当用户通过 `generate_manual_command(7, 'inflate')` 或 `generate_manual_command(8, 'deflate')` 操作臀托气囊时，系统会自动将操作计数累加到 `hip` 区域。该计数在调用 `trigger_preference_recording(airbag_ops=...)` 时传入，用于品味记录中臀托净充放气次数的持久化。
 
 ### 3.19. `reset_manual_airbag_ops(self)`
 
 重置手动模式气囊操作计数。切换模式或记录品味后应调用。
+
+---
+
+### 3.20. `get_control_mode(self) -> str` **(V1.1.0新增)**
+
+获取当前控制模式。
+
+**输入参数：** 无
+
+**返回值：** `str` - `'mode1'`（体验版）或 `'mode2'`（量产版）
+
+---
+
+### 3.21. `get_mode2_status(self) -> Dict` **(V1.1.0新增)**
+
+获取 Mode2（量产版）子状态机的实时状态。
+
+**输入参数：** 无
+
+**返回值：** `Dict`
+
+| 键 | 类型 | 说明 |
+|---|---|---|
+| `sub_state` | `str` | 当前子状态：`'adaptive'`（自适应调节中）或 `'hold'`（保压中） |
+| `sub_counter` | `int` | 当前子状态已执行的帧数 |
+| `adaptive_frames` | `int` | 自适应阶段总帧数（由配置 `mode2_adaptive_seconds` 计算） |
+| `hold_frames` | `int` | 保压阶段总帧数（由配置 `mode2_hold_seconds` 计算） |
 
 ---
 
@@ -675,7 +734,23 @@ def on_new_sensor_data(raw_144: np.ndarray):
 | `preference.kalman_process_noise` | `float` | `0.001` | 卡尔曼滤波过程噪声 |
 | `preference.kalman_measurement_noise` | `float` | `0.01` | 卡尔曼滤波观测噪声 |
 
-### 4.2. 腿托控制配置 (`leg_support`)
+### 4.2. 控制模式配置 (`control`) **(V1.1.0新增)**
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `control.mode` | `str` | `"mode1"` | 控制模式：`mode1`=体验版（持续自适应），`mode2`=量产版（自适应/保压交替） |
+| `control.mode2_adaptive_seconds` | `int` | `5` | Mode2自适应阶段持续秒数 |
+| `control.mode2_hold_seconds` | `int` | `10` | Mode2保压阶段持续秒数 |
+
+### 4.3. 臀托初始化配置 (`integrated_system.init_inflate`) **(V1.1.0新增)**
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `integrated_system.init_inflate.hip_airbags` | `list` | `[7, 8]` | 臀托气囊编号 |
+| `integrated_system.init_inflate.hip_base_cycles` | `int` | `26` | 臀托基础初始化周期数（约2秒） |
+| `integrated_system.init_inflate.hip_preference_seconds_per_op` | `int` | `3` | 品味每次操作对应的初始化秒数 |
+
+### 4.4. 腿托控制配置 (`leg_support`)
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |---|---|---|---|

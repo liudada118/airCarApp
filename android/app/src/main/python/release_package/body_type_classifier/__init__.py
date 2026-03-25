@@ -14,7 +14,7 @@ V2核心改进:
     - data_loader: 数据加载与预处理（含全144点和侧翼传感器）
     - feature_engineer: 特征工程（增强版 + 滑动窗口 + 时间变异特征）
     - classifier: 分类模型训练与预测（概率软投票）
-    - visualizer: 分类结果可视化
+    - visualizer: 分类结果可视化（需要 matplotlib, seaborn, sklearn 等额外依赖）
 """
 
 # 子模块版本号，算法包统一版本见 version.py
@@ -24,4 +24,11 @@ __author__ = "Hirkond"
 from .data_loader import DataLoader
 from .feature_engineer import FeatureEngineer
 from .classifier import BodyTypeClassifier
-from .visualizer import ClassificationVisualizer
+
+# visualizer 依赖 matplotlib, seaborn, sklearn.decomposition 等额外库
+# 包初始化时使用延迟导入，避免因缺少这些库导致整个包无法加载
+# 需要可视化调试时，直接 from body_type_classifier.visualizer import ClassificationVisualizer
+try:
+    from .visualizer import ClassificationVisualizer
+except (ImportError, ModuleNotFoundError):
+    ClassificationVisualizer = None

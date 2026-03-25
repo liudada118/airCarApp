@@ -73,20 +73,8 @@ class IntegratedSeatSystem:
         if self.config.get('body_shape_classification.enabled', False):
             model_path = self.config.get('body_shape_classification.model_path', None)
             if model_path and not os.path.isabs(model_path):
-                # 相对路径转为绝对路径
-                # 优先相对于配置文件所在目录，如果不存在则尝试相对于本文件所在目录
-                config_dir_path = os.path.join(os.path.dirname(os.path.abspath(config_path)), model_path)
-                module_dir_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), model_path)
-                if os.path.exists(config_dir_path):
-                    model_path = config_dir_path
-                elif os.path.exists(module_dir_path):
-                    model_path = module_dir_path
-                    # print(f"[集成系统] 模型文件不在配置目录，使用模块目录: {model_path}")
-                else:
-                    model_path = config_dir_path  # 保持原始行为，让 BodyShapeClassifier 报错
-                    # print(f"[集成系统] 警告: 模型文件两个路径都不存在:")
-                    # print(f"  配置目录: {config_dir_path}")
-                    # print(f"  模块目录: {module_dir_path}")
+                # 相对路径转为绝对路径（相对于配置文件所在目录）
+                model_path = os.path.join(os.path.dirname(os.path.abspath(config_path)), model_path)
             self.body_shape_classifier = BodyShapeClassifier(self.config, model_path)
         else:
             self.body_shape_classifier = None
@@ -138,10 +126,30 @@ class IntegratedSeatSystem:
         # 初始化充气相关配置
         self.init_inflate_enabled = self.config.get('integrated_system.init_inflate.enabled', True)
         self.init_inflate_cycles = self.config.get('integrated_system.init_inflate.cycles', 6)  # 充气周期数
-        self.init_inflate_airbags = self.config.get('integrated_system.init_inflate.airbags', [5, 6, 7, 8])  # 默认腰托(5,6)和臀托(7,8)
+        self.init_inflate_airbags = self.config.get('integrated_system.init_inflate.airbags', [5, 6, 1, 2, 3, 4])  # 默认腰托+侧翼（不含臀托）
         self.is_init_inflating = False  # 是否在初始化充气阶段
         self.init_inflate_counter = 0  # 初始化充气计数器
         self.init_inflate_done = False  # 标记这次会话是否已完成初始化充气
+
+        # 臀托初始化配置（独立于其他气囊，与品味系数联动）
+        self.hip_airbags = self.config.get('integrated_system.init_inflate.hip_airbags', [7, 8])
+        self.hip_base_cycles = self.config.get('integrated_system.init_inflate.hip_base_cycles', 26)  # 臀托基础初始化周期数（约2s）
+        self.hip_preference_seconds_per_op = self.config.get('integrated_system.init_inflate.hip_preference_seconds_per_op', 3)  # 品味每次操作对应秒数
+        self.is_hip_init_inflating = False  # 臀托是否在初始化充气阶段
+        self.hip_init_counter = 0  # 臀托初始化计数器
+        self.hip_init_cycles = self.hip_base_cycles  # 臀托实际初始化周期数（运行时根据品味调整）
+        self.hip_init_action = 'inflate'  # 臀托初始化动作（'inflate' 或 'deflate'）
+        self.hip_init_done = False  # 臀托初始化是否完成
+
+        # 控制模式配置（mode1=体验版, mode2=量产版）
+        self.control_mode = self.config.get('control.mode', 'mode1')
+        # Mode2 量产版参数
+        hz = self.config.get('system.hz', 13)
+        self.mode2_adaptive_frames = int(self.config.get('control.mode2_adaptive_seconds', 5) * hz)
+        self.mode2_hold_frames = int(self.config.get('control.mode2_hold_seconds', 10) * hz)
+        # Mode2 子状态机
+        self.mode2_sub_state = 'adaptive'  # 'adaptive' 或 'hold'
+        self.mode2_sub_counter = 0  # 子状态计数器（帧数）
 
         # 放气冷却锁配置（按气囊组独立锁定）
         self.deflate_cooldown_enabled = self.config.get('integrated_system.deflate_cooldown.enabled', True)
@@ -227,6 +235,7 @@ class IntegratedSeatSystem:
             'side_wings_right': {'inflate': 0, 'deflate': 0},
             'leg_left': {'inflate': 0, 'deflate': 0},
             'leg_right': {'inflate': 0, 'deflate': 0},
+            'hip': {'inflate': 0, 'deflate': 0},  # 臀托区域
         }
         # 气囊ID到区域的映射
         self._airbag_to_region = {
@@ -234,6 +243,7 @@ class IntegratedSeatSystem:
             2: 'side_wings_left', 4: 'side_wings_left',
             1: 'side_wings_right', 3: 'side_wings_right',
             10: 'leg_left', 9: 'leg_right',
+            7: 'hip', 8: 'hip',  # 臀托气囊映射
         }
 
         # 腿托前3后3比配置
@@ -263,24 +273,24 @@ class IntegratedSeatSystem:
         self.step_drop_triggered = False  # 是否已触发阶跃
         self.step_drop_deflate_counter = 0  # 放气周期计数器
 
-        # print(f"[集成系统] v{__version__} 初始化完成")
-        # print(f"  - 坐垫阈值: {self.cushion_sum_threshold}")
-        # print(f"  - 靠背阈值: {self.backrest_sum_threshold}")
-        # print(f"  - 离座帧数: {self.off_seat_frames_threshold}")
-        # print(f"  - 复位总帧数: {self.reset_frames_threshold} | 放气阶段: {self.reset_deflate_frames}帧")
-        # print(f"  - 使用滤波sum: {self.use_filtered_sum}")
+        print(f"[集成系统] v{__version__} 初始化完成")
+        print(f"  - 控制模式: {self.control_mode}")
+        print(f"  - 坐垫阈值: {self.cushion_sum_threshold}")
+        print(f"  - 靠背阈值: {self.backrest_sum_threshold}")
+        print(f"  - 离座帧数: {self.off_seat_frames_threshold}")
+        print(f"  - 复位总帧数: {self.reset_frames_threshold} | 放气阶段: {self.reset_deflate_frames}帧")
+        print(f"  - 使用滤波sum: {self.use_filtered_sum}")
         if self.init_inflate_enabled:
-            # print(f"  - 初始化充气: 启用 | 周期数={self.init_inflate_cycles} | 气囊={self.init_inflate_airbags}")
-            pass
+            print(f"  - 初始化充气: 启用 | 周期数={self.init_inflate_cycles} | 气囊={self.init_inflate_airbags}")
+            print(f"  - 臀托初始化: 启用 | 基础周期数={self.hip_base_cycles} | 气囊={self.hip_airbags} | 品味每次操作={self.hip_preference_seconds_per_op}s")
+        if self.control_mode == 'mode2':
+            print(f"  - Mode2参数: 自适应={self.mode2_adaptive_frames}帧 | 保压={self.mode2_hold_frames}帧")
         if self.deflate_cooldown_enabled:
-            # print(f"  - 放气冷却锁: 启用（按组独立） | 最大连续指令数={self.deflate_cooldown_max_commands} | 组=[lumbar, left_side_wing, right_side_wing, left_leg, right_leg]")
-            pass
+            print(f"  - 放气冷却锁: 启用（按组独立） | 最大连续指令数={self.deflate_cooldown_max_commands} | 组=[lumbar, left_side_wing, right_side_wing, left_leg, right_leg]")
         if self.body_shape_classifier:
-            # print(f"  - 体型三分类: 启用 | 自动触发={'开启' if self.auto_trigger_body_shape else '关闭'}")
-            pass
+            print(f"  - 体型三分类: 启用 | 自动触发={'开启' if self.auto_trigger_body_shape else '关闭'}")
         if self.step_drop_enabled:
-            # print(f"  - 阶跃下降检测: 启用 | 窗口={self.step_drop_window_frames}帧 | 间隔={self.step_drop_history_gap_frames}帧 | 阈值={self.step_drop_pressure_threshold} | 比例={self.step_drop_ratio} | 确认={self.step_drop_confirm_cycles}周期 | 放气={self.step_drop_deflate_cycles}周期")
-            pass
+            print(f"  - 阶跃下降检测: 启用 | 窗口={self.step_drop_window_frames}帧 | 间隔={self.step_drop_history_gap_frames}帧 | 阈值={self.step_drop_pressure_threshold} | 比例={self.step_drop_ratio} | 确认={self.step_drop_confirm_cycles}周期 | 放气={self.step_drop_deflate_cycles}周期")
 
     def process_frame(self, sensor_data: np.ndarray) -> Dict:
         """
@@ -479,9 +489,8 @@ class IntegratedSeatSystem:
         if living_result is not None and self.state in self.living_queue_enabled_states:
             self.living_result_queue.append(living_result['is_living'])
             if self.frame_count % 20 == 0:  # 减少日志输出
-                # print(f"[活体队列] 推入结果: {'活体' if living_result['is_living'] else '静物'}, "
-                      # f"队列长度: {len(self.living_result_queue)}/{self.living_queue_size}")
-                pass
+                print(f"[活体队列] 推入结果: {'活体' if living_result['is_living'] else '静物'}, "
+                      f"队列长度: {len(self.living_result_queue)}/{self.living_queue_size}")
 
         # 【新增】体型检测队列管理
         if body_result is not None and self.state in self.body_type_queue_enabled_states and not self.body_type_locked:
@@ -490,16 +499,15 @@ class IntegratedSeatSystem:
             if body_type in ["大人", "小孩"]:
                 self.body_type_result_queue.append(body_type)
                 if self.frame_count % 20 == 0:  # 减少日志输出
-                    # print(f"[体型队列] 推入结果: {body_type}, "
-                          # f"队列长度: {len(self.body_type_result_queue)}/{self.body_type_queue_size}")
-                    pass
+                    print(f"[体型队列] 推入结果: {body_type}, "
+                          f"队列长度: {len(self.body_type_result_queue)}/{self.body_type_queue_size}")
 
                 # 检查是否可以锁定体型（队列满且值一致）
                 if len(self.body_type_result_queue) >= self.body_type_queue_size:
                     if len(set(self.body_type_result_queue)) == 1:  # 所有值一致
                         self.body_type_locked = True
                         self.locked_body_type = self.body_type_result_queue[0]
-                        # print(f"[集成系统] 体型已锁定: {self.locked_body_type}（帧{self.frame_count}）")
+                        print(f"[集成系统] 体型已锁定: {self.locked_body_type}（帧{self.frame_count}）")
 
         # 获取坐垫和靠背的sum值（用于状态判定）
         # RESETTING状态时使用当前帧结果（检测重新入座），其他状态使用缓存结果（避免13帧间隔导致的0值闪烁）
@@ -521,13 +529,15 @@ class IntegratedSeatSystem:
             living_status = self._get_living_status(living_result)
             if living_status == "活体":
                 self.adaptive_control_unlocked = True
-                # print(f"[集成系统] 首次确认活体，解锁自适应控制（帧{self.frame_count}）")
+                print(f"[集成系统] 首次确认活体，解锁自适应控制（帧{self.frame_count}）")
 
                 # 在ADAPTIVE_LOCKED状态且首次确认活体时，启动初始化充气
                 if self.state == IntegratedState.ADAPTIVE_LOCKED and self.init_inflate_enabled and not self.init_inflate_done:
                     self.is_init_inflating = True
                     self.init_inflate_counter = 0
-                    # print(f"[集成系统] 启动初始化充气（帧{self.frame_count}）")
+                    # 同时启动臀托初始化（与品味系数联动）
+                    self._start_hip_init()
+                    print(f"[集成系统] 启动初始化充气（帧{self.frame_count}）")
 
         # 根据状态生成控制指令和决策数据
         control_command, control_decision_data = self._generate_control_command(regions, tap_result)
@@ -550,15 +560,41 @@ class IntegratedSeatSystem:
             # 非控制帧：延续上一帧的指令（如果有）
             control_command = self.latest_control_command
 
-        # 更新初始化充气计数器
+        # 更新初始化充气计数器（支撑气囊 + 臀托独立计数）
         if self.is_init_inflating and control_command is not None:
             self.init_inflate_counter += 1
             if self.init_inflate_counter >= self.init_inflate_cycles:
-                # 初始化充气完成，退出初始化充气阶段
+                # 支撑气囊初始化充气完成
                 self.is_init_inflating = False
                 self.init_inflate_counter = 0
-                self.init_inflate_done = True  # 标记已完成初始化充气
-                # print(f"[集成系统] 初始化充气完成，进入正常自适应控制阶段（帧{self.frame_count}）")
+                # 检查臀托是否也完成
+                if self.hip_init_done:
+                    self.init_inflate_done = True
+                    # Mode2: 初始化完成后重置子状态机
+                    if self.control_mode == 'mode2':
+                        self.mode2_sub_state = 'adaptive'
+                        self.mode2_sub_counter = 0
+                    print(f"[集成系统] 初始化充气全部完成，进入正常控制阶段（帧{self.frame_count}）")
+                else:
+                    print(f"[集成系统] 支撑气囊初始化完成，等待臀托初始化完成（帧{self.frame_count}）")
+        # 更新臀托初始化计数器
+        if self.is_hip_init_inflating and control_command is not None:
+            self.hip_init_counter += 1
+            if self.hip_init_counter >= self.hip_init_cycles:
+                # 臀托初始化完成
+                self.is_hip_init_inflating = False
+                self.hip_init_counter = 0
+                self.hip_init_done = True
+                # 检查支撑气囊是否也完成
+                if not self.is_init_inflating:
+                    self.init_inflate_done = True
+                    # Mode2: 初始化完成后重置子状态机
+                    if self.control_mode == 'mode2':
+                        self.mode2_sub_state = 'adaptive'
+                        self.mode2_sub_counter = 0
+                    print(f"[集成系统] 初始化充气全部完成，进入正常控制阶段（帧{self.frame_count}）")
+                else:
+                    print(f"[集成系统] 臀托初始化完成，等待支撑气囊初始化完成（帧{self.frame_count}）")
 
         # 阶跃下降覆盖检查（仅在控制帧检查）
         step_drop_override = False
@@ -611,11 +647,9 @@ class IntegratedSeatSystem:
                     self.preference_manager.set_active_body_shape(classified_shape)
                     # 检查该体型是否有品味数据，有则自动应用
                     if self.preference_manager.has_preference(classified_shape):
-                        # print(f"[集成系统] 体型 '{classified_shape}' 已识别，自动应用品味调节区间")
-                        pass
+                        print(f"[集成系统] 体型 '{classified_shape}' 已识别，自动应用品味调节区间")
                     else:
-                        # print(f"[集成系统] 体型 '{classified_shape}' 已识别，使用默认调节区间")
-                        pass
+                        print(f"[集成系统] 体型 '{classified_shape}' 已识别，使用默认调节区间")
 
                     # 体型分类完成时标定列方向重心（此时入座已稳定）
                     if not self.centroid_calibrated:
@@ -662,19 +696,6 @@ class IntegratedSeatSystem:
             },
         }
 
-        # 调试日志：每100帧打印一次体型三分类状态
-        if self.frame_count % 100 == 0:
-            _bsc_state = self.body_shape_classifier.state.name if self.body_shape_classifier else 'None'
-            _bsc_result = self.body_shape_classifier.latest_result if self.body_shape_classifier else None
-            _bsi_shape = body_shape_info.get('body_shape', '')
-            _pref_shape = self.preference_manager.active_body_shape
-            # print(f"[\u96c6\u6210\u7cfb\u7edf] \u5e27{self.frame_count} \u4f53\u578b\u8c03\u8bd5: "
-                  # f"classifier_state={_bsc_state}, "
-                  # f"latest_result={_bsc_result is not None}, "
-                  # f"body_shape_info.body_shape='{_bsi_shape}', "
-                  # f"pref_active='{_pref_shape}', "
-                  # f"seat_state={self.state.name}")
-
         # ③ 气囊指令
         airbag_command = {
             'command': control_command,                                  # list[int](55元素) 或 None
@@ -717,6 +738,20 @@ class IntegratedSeatSystem:
             'step_drop_detection': step_drop_data,
             'preference': preference_status,
             'preference_record_result': preference_record_result,
+            'control_mode': self.control_mode,
+            'mode2_status': {
+                'sub_state': self.mode2_sub_state,
+                'sub_counter': self.mode2_sub_counter,
+                'adaptive_frames': self.mode2_adaptive_frames,
+                'hold_frames': self.mode2_hold_frames,
+            } if self.control_mode == 'mode2' else None,
+            'hip_init': {
+                'is_active': self.is_hip_init_inflating,
+                'done': self.hip_init_done,
+                'action': self.hip_init_action,
+                'counter': self.hip_init_counter,
+                'total_cycles': self.hip_init_cycles,
+            },
             'frame_count': self.frame_count
         }
 
@@ -736,17 +771,6 @@ class IntegratedSeatSystem:
         Args:
             trigger_source: 触发来源描述（用于日志）
         """
-        # 详细调试日志：打印每个条件的状态
-        _auto_cfg = self.auto_trigger_body_shape
-        _cls_exists = self.body_shape_classifier is not None
-        _already_triggered = self._body_shape_auto_triggered
-        _cls_state = self.body_shape_classifier.state.name if _cls_exists else 'None'
-        _model_loaded = (self.body_shape_classifier._backend is not None) if _cls_exists else False
-        # print(f"[集成系统] _try_auto_trigger({trigger_source}): "
-              # f"auto_cfg={_auto_cfg}, cls_exists={_cls_exists}, "
-              # f"already_triggered={_already_triggered}, cls_state={_cls_state}, "
-              # f"model_loaded={_model_loaded}")
-
         if (self.auto_trigger_body_shape
                 and self.body_shape_classifier is not None
                 and not self._body_shape_auto_triggered
@@ -754,22 +778,7 @@ class IntegratedSeatSystem:
             result = self.body_shape_classifier.trigger()
             if result.get('success'):
                 self._body_shape_auto_triggered = True
-                # print(f"[集成系统] 自动触发体型三分类成功（{trigger_source}，帧{self.frame_count}）")
-            else:
-                # print(f"[集成系统] 自动触发体型三分类失败（{trigger_source}）: {result.get('message', 'unknown')}")
-                pass
-        else:
-            # 打印哪个条件不满足
-            reasons = []
-            if not _auto_cfg:
-                reasons.append('auto_trigger配置关闭')
-            if not _cls_exists:
-                reasons.append('分类器未初始化')
-            if _already_triggered:
-                reasons.append('本次入座已触发过')
-            if _cls_exists and self.body_shape_classifier.state != ClassifierState.IDLE:
-                reasons.append(f'分类器状态不是IDLE(当前{_cls_state})')
-            # print(f"[集成系统] 自动触发跳过（{trigger_source}）: {', '.join(reasons)}")
+                print(f"[集成系统] 自动触发体型三分类（{trigger_source}，帧{self.frame_count}）")
 
     def _reset_body_shape_auto_trigger(self):
         """重置自动触发标志（离座时调用，下次入座可重新触发）"""
@@ -794,7 +803,7 @@ class IntegratedSeatSystem:
         # 重置品味管理器（取消激活体型，取消进行中的记录）
         if self.preference_manager.is_recording:
             self.preference_manager.cancel_recording()
-            # print(f"[集成系统] 离座时取消了进行中的品味记录")
+            print(f"[集成系统] 离座时取消了进行中的品味记录")
         self.preference_manager.set_active_body_shape(None)
 
         # 重置重心标定状态（下次入座重新标定）
@@ -925,8 +934,8 @@ class IntegratedSeatSystem:
         self.centroid_calibrated = True
         # 同步重心到品味管理器（确保品味采集时使用相同的重心）
         self.preference_manager.set_centroid(self.cushion_col_centroid)
-        # print(f"[集成系统] 列方向重心标定完成: {self.cushion_col_centroid:.3f}"
-              # f"（帧{self.frame_count}）")
+        print(f"[集成系统] 列方向重心标定完成: {self.cushion_col_centroid:.3f}"
+              f"（帧{self.frame_count}）")
 
     def _compute_f3r3_by_centroid(self, front3: np.ndarray, rear3: np.ndarray) -> dict:
         """
@@ -1037,7 +1046,7 @@ class IntegratedSeatSystem:
                     self.body_type_locked = False  # 重置体型锁
                     self.locked_body_type = "未判断"  # 重置锁定值
                     self._reset_deflate_cooldown()  # 重置所有气囊组的放气冷却锁
-                    # print(f"[集成系统] 状态转换: OFF_SEAT → ADAPTIVE_LOCKED (全座有压力，帧{self.frame_count})，活体队列已清空")
+                    print(f"[集成系统] 状态转换: OFF_SEAT → ADAPTIVE_LOCKED (全座有压力，帧{self.frame_count})，活体队列已清空")
                     self._try_auto_trigger_body_shape('OFF_SEAT→ADAPTIVE_LOCKED')
                 else:
                     # 只有坐垫 → 进入CUSHION_ONLY
@@ -1048,7 +1057,7 @@ class IntegratedSeatSystem:
                     self.body_type_locked = False  # 重置体型锁
                     self.locked_body_type = "未判断"  # 重置锁定值，避免后续判断错误
                     self._reset_deflate_cooldown()  # 重置所有气囊组的放气冷却锁
-                    # print(f"[集成系统] 状态转换: OFF_SEAT → CUSHION_ONLY (仅坐垫有压力，帧{self.frame_count})，活体队列已清空")
+                    print(f"[集成系统] 状态转换: OFF_SEAT → CUSHION_ONLY (仅坐垫有压力，帧{self.frame_count})，活体队列已清空")
 
         elif self.state == IntegratedState.CUSHION_ONLY:
             # 检查是否升级到全座
@@ -1058,7 +1067,7 @@ class IntegratedSeatSystem:
                 self.off_counter = 0
                 self.backrest_lost_counter = 0
                 # 不清空队列，保留已有的检测历史
-                # print(f"[集成系统] 状态转换: CUSHION_ONLY → ADAPTIVE_LOCKED (靠背压力出现，帧{self.frame_count})，保留活体队列")
+                print(f"[集成系统] 状态转换: CUSHION_ONLY → ADAPTIVE_LOCKED (靠背压力出现，帧{self.frame_count})，保留活体队列")
                 self._try_auto_trigger_body_shape('CUSHION_ONLY→ADAPTIVE_LOCKED')
             elif cushion_sum < self.cushion_sum_threshold:
                 # 坐垫压力消失 - 准备离座，进入复位状态
@@ -1068,6 +1077,10 @@ class IntegratedSeatSystem:
                     self.off_counter = 0
                     self.reset_counter = 0
                     self.init_inflate_done = False  # 重置初始化充气标志，下次坐下可以重新初始化
+                    self.is_hip_init_inflating = False  # 重置臀托初始化
+                    self.hip_init_done = False
+                    self.mode2_sub_state = 'adaptive'  # 重置Mode2子状态机
+                    self.mode2_sub_counter = 0
                     self.living_result_queue.clear()  # 新增：清空活体队列
                     self.body_type_result_queue.clear()  # 新增：清空体型队列
                     self.body_type_locked = False  # 重置体型锁
@@ -1080,7 +1093,7 @@ class IntegratedSeatSystem:
                     self._reset_step_drop_detection()  # 重置阶跃检测
                     self._reset_body_shape_auto_trigger()  # 重置自动触发标志
                     self._reset_body_shape_on_leave()  # 重置体型三分类结果和品味激活状态
-                    # print(f"[集成系统] 状态转换: CUSHION_ONLY → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空，体型已重置")
+                    print(f"[集成系统] 状态转换: CUSHION_ONLY → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空，体型已重置")
             else:
                 # 坐垫满足但靠背不满足，保持CUSHION_ONLY
                 self.off_counter = 0
@@ -1096,7 +1109,7 @@ class IntegratedSeatSystem:
                     self.backrest_lost_counter = 0
                     self.off_counter = 0
                     # 不清空队列，保留检测历史
-                    # print(f"[集成系统] 状态转换: ADAPTIVE_LOCKED → CUSHION_ONLY (靠背压力不足超过1秒，帧{self.frame_count})，保留活体队列")
+                    print(f"[集成系统] 状态转换: ADAPTIVE_LOCKED → CUSHION_ONLY (靠背压力不足超过1秒，帧{self.frame_count})，保留活体队列")
             else:
                 # 靠背压力正常，重置缓冲计数
                 self.backrest_lost_counter = 0
@@ -1109,6 +1122,10 @@ class IntegratedSeatSystem:
                     self.off_counter = 0
                     self.reset_counter = 0
                     self.init_inflate_done = False  # 重置初始化充气标志，下次坐下可以重新初始化
+                    self.is_hip_init_inflating = False  # 重置臀托初始化
+                    self.hip_init_done = False
+                    self.mode2_sub_state = 'adaptive'  # 重置Mode2子状态机
+                    self.mode2_sub_counter = 0
                     self.living_result_queue.clear()  # 新增：清空活体队列
                     self.body_type_result_queue.clear()  # 新增：清空体型队列
                     self.body_type_locked = False  # 重置体型锁
@@ -1121,7 +1138,7 @@ class IntegratedSeatSystem:
                     self._reset_step_drop_detection()  # 重置阶跃检测
                     self._reset_body_shape_auto_trigger()  # 重置自动触发标志
                     self._reset_body_shape_on_leave()  # 重置体型三分类结果和品味激活状态
-                    # print(f"[集成系统] 状态转换: ADAPTIVE_LOCKED → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空，体型已重置")
+                    print(f"[集成系统] 状态转换: ADAPTIVE_LOCKED → RESETTING (帧{self.frame_count})，按摩已关闭，活体队列已清空，体型已重置")
             else:
                 self.off_counter = 0
 
@@ -1140,7 +1157,7 @@ class IntegratedSeatSystem:
                     self.body_type_locked = False  # 重置体型锁
                     self.locked_body_type = "未判断"  # 重置锁定值
                     self._reset_deflate_cooldown()  # 重置所有气囊组的放气冷却锁
-                    # print(f"[集成系统] 状态转换: RESETTING → ADAPTIVE_LOCKED (复位期间重新入座，全座有压力，帧{self.frame_count})，活体队列已清空")
+                    print(f"[集成系统] 状态转换: RESETTING → ADAPTIVE_LOCKED (复位期间重新入座，全座有压力，帧{self.frame_count})，活体队列已清空")
                     self._try_auto_trigger_body_shape('RESETTING→ADAPTIVE_LOCKED')
                 else:
                     # 只有坐垫 → 进入CUSHION_ONLY
@@ -1152,13 +1169,13 @@ class IntegratedSeatSystem:
                     self.body_type_locked = False  # 重置体型锁
                     self.locked_body_type = "未判断"  # 重置锁定值
                     self._reset_deflate_cooldown()  # 重置所有气囊组的放气冷却锁
-                    # print(f"[集成系统] 状态转换: RESETTING → CUSHION_ONLY (复位期间重新入座，仅坐垫有压力，帧{self.frame_count})，活体队列已清空")
+                    print(f"[集成系统] 状态转换: RESETTING → CUSHION_ONLY (复位期间重新入座，仅坐垫有压力，帧{self.frame_count})，活体队列已清空")
             elif self.reset_counter >= self.reset_frames_threshold:
                 # 复位完成，进入OFF_SEAT
                 self.state = IntegratedState.OFF_SEAT
                 self.reset_counter = 0
                 self._reset_body_shape_auto_trigger()  # 重置自动触发标志
-                # print(f"[集成系统] 状态转换: RESETTING → OFF_SEAT (复位完成，帧{self.frame_count})")
+                print(f"[集成系统] 状态转换: RESETTING → OFF_SEAT (复位完成，帧{self.frame_count})")
             else:
                 # 继续复位
                 self.reset_counter += 1
@@ -1194,11 +1211,11 @@ class IntegratedSeatSystem:
                 if self.reset_counter <= self.reset_deflate_frames:
                     # 放气阶段：发送全部气囊放气指令
                     command = self._generate_reset_command()
-                    # print(f"[控制指令] 帧{self.frame_count} | 指令#{self.command_count} | 复位-放气阶段({self.reset_counter}/{self.reset_deflate_frames}) | 全部放气(1-24号)")
+                    print(f"[控制指令] 帧{self.frame_count} | 指令#{self.command_count} | 复位-放气阶段({self.reset_counter}/{self.reset_deflate_frames}) | 全部放气(1-24号)")
                 else:
                     # 保持阶段：发送全部气囊保持指令
                     command = self._generate_reset_hold_command()
-                    # print(f"[控制指令] 帧{self.frame_count} | 指令#{self.command_count} | 复位-保持阶段({self.reset_counter}/{self.reset_frames_threshold}) | 全部保持(1-24号)")
+                    print(f"[控制指令] 帧{self.frame_count} | 指令#{self.command_count} | 复位-保持阶段({self.reset_counter}/{self.reset_frames_threshold}) | 全部保持(1-24号)")
 
                 return command, control_decision_data
             return None, control_decision_data
@@ -1211,8 +1228,7 @@ class IntegratedSeatSystem:
 
             # 每10帧发送保持指令
             if self.frame_count % 10 == 0:
-                # print(f"[控制] 帧{self.frame_count} | CUSHION_ONLY状态，发送保持指令（按摩已屏蔽）")
-                pass
+                print(f"[控制] 帧{self.frame_count} | CUSHION_ONLY状态，发送保持指令（按摩已屏蔽）")
                 return self._generate_hold_command(), control_decision_data
 
             return None, control_decision_data
@@ -1223,18 +1239,19 @@ class IntegratedSeatSystem:
             if self.manual_mode:
                 return None, control_decision_data
 
-            # 初始化充气阶段：也需要先确认活体（安全机制）
-            if self.is_init_inflating:
+            # 初始化充气阶段（支撑气囊 + 臀托独立初始化）
+            if self.is_init_inflating or self.is_hip_init_inflating:
                 if self.frame_count % self.control_check_interval == 0:
                     # 首先检查自适应控制锁
                     if not self.adaptive_control_unlocked:
                         if self.frame_count % 20 == 0:
-                            # print(f"[集成系统] 等待首次确认活体，初始化充气已暂停，发送保持指令（帧{self.frame_count}）")
-                            pass
+                            print(f"[集成系统] 等待首次确认活体，初始化充气已暂停，发送保持指令（帧{self.frame_count}）")
                         return self._generate_hold_command(), control_decision_data
 
-                    # 已解锁，可以进行初始化充气
-                    # print(f"[控制] 帧{self.frame_count} | 初始化充气中 ({self.init_inflate_counter}/{self.init_inflate_cycles})")
+                    # 已解锁，进行初始化充气（支撑气囊 + 臀托同时进行）
+                    hip_status = f" | 臀托{self.hip_init_action}({self.hip_init_counter}/{self.hip_init_cycles})" if self.is_hip_init_inflating else ""
+                    support_status = f"支撑气囊({self.init_inflate_counter}/{self.init_inflate_cycles})" if self.is_init_inflating else "支撑气囊已完成"
+                    print(f"[控制] 帧{self.frame_count} | 初始化充气中 {support_status}{hip_status}")
                     return self._generate_init_inflate_command(), control_decision_data
                 return None, control_decision_data
 
@@ -1248,30 +1265,48 @@ class IntegratedSeatSystem:
             # 🌟 首先检查自适应控制锁
             if not self.adaptive_control_unlocked:
                 if self.frame_count % 20 == 0:  # 每20帧打印一次
-                    # print(f"[集成系统] 等待首次确认活体，自适应控制已锁定，发送保持指令（帧{self.frame_count}）")
-                    pass
+                    print(f"[集成系统] 等待首次确认活体，自适应控制已锁定，发送保持指令（帧{self.frame_count}）")
                 return self._generate_hold_command(), control_decision_data
 
             # 🌟 静物或检测中：暂停调节，发送保持指令
             living_status = self._get_living_status(self.latest_living_result)
             if living_status in ["静物", "检测中"]:
                 if self.frame_count % 20 == 0:  # 每20帧打印一次（约1.5秒）
-                    # print(f"[集成系统] {living_status}，暂停气囊自适应调节，发送保持指令（帧{self.frame_count}）")
-                    pass
+                    print(f"[集成系统] {living_status}，暂停气囊自适应调节，发送保持指令（帧{self.frame_count}）")
                 # 发送保持指令
                 return self._generate_hold_command(), control_decision_data
 
-            # 正常控制逻辑（仅当解锁且确认为"活体"时）
+            # === Mode2 量产版：自适应与保压交替 ===
+            if self.control_mode == 'mode2':
+                self.mode2_sub_counter += self.control_check_interval  # 每次调用时累加间隔帧数
+                if self.mode2_sub_state == 'adaptive':
+                    # 自适应阶段：执行正常控制逻辑
+                    if self.mode2_sub_counter >= self.mode2_adaptive_frames:
+                        # 切换到保压阶段
+                        self.mode2_sub_state = 'hold'
+                        self.mode2_sub_counter = 0
+                        print(f"[集成系统] Mode2: 自适应阶段结束，切换到保压阶段（帧{self.frame_count}）")
+                        return self._generate_hold_command(), control_decision_data
+                    # 还在自适应阶段，执行正常控制逻辑（下方执行）
+                elif self.mode2_sub_state == 'hold':
+                    # 保压阶段：发送保持指令
+                    if self.mode2_sub_counter >= self.mode2_hold_frames:
+                        # 切换到自适应阶段
+                        self.mode2_sub_state = 'adaptive'
+                        self.mode2_sub_counter = 0
+                        print(f"[集成系统] Mode2: 保压阶段结束，切换到自适应阶段（帧{self.frame_count}）")
+                    else:
+                        # 保压中，发送保持指令
+                        if self.frame_count % 20 == 0:
+                            print(f"[集成系统] Mode2: 保压中 ({self.mode2_sub_counter}/{self.mode2_hold_frames}帧)，发送保持指令（帧{self.frame_count}）")
+                        return self._generate_hold_command(), control_decision_data
+
+            # 正常控制逻辑（mode1始终执行，mode2仅在自适应阶段执行）
             lumbar_action = self._lumbar_control(regions)
             left_wing_action, right_wing_action = self._side_wing_control(regions)
             left_leg_action, right_leg_action = self._leg_support_control(regions)
 
-            # 调试：显示当前控制决策
-            # print(f"[控制决策] 帧{self.frame_count} | "
-            #       f"腰托={lumbar_action}, 左翼={left_wing_action}, "
-            #       f"右翼={right_wing_action}, 左腿托={left_leg_action}, 右腿托={right_leg_action}")
-
-            # === 收集支撑气囊指令（按摩关闭时） ===
+            # === 收集支撑气囊指令 ===
             commands = self._collect_commands(
                 lumbar_action, left_wing_action, right_wing_action,
                 left_leg_action, right_leg_action
@@ -1282,18 +1317,6 @@ class IntegratedSeatSystem:
 
             # 如果有控制命令，直接发送
             if commands:
-                # 打印发送的指令
-                action_names = []
-                for airbag, gear in commands.items():
-                    if gear == self.gear_inflate:
-                        action_names.append(f"{airbag}充")
-                    elif gear == self.gear_deflate:
-                        action_names.append(f"{airbag}放")
-                    elif gear == self.gear_stop:
-                        action_names.append(f"{airbag}保持")
-
-                # print(f"[控制指令] 帧{self.frame_count} | 发送指令: {', '.join(action_names)}")
-
                 # 生成协议帧
                 return self._generate_protocol_frame(commands), control_decision_data
 
@@ -1481,7 +1504,8 @@ class IntegratedSeatSystem:
             self.left_wing_airbags +
             self.right_wing_airbags +
             self.left_leg_airbags +
-            self.right_leg_airbags
+            self.right_leg_airbags +
+            self.hip_airbags
         )
         commands = {airbag: self.gear_stop for airbag in active_airbags}
         return self._generate_protocol_frame(commands)
@@ -1499,9 +1523,88 @@ class IntegratedSeatSystem:
         return self._generate_protocol_frame(commands)
 
     def _generate_init_inflate_command(self) -> list:
-        """生成初始化充气指令"""
-        commands = {airbag: self.gear_inflate for airbag in self.init_inflate_airbags}
+        """生成初始化充气指令（支撑气囊 + 臀托独立控制）"""
+        commands = {}
+        # 支撑气囊：如果还在初始化充气阶段，发送充气指令
+        if self.is_init_inflating:
+            for airbag in self.init_inflate_airbags:
+                commands[airbag] = self.gear_inflate
+        # 臀托：如果还在臀托初始化阶段，根据动作方向发送充气或放气指令
+        if self.is_hip_init_inflating:
+            gear = self.gear_inflate if self.hip_init_action == 'inflate' else self.gear_deflate
+            for airbag in self.hip_airbags:
+                commands[airbag] = gear
         return self._generate_protocol_frame(commands)
+
+    def _start_hip_init(self):
+        """
+        启动臀托初始化（与品味系数联动）
+
+        算法逻辑：
+        1. 基础初始化时间 = hip_base_cycles（配置文件中的基础周期数，约2s）
+        2. 查询当前激活体型的品味数据，获取臀托区域的净充放气次数
+        3. 计算额外时间 = 净充放气次数 * 每次操作对应秒数 * 采样率 / 控制间隔
+        4. 总初始化周期数 = 基础周期数 + 额外周期数
+        5. 如果总周期数 > 0，充气；如果 < 0，放气；如果 = 0，跳过
+        """
+        hz = self.config.get('system.hz', 13)
+        cycles_per_second = hz / self.control_check_interval  # 每秒发送的指令数
+
+        # 基础初始化周期数
+        base_cycles = self.hip_base_cycles
+
+        # 查询品味系数中臀托的净充放气次数
+        hip_net_ops = self._get_hip_preference_net_ops()
+
+        # 计算品味额外周期数：净充放气次数 * 每次操作对应秒数 * 每秒周期数
+        extra_cycles = int(hip_net_ops * self.hip_preference_seconds_per_op * cycles_per_second)
+
+        # 总初始化周期数
+        total_cycles = base_cycles + extra_cycles
+
+        if total_cycles > 0:
+            self.hip_init_action = 'inflate'
+            self.hip_init_cycles = total_cycles
+        elif total_cycles < 0:
+            self.hip_init_action = 'deflate'
+            self.hip_init_cycles = abs(total_cycles)
+        else:
+            # 总周期数为0，跳过臀托初始化
+            self.hip_init_done = True
+            print(f"[集成系统] 臀托初始化跳过（净周期数为0）")
+            return
+
+        self.is_hip_init_inflating = True
+        self.hip_init_counter = 0
+        self.hip_init_done = False
+
+        print(f"[集成系统] 臀托初始化启动: 动作={self.hip_init_action} | "
+              f"基础周期={base_cycles} | 品味净操作={hip_net_ops} | "
+              f"额外周期={extra_cycles} | 总周期={self.hip_init_cycles}")
+
+    def _get_hip_preference_net_ops(self) -> int:
+        """
+        获取当前激活体型的臀托品味净充放气次数
+
+        返回值：
+            正数 = 净充气次数（需要额外充气）
+            负数 = 净放气次数（需要放气）
+            0 = 无品味数据或充放气平衡
+        """
+        active_shape = self.preference_manager.active_body_shape
+        if active_shape is None:
+            return 0
+
+        # 尝试从品味数据中获取臀托的净操作次数
+        if not self.preference_manager.has_preference(active_shape):
+            return 0
+
+        # 从品味数据中获取hip区域的net_ops
+        pref_data = self.preference_manager.preferences.get(active_shape, {})
+        net_ops_data = pref_data.get('net_ops', {})
+        hip_net_ops = net_ops_data.get('hip', 0)
+
+        return hip_net_ops
 
     def _lumbar_control(self, regions: Dict) -> ControlAction:
         """腰托控制逻辑（使用平均值而非总和）
@@ -1762,7 +1865,7 @@ class IntegratedSeatSystem:
                 if group_state['locked']:
                     group_state['locked'] = False
                     group_state['counter'] = 0
-                    # print(f"[放气冷却锁] 帧{self.frame_count} | {group_name}组：检测到充气动作，解除冷却锁")
+                    print(f"[放气冷却锁] 帧{self.frame_count} | {group_name}组：检测到充气动作，解除冷却锁")
                 elif group_state['counter'] > 0:
                     group_state['counter'] = 0
 
@@ -1775,8 +1878,7 @@ class IntegratedSeatSystem:
                             modified_commands[airbag] = self.gear_stop
 
                     if self.frame_count % 20 == 0:  # 每20帧打印一次
-                        # print(f"[放气冷却锁] 帧{self.frame_count} | {group_name}组：冷却锁生效中，放气指令已转为保持")
-                        pass
+                        print(f"[放气冷却锁] 帧{self.frame_count} | {group_name}组：冷却锁生效中，放气指令已转为保持")
                 else:
                     # 该组冷却锁未触发，增加计数
                     group_state['counter'] += 1
@@ -1784,7 +1886,7 @@ class IntegratedSeatSystem:
                     # 检查是否达到阈值
                     if group_state['counter'] >= self.deflate_cooldown_max_commands:
                         group_state['locked'] = True
-                        # print(f"[放气冷却锁] 帧{self.frame_count} | {group_name}组：触发冷却锁！连续放气{group_state['counter']}条指令")
+                        print(f"[放气冷却锁] 帧{self.frame_count} | {group_name}组：触发冷却锁！连续放气{group_state['counter']}条指令")
 
                         # 立即将该组本帧的放气改为保持
                         for airbag in airbag_list:
@@ -1934,7 +2036,7 @@ class IntegratedSeatSystem:
                 self.step_drop_triggered = False
                 self.step_drop_deflate_counter = 0
                 self.step_drop_confirm_counter = 0
-                # print(f"[阶跃检测] 帧{self.frame_count} | 放气完成，恢复正常控制")
+                print(f"[阶跃检测] 帧{self.frame_count} | 放气完成，恢复正常控制")
                 return False
             return True
 
@@ -1945,8 +2047,8 @@ class IntegratedSeatSystem:
                 # 确认触发
                 self.step_drop_triggered = True
                 self.step_drop_deflate_counter = 0
-                # print(f"[阶跃检测] 帧{self.frame_count} | 检测到阶跃下降！历史平均={step_drop_data['history_avg']:.0f}, "
-                      # f"当前={step_drop_data['current_pressure']:.0f}, 开始放气")
+                print(f"[阶跃检测] 帧{self.frame_count} | 检测到阶跃下降！历史平均={step_drop_data['history_avg']:.0f}, "
+                      f"当前={step_drop_data['current_pressure']:.0f}, 开始放气")
                 return True
         else:
             # 未检测到下降，重置确认计数
@@ -2188,9 +2290,6 @@ class IntegratedSeatSystem:
         """
         生成 process_frame 返回值中的 body_shape 字段
 
-        改进：即使分类器不在 COMPLETED 状态，也检查 latest_result 和
-        preference_manager.active_body_shape，确保分类结果不会丢失。
-
         Returns:
             Dict - 体型三分类状态摘要
         """
@@ -2214,24 +2313,11 @@ class IntegratedSeatSystem:
             result['progress'] = status.get('progress', 0)
             result['remaining_sec'] = status.get('remaining_sec', 0)
 
-        # 优先从 COMPLETED 状态的 result 中获取体型信息
         if state == 'COMPLETED' and 'result' in status:
             r = status['result']
             result['body_shape'] = r.get('body_shape', '')
             result['confidence'] = r.get('confidence', 0)
             result['probabilities'] = r.get('probabilities', {})
-        elif self.body_shape_classifier.latest_result is not None:
-            # Fallback: 分类器有历史结果但状态不是 COMPLETED（不应发生，但作为保护）
-            r = self.body_shape_classifier.latest_result
-            body_shape = r.get('body_shape', '')
-            if body_shape and body_shape not in ('分类失败', '采集超时'):
-                result['body_shape'] = body_shape
-                result['confidence'] = r.get('confidence', 0)
-                result['probabilities'] = r.get('probabilities', {})
-
-        # 最终 Fallback: 使用品味管理器的激活体型
-        if not result.get('body_shape') and self.preference_manager.active_body_shape:
-            result['body_shape'] = self.preference_manager.active_body_shape
 
         return result
 
@@ -2353,6 +2439,15 @@ class IntegratedSeatSystem:
         self.is_init_inflating = False
         self.init_inflate_counter = 0
         self.init_inflate_done = False
+        # 重置臀托初始化状态
+        self.is_hip_init_inflating = False
+        self.hip_init_counter = 0
+        self.hip_init_cycles = self.hip_base_cycles
+        self.hip_init_action = 'inflate'
+        self.hip_init_done = False
+        # 重置Mode2子状态机
+        self.mode2_sub_state = 'adaptive'
+        self.mode2_sub_counter = 0
         self._reset_deflate_cooldown()  # 重置所有气囊组的放气冷却锁
 
         # 清空指令队列
@@ -2381,7 +2476,7 @@ class IntegratedSeatSystem:
         self.preference_manager.set_active_body_shape(None)
 
         self.latest_result = None
-        # print("[集成系统] 已重置")
+        print("[集成系统] 已重置")
 
     def reset_massage(self, clear_history: bool = False):
         """
@@ -2391,8 +2486,7 @@ class IntegratedSeatSystem:
             clear_history: 是否同时清空拍打检测历史缓冲（默认False，仅关闭按摩）
         """
         if not self.tap_massage_detector:
-            # print("[集成系统] 拍打按摩检测器未启用")
-            pass
+            print("[集成系统] 拍打按摩检测器未启用")
             return
 
         # 关闭按摩状态
@@ -2407,10 +2501,9 @@ class IntegratedSeatSystem:
             self.tap_massage_detector.cushion_frame_diff_history.clear()
             self.tap_massage_detector.backrest_tap_events.clear()
             self.tap_massage_detector.cushion_tap_events.clear()
-            # print("[集成系统] 拍打按摩已关闭，检测历史已清空")
+            print("[集成系统] 拍打按摩已关闭，检测历史已清空")
         else:
-            # print("[集成系统] 拍打按摩已关闭")
-            pass
+            print("[集成系统] 拍打按摩已关闭")
 
     def _handle_tap_massage_commands(self, tap_result: Dict) -> Dict[int, int]:
         """
@@ -2430,12 +2523,12 @@ class IntegratedSeatSystem:
                 # 开启：充气所有靠背按摩气囊（11-18）
                 for airbag in self.backrest_massage_airbags:
                     commands[airbag] = self.gear_inflate
-                # print(f"[拍打按摩] 靠背按摩开启 (帧{self.frame_count})")
+                print(f"[拍打按摩] 靠背按摩开启 (帧{self.frame_count})")
             elif tap_result['backrest_command'] == 'TOGGLE_OFF':
                 # 关闭：放气
                 for airbag in self.backrest_massage_airbags:
                     commands[airbag] = self.gear_deflate
-                # print(f"[拍打按摩] 靠背按摩关闭 (帧{self.frame_count})")
+                print(f"[拍打按摩] 靠背按摩关闭 (帧{self.frame_count})")
 
         # 坐垫按摩触发
         if tap_result.get('cushion_tap_triggered'):
@@ -2443,12 +2536,12 @@ class IntegratedSeatSystem:
                 # 开启：充气所有坐垫按摩气囊（19-24）
                 for airbag in self.cushion_massage_airbags:
                     commands[airbag] = self.gear_inflate
-                # print(f"[拍打按摩] 坐垫按摩开启 (帧{self.frame_count})")
+                print(f"[拍打按摩] 坐垫按摩开启 (帧{self.frame_count})")
             elif tap_result['cushion_command'] == 'TOGGLE_OFF':
                 # 关闭：放气
                 for airbag in self.cushion_massage_airbags:
                     commands[airbag] = self.gear_deflate
-                # print(f"[拍打按摩] 坐垫按摩关闭 (帧{self.frame_count})")
+                print(f"[拍打按摩] 坐垫按摩关闭 (帧{self.frame_count})")
 
         # 修复：保持其他正在运行的按摩气囊充气状态
         # 当一个按摩被触发切换时，另一个正在运行的按摩不应被设置为保持档位
@@ -2513,18 +2606,17 @@ class IntegratedSeatSystem:
         elif key in reverse_mapping:
             # 完整路径：反向查找简短名称
             short_name = reverse_mapping[key]
-            # print(f"[集成系统] 完整路径 {key} 映射到简短名称 {short_name}")
+            print(f"[集成系统] 完整路径 {key} 映射到简短名称 {short_name}")
         else:
             # 未知参数：只更新配置文件，不更新实例变量
             self.config.set(key, value)
-            # print(f"[集成系统] 配置已更新（未映射参数）: {key} = {value}")
+            print(f"[集成系统] 配置已更新（未映射参数）: {key} = {value}")
             if auto_save:
                 try:
                     self.config.save_to_file()
-                    # print(f"[集成系统] 配置已保存到文件")
+                    print(f"[集成系统] 配置已保存到文件")
                 except Exception as e:
-                    # print(f"[集成系统] 保存配置失败: {e}")
-                    pass
+                    print(f"[集成系统] 保存配置失败: {e}")
             return
 
         # 使用映射表更新
@@ -2536,22 +2628,21 @@ class IntegratedSeatSystem:
         # 2. 更新配置
         self.config.set(config_path, value)
 
-        # print(f"[集成系统] 参数已更新: {short_name} = {value} (配置路径: {config_path})")
+        print(f"[集成系统] 参数已更新: {short_name} = {value} (配置路径: {config_path})")
 
         # 特殊处理：队列大小变化时重建队列
         if short_name == 'living_queue_size':
             old_queue = list(self.living_result_queue)
             self.living_result_queue = deque(old_queue[-value:], maxlen=value)
-            # print(f"[集成系统] 活体队列大小已更新: maxlen={value}, 当前长度={len(self.living_result_queue)}")
+            print(f"[集成系统] 活体队列大小已更新: maxlen={value}, 当前长度={len(self.living_result_queue)}")
 
         # 自动保存配置到文件
         if auto_save:
             try:
                 self.config.save_to_file()
-                # print(f"[集成系统] 配置已保存到文件")
+                print(f"[集成系统] 配置已保存到文件")
             except Exception as e:
-                # print(f"[集成系统] 保存配置失败: {e}")
-                pass
+                print(f"[集成系统] 保存配置失败: {e}")
 
     def _set_nested_attr(self, attr_path: str, value: Any):
         """
@@ -2569,15 +2660,13 @@ class IntegratedSeatSystem:
             for part in parts[:-1]:
                 obj = getattr(obj, part)
                 if obj is None:
-                    # print(f"[警告] 对象属性路径 {attr_path} 中的 {part} 为 None，跳过设置")
-                    pass
+                    print(f"[警告] 对象属性路径 {attr_path} 中的 {part} 为 None，跳过设置")
                     return
 
             # 设置最终属性
             setattr(obj, parts[-1], value)
         except AttributeError as e:
-            # print(f"[警告] 设置属性 {attr_path} 失败: {e}")
-            pass
+            print(f"[警告] 设置属性 {attr_path} 失败: {e}")
 
     # ==================== 手动模式接口 ====================
 
@@ -2602,7 +2691,7 @@ class IntegratedSeatSystem:
         prev_mode = self.manual_mode
         self.manual_mode = enabled
         mode_name = '手动' if enabled else '自适应'
-        # print(f"[集成系统] 模式切换: {'手动' if prev_mode else '自适应'} → {mode_name}")
+        print(f"[集成系统] 模式切换: {'手动' if prev_mode else '自适应'} → {mode_name}")
         return {
             'success': True,
             'mode': 'manual' if enabled else 'adaptive',
@@ -2617,6 +2706,36 @@ class IntegratedSeatSystem:
             str: 'manual' 或 'adaptive'
         """
         return 'manual' if self.manual_mode else 'adaptive'
+
+    def get_control_mode(self) -> str:
+        """
+        获取当前控制模式（mode1=体验版, mode2=量产版）
+
+        Returns:
+            str: 'mode1' 或 'mode2'
+        """
+        return self.control_mode
+
+    def get_mode2_status(self) -> Dict:
+        """
+        获取Mode2子状态机状态（仅mode2时有意义）
+
+        Returns:
+            Dict: {
+                'control_mode': str,        # 'mode1' 或 'mode2'
+                'sub_state': str,           # 'adaptive' 或 'hold'
+                'sub_counter': int,         # 当前子状态已运行帧数
+                'adaptive_frames': int,     # 自适应阶段总帧数
+                'hold_frames': int,         # 保压阶段总帧数
+            }
+        """
+        return {
+            'control_mode': self.control_mode,
+            'sub_state': self.mode2_sub_state,
+            'sub_counter': self.mode2_sub_counter,
+            'adaptive_frames': self.mode2_adaptive_frames,
+            'hold_frames': self.mode2_hold_frames,
+        }
 
     def generate_manual_command(self, airbag_id: int, action: str) -> Optional[list]:
         """
@@ -2633,13 +2752,11 @@ class IntegratedSeatSystem:
             list[int] | None: 55个10进制整数的协议帧，失败返回None
         """
         if not self.manual_mode:
-            # print(f"[集成系统] 非手动模式，忽略手动指令")
-            pass
+            print(f"[集成系统] 非手动模式，忽略手动指令")
             return None
 
         if airbag_id < 1 or airbag_id > 24:
-            # print(f"[集成系统] 无效气囊编号: {airbag_id}")
-            pass
+            print(f"[集成系统] 无效气囊编号: {airbag_id}")
             return None
 
         gear_map = {
@@ -2650,22 +2767,21 @@ class IntegratedSeatSystem:
 
         gear = gear_map.get(action)
         if gear is None:
-            # print(f"[集成系统] 无效操作: {action}")
-            pass
+            print(f"[集成系统] 无效操作: {action}")
             return None
 
         commands = {airbag_id: gear}
         frame = self._generate_protocol_frame(commands)
 
         action_name = {'inflate': '充气', 'deflate': '放气', 'hold': '保持'}[action]
-        # print(f"[手动控制] 气囊{airbag_id} {action_name}")
+        print(f"[手动控制] 气囊{airbag_id} {action_name}")
 
         # 更新操作计数（仅充气/放气）
         if action in ('inflate', 'deflate'):
             region = self._airbag_to_region.get(airbag_id)
             if region:
                 self.manual_airbag_ops[region][action] += 1
-                # print(f"[手动控制] 区域{region} {action}计数: {self.manual_airbag_ops[region]}")
+                print(f"[手动控制] 区域{region} {action}计数: {self.manual_airbag_ops[region]}")
 
         return frame
 
@@ -2684,7 +2800,7 @@ class IntegratedSeatSystem:
         """
         for region in self.manual_airbag_ops:
             self.manual_airbag_ops[region] = {'inflate': 0, 'deflate': 0}
-        # print("[集成系统] 手动气囊操作计数已重置")
+        print("[集成系统] 手动气囊操作计数已重置")
 
     def generate_manual_hold_all_command(self) -> list:
         """

@@ -10,7 +10,7 @@
 
 使用方式:
     from version import __version__
-    # print(__version__)  # "1.0.0"
+    print(__version__)  # "1.1.0"
 
 版本号更新规则:
     1. 修复bug（不改变接口）: 递增 PATCH (1.0.0 → 1.0.1)
@@ -19,7 +19,7 @@
 """
 
 # ===== 版本号定义（唯一真实来源 Single Source of Truth）=====
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 
 # ===== 版本元信息 =====
 __version_info__ = tuple(int(x) for x in __version__.split("."))
@@ -27,6 +27,14 @@ __author__ = "Hirkond"
 __project__ = "汽车座椅智能控制算法包"
 
 # ===== 版本历史摘要 =====
+# 1.1.0 (2026-03-20)
+#   - 新增: 离座reset阶段调整为放气10s+保持10s=20s，后续不再继续动作
+#   - 新增: 臀托初始化阶段，与品味系数联动（净充放气次数×3s/次）
+#   - 新增: 双模式控制（mode1=体验版, mode2=量产版自适应/保压交替）
+#   - 新增: 品味管理器扩展hip区域支持，记录净充放气次数(net_ops)
+#   - 新增: get_control_mode() / get_mode2_status() API
+#   - 配置: sensor_config.yaml新增control.mode、mode2参数、臀托初始化参数
+#
 # 1.0.2 (2026-03-04)
 #   - 腿托控制算法V2：重心划分左右腿 + 前3后3比 + 左右独立阈值
 #   - 品味采集同步改为前3后3比方案

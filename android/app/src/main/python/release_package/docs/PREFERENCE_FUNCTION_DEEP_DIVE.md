@@ -1,8 +1,8 @@
 # 汽车座椅品味记忆功能深度解析
 
-**版本**: 1.1
+**版本**: 1.1.0
 **作者**: Manus AI
-**日期**: 2026-03-05
+**日期**: 2026-03-20
 
 ---
 
@@ -102,11 +102,78 @@ graph TD
     end
 ```
 
-## 5. 核心实现 (`PreferenceManager` 详解)
+## 5. 臀托品味联动机制 (V1.1.0)
+
+### 5.1. 设计背景
+
+臀托（气囊7, 8）与其他支撑气囊（腰托、侧翼、腿托）的本质区别在于：其他气囊的品味记忆是通过**压力比例的保持区间**来实现的（即记录用户喜好的比例值，后续自适应时维持在该比例附近），而臀托气囊不参与自适应比例控制。因此，臀托的品味记忆采用了一种不同的机制：**初始化时长联动**。
+
+### 5.2. 核心算法
+
+臀托品味联动的核心思想是：将用户对臀托的充放气偏好，转化为下次入座时臀托初始化的时长调整。
+
+```
+总初始化周期数 = 基础周期数 + 净充放气次数 × 每次操作秒数(3s) × 每秒周期数
+```
+
+**参数说明：**
+
+| 参数 | 配置键 | 默认值 | 说明 |
+|---|---|---|---|
+| 基础周期数 | `hip_base_cycles` | 26 | 无品味时的默认初始化周期数（约2秒） |
+| 净充放气次数 | 来自 `net_ops.hip` | 0 | 品味数据中臀托的净操作次数（inflate - deflate） |
+| 每次操作秒数 | `hip_preference_seconds_per_op` | 3 | 每次净操作对应的初始化时长增量 |
+| 每秒周期数 | `Hz / control_check_interval` | 13/1 | 采样率除以控制间隔 |
+
+**执行逻辑：**
+
+1. 如果总周期数 > 0：臀托气囊充气，持续 `总周期数` 帧
+2. 如果总周期数 < 0：臀托气囊放气，持续 `|总周期数|` 帧
+3. 如果总周期数 = 0：跳过臀托初始化
+
+### 5.3. 数据流程
+
+臀托品味联动的完整数据流如下：
+
+```
+用户手动调节臀托气囊(7,8)
+    ↓
+generate_manual_command(7/8, 'inflate'/'deflate')
+    ↓
+manual_airbag_ops['hip'] 自动累加计数
+    ↓
+trigger_preference_recording(airbag_ops=get_manual_airbag_ops())
+    ↓
+PreferenceManager.start_recording(shape, airbag_ops)
+    ↓  ← hip区域不参与置信区间计算，仅透传
+_finalize_recording() → net_ops['hip'] = inflate - deflate
+    ↓
+preferences.json 持久化
+    ↓
+下次入座 → _start_hip_init()
+    ↓
+_get_hip_preference_net_ops() 读取 net_ops['hip']
+    ↓
+计算总初始化周期数 → 充气/放气/跳过
+```
+
+### 5.4. 与其他区域的对比
+
+| 特性 | 腰托/侧翼/腿托 | 臀托 (hip) |
+|---|---|---|
+| 品味记忆方式 | 压力比例保持区间 | 初始化时长联动 |
+| 参与比例计算 | 是 | 否 |
+| 参与置信区间 | 是 | 否 |
+| 品味应用时机 | 自适应控制时实时应用 | 仅在初始化阶段一次性应用 |
+| 持久化字段 | `ratios`, `thresholds` | `net_ops.hip` |
+| `REGION_RATIO_MAP` | 映射到具体比例键 | `[]`（空列表） |
+| `INFLATE_DIRECTION` | 定义充气对比例的影响方向 | `{}`（空字典） |
+
+## 6. 核心实现 (`PreferenceManager` 详解)
 
 `preference_manager.py` 是该功能的独立核心模块，不依赖系统其他部分，具有高内聚性。
 
-### 5.1. 关键方法 (V1.1 变更)
+### 6.1. 关键方法 (V1.1 变更)
 
 | 方法 | 职责 |
 |---|---|
@@ -119,11 +186,11 @@ graph TD
 | `get_active_thresholds()` | **区间提供者**。根据当前激活的体型，判断是返回该体型的品味区间，还是返回系统默认的调节区间。这是与系统解耦的关键。 |
 | `_save_to_file()` / `_load_from_file()` | **持久化**。负责将内存中的品味数据以JSON格式写入文件，或在启动时从文件加载。 |
 
-## 6. Python包调用接口 (V1.1 变更)
+## 7. Python包调用接口 (V1.1 变更)
 
 品味系统通过 `IntegratedSeatSystem` 类暴露了4个核心公共方法，供其他Python模块调用。
 
-### 6.1. `trigger_preference_recording(body_shape: str = None, airbag_ops: Dict = None) -> Dict`
+### 7.1. `trigger_preference_recording(body_shape: str = None, airbag_ops: Dict = None) -> Dict`
 
 - **功能**: 启动一次新的品味记录流程。**支持鲁棒记录**。
 - **调用时机**: 用户手动调节完座椅气囊，并感觉舒适稳定后调用。
@@ -134,10 +201,13 @@ graph TD
     {
         'lumbar': {'inflate': 3, 'deflate': 0},
         'side_wings_left': {'inflate': 1, 'deflate': 0},
+        'side_wings_right': {'inflate': 0, 'deflate': 0},
         'leg_left': {'inflate': 0, 'deflate': 2},
-        # ... 其他区域
+        'leg_right': {'inflate': 0, 'deflate': 1},
+        'hip': {'inflate': 2, 'deflate': 1},  # V1.1.0新增：臀托区域，仅记录净操作次数
     }
     ```
+    > **注意**：`hip` 区域与其他区域不同，其充放气次数不用于构建置信区间，而是记录到 `net_ops` 字段中，用于下次入座时臀托初始化时长的联动调整。详见第5章“臀托品味联动机制”。
 - **成功返回**:
   ```python
   {
@@ -151,22 +221,22 @@ graph TD
   }
   ```
 
-### 6.2. `cancel_preference_recording() -> Dict`
+### 7.2. `cancel_preference_recording() -> Dict`
 
 - **功能**: 中断正在进行中的品味记录。
 - **调用时机**: 用户在记录过程中移动身体，或不希望继续记录时。
 
-### 6.3. `get_preference_status() -> Dict`
+### 7.3. `get_preference_status() -> Dict`
 
 - **功能**: 获取品味系统的完整实时状态。
 - **调用时机**: 任何时候需要查询品味状态时。
 
-### 6.4. `clear_preference(body_shape: str = None) -> Dict`
+### 7.4. `clear_preference(body_shape: str = None) -> Dict`
 
 - **功能**: 删除已保存的品味数据。
 - **调用时机**: 用户希望重置个性化设置时。
 
-## 7. 配置文件 (`sensor_config.yaml`)
+## 8. 配置文件 (`sensor_config.yaml`)
 
 在 `sensor_config.yaml` 中新增了鲁棒品味记录相关的配置。
 
@@ -194,7 +264,7 @@ preference:
   kalman_outlier_scale: 5.0
 ```
 
-## 8. 总结与可复用思想
+## 9. 总结与可复用思想
 
 品味记忆功能的设计体现了几个重要的可复用思想：
 
