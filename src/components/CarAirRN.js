@@ -44,10 +44,10 @@ const IDLE_RENDER_FRAMES = 3;
 
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
 const DEFAULT_POINT_FIT_LAYOUT = {
-  center: {position: [16, -58, 45], rotation: [2.96, 0, 0], scale: 5.2},
-  centersit: {position: [52, 38, -43], rotation: [1.32, 0, 0], scale: 3.9},
-  leftsit: {position: [-33, -20, -13], rotation: [1.35, 0, 0], scale: 3.3},
-  rightsit: {position: [61, -20, -13], rotation: [1.35, 0, 0], scale: 3.3},
+  center: {position: [16, -58, 45], rotation: [2.96, 0, 0], sx: 5.2, sy: 5.2, sz: 5.2},
+  centersit: {position: [52, 38, -43], rotation: [1.32, 0, 0], sx: 3.9, sy: 3.9, sz: 3.9},
+  leftsit: {position: [-33, -20, -13], rotation: [1.35, 0, 0], sx: 3.3, sy: 3.3, sz: 3.3},
+  rightsit: {position: [61, -20, -13], rotation: [1.35, 0, 0], sx: 3.3, sy: 3.3, sz: 3.3},
 };
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
@@ -55,8 +55,7 @@ const POINT_MAP_SCALE_DEFAULT = 1.8;
 
 // ─── 调节面板配置 ────────────────────────────────────────────────────────────
 const PANEL_WIDTH = 300;
-// 暂时取消侧翼展示（leftsit=右侧翼, rightsit=左侧翼）
-const ZONE_NAMES = ['center', 'centersit'];
+const ZONE_NAMES = ['center', 'centersit', 'leftsit', 'rightsit'];
 const ZONE_LABELS = {
   center: '坐垫',
   centersit: '靠背',
@@ -78,7 +77,6 @@ const allConfig = {
     flipRow: true,     // 座椅前后矩阵顺序翻转
     flipHeight: false,
   },
-  // 暂时取消侧翼展示
   necksit: {
     dataConfig: backConfig,
     name: 'leftsit',
@@ -491,11 +489,15 @@ function applyPointFitToModel(model, pointMeshes, layoutMap = DEFAULT_POINT_FIT_
     );
     mesh.rotation.set(...layout.rotation);
 
-    // 每个区域独立缩放
-    const scaleFactor = layout.scale != null ? layout.scale : POINT_MAP_SCALE_DEFAULT;
-    const safeFactor = Number.isFinite(scaleFactor) ? scaleFactor : 1;
-    const meshScale = POINT_SCALE * safeFactor;
-    mesh.scale.set(meshScale, meshScale, meshScale);
+    // 每个区域独立 XYZ 缩放
+    const sxVal = layout.sx != null ? layout.sx : POINT_MAP_SCALE_DEFAULT;
+    const syVal = layout.sy != null ? layout.sy : POINT_MAP_SCALE_DEFAULT;
+    const szVal = layout.sz != null ? layout.sz : POINT_MAP_SCALE_DEFAULT;
+    mesh.scale.set(
+      POINT_SCALE * (Number.isFinite(sxVal) ? sxVal : 1),
+      POINT_SCALE * (Number.isFinite(syVal) ? syVal : 1),
+      POINT_SCALE * (Number.isFinite(szVal) ? szVal : 1),
+    );
 
     // [PointFit] log disabled
   });
@@ -580,13 +582,11 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
       position[k + 1] = heightSign * smoothBig[l] * height;
       position[k + 2] = ix * SEPARATION - (amountY * SEPARATION) / 2;
 
-      // if (scales) {
-      //   // 用平滑后的值判断隐藏，避免阈值附近反复闪烁
-      //   const isHidden = ENABLE_POINT_HIDE && smoothBig[l] <= hideThreshold;
-      //   scales[j] = isHidden ? 0 : 1;
-      // }
-
-      scales[j] = 1
+      if (scales) {
+        // 用平滑后的值判断隐藏，避免阈值附近反复闪烁
+        const isHidden = ENABLE_POINT_HIDE && smoothBig[l] <= hideThreshold;
+        scales[j] = isHidden ? 0 : 1;
+      }
 
       const rgb = jetWhite3(0, color, smoothBig[l]);
       colors[k] = rgb[0] / 255;
@@ -892,7 +892,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         rx: def.rotation[0],
         ry: def.rotation[1],
         rz: def.rotation[2],
-        s: def.scale != null ? def.scale : POINT_MAP_SCALE_DEFAULT,
+        sx: def.sx != null ? def.sx : POINT_MAP_SCALE_DEFAULT,
+        sy: def.sy != null ? def.sy : POINT_MAP_SCALE_DEFAULT,
+        sz: def.sz != null ? def.sz : POINT_MAP_SCALE_DEFAULT,
       };
     });
     return init;
@@ -938,10 +940,11 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       );
       mesh.rotation.set(l.rx, l.ry, l.rz);
 
-      // 每个区域独立缩放
-      const safeFactor = Number.isFinite(l.s) ? l.s : POINT_MAP_SCALE_DEFAULT;
-      const meshScale = POINT_SCALE * safeFactor;
-      mesh.scale.set(meshScale, meshScale, meshScale);
+      // 每个区域独立 XYZ 缩放
+      const sxF = Number.isFinite(l.sx) ? l.sx : POINT_MAP_SCALE_DEFAULT;
+      const syF = Number.isFinite(l.sy) ? l.sy : POINT_MAP_SCALE_DEFAULT;
+      const szF = Number.isFinite(l.sz) ? l.sz : POINT_MAP_SCALE_DEFAULT;
+      mesh.scale.set(POINT_SCALE * sxF, POINT_SCALE * syF, POINT_SCALE * szF);
     });
 
     s.dirty = true;
@@ -1032,7 +1035,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       rx: def.rotation[0],
       ry: def.rotation[1],
       rz: def.rotation[2],
-      s: def.scale != null ? def.scale : POINT_MAP_SCALE_DEFAULT,
+      sx: def.sx != null ? def.sx : POINT_MAP_SCALE_DEFAULT,
+      sy: def.sy != null ? def.sy : POINT_MAP_SCALE_DEFAULT,
+      sz: def.sz != null ? def.sz : POINT_MAP_SCALE_DEFAULT,
     };
     setLayout(prev => {
       const next = {...prev, [activeZone]: resetVal};
@@ -1053,7 +1058,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         rx: def.rotation[0],
         ry: def.rotation[1],
         rz: def.rotation[2],
-        s: def.scale != null ? def.scale : POINT_MAP_SCALE_DEFAULT,
+        sx: def.sx != null ? def.sx : POINT_MAP_SCALE_DEFAULT,
+        sy: def.sy != null ? def.sy : POINT_MAP_SCALE_DEFAULT,
+        sz: def.sz != null ? def.sz : POINT_MAP_SCALE_DEFAULT,
       };
     });
     setLayout(init);
@@ -1088,7 +1095,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       output[name] = {
         position: [parseFloat(l.px.toFixed(2)), parseFloat(l.py.toFixed(2)), parseFloat(l.pz.toFixed(2))],
         rotation: [parseFloat(l.rx.toFixed(4)), parseFloat(l.ry.toFixed(4)), parseFloat(l.rz.toFixed(4))],
-        scale: parseFloat(l.s.toFixed(2)),
+        scale: {x: parseFloat(l.sx.toFixed(2)), y: parseFloat(l.sy.toFixed(2)), z: parseFloat(l.sz.toFixed(2))},
       };
     });
     output._model = {
@@ -1688,13 +1695,31 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
 
           <Text style={styles.sectionLabel}>{ZONE_LABELS[activeZone]} - 缩放</Text>
           <StepControl
-            label="缩放"
-            value={zoneLayout.s ?? 1}
+            label="X 缩放"
+            value={zoneLayout.sx ?? 1}
             min={0.1}
-            max={10}
+            max={20}
             step={0.1}
             decimals={1}
-            onValueChange={v => updateZoneParam(activeZone, 's', v)}
+            onValueChange={v => updateZoneParam(activeZone, 'sx', v)}
+          />
+          <StepControl
+            label="Y 缩放"
+            value={zoneLayout.sy ?? 1}
+            min={0.1}
+            max={20}
+            step={0.1}
+            decimals={1}
+            onValueChange={v => updateZoneParam(activeZone, 'sy', v)}
+          />
+          <StepControl
+            label="Z 缩放"
+            value={zoneLayout.sz ?? 1}
+            min={0.1}
+            max={20}
+            step={0.1}
+            decimals={1}
+            onValueChange={v => updateZoneParam(activeZone, 'sz', v)}
           />
 
           <View style={styles.btnRow}>
