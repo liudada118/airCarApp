@@ -44,11 +44,12 @@ const IDLE_RENDER_FRAMES = 3;
 
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
 const DEFAULT_POINT_FIT_LAYOUT = {
-  center: {position: [16, -58, 45], rotation: [2.96, 0, 0], sx: 5.2, sy: 5.2, sz: 5.2},
-  centersit: {position: [52, 38, -43], rotation: [1.32, 0, 0], sx: 3.9, sy: 3.9, sz: 3.9},
-  leftsit: {position: [-33, -20, -13], rotation: [1.35, 0, 0], sx: 3.3, sy: 3.3, sz: 3.3},
-  rightsit: {position: [61, -20, -13], rotation: [1.35, 0, 0], sx: 3.3, sy: 3.3, sz: 3.3},
+  center: {position: [20, -58, 45], rotation: [2.96, 0, 0], sx: 5.5, sy: 5.2, sz: 5.2},
+  centersit: {position: [69, 38, -43], rotation: [1.32, 0, 0], sx: 5.1, sy: 1.9, sz: 3.3},
+  leftsit: {position: [-28, -9, -30], rotation: [1.35, 0, -0.50], sx: 3.3, sy: 3.3, sz: 3.3},
+  rightsit: {position: [64, -7, -10], rotation: [1.35, 0, 0.50], sx: 3.3, sy: 3.3, sz: 3.3},
 };
+const DEFAULT_POINT_SIZE = 2;  // 默认点大小
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
 const POINT_MAP_SCALE_DEFAULT = 1.8;
@@ -66,7 +67,7 @@ const ZONE_LABELS = {
 // ─── 插值配置（保持原有点数不变） ────────────────────────────────────────────
 const sitleftConfig = {sitnum1: 3, sitnum2: 2, sitInterp: 5, sitInterp1: 1, sitOrder: 3};
 const sitConfig = {sitnum1: 10, sitnum2: 6, sitInterp: 4, sitInterp1: 5, sitOrder: 3};
-const backConfig = {sitnum1: 3, sitnum2: 2, sitInterp: 8, sitInterp1: 2, sitOrder: 2};
+const backConfig = {sitnum1: 3, sitnum2: 2, sitInterp: 16, sitInterp1: 12, sitOrder: 2};
 const sitConfigBack = {sitnum1: 10, sitnum2: 6, sitInterp: 9, sitInterp1: 6, sitOrder: 3};
 
 const allConfig = {
@@ -420,7 +421,7 @@ function initPoint(config, pointConfig, name, group) {
     depthTest: true,
     blending: THREE.NormalBlending,
     opacity: 0.6,
-    size: name === 'center' || name === 'centersit' ? 2 : 2.5,
+    size: DEFAULT_POINT_SIZE,
     map: circleTexture,
     alphaTest: 0.2,
   });
@@ -900,6 +901,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     return init;
   });
   const [activeZone, setActiveZone] = useState('center');
+  const [pointSize, setPointSize] = useState(DEFAULT_POINT_SIZE);
 
   // 整体视角参数
   const [viewParams, setViewParams] = useState({
@@ -947,6 +949,19 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       mesh.scale.set(POINT_SCALE * sxF, POINT_SCALE * syF, POINT_SCALE * szF);
     });
 
+    s.dirty = true;
+  }, []);
+
+  // 应用点大小到所有点图
+  const applyPointSize = useCallback((size) => {
+    const s = stateRef.current;
+    if (!s.pointMeshes) return;
+    Object.values(s.pointMeshes).forEach(mesh => {
+      if (mesh && mesh.material) {
+        mesh.material.size = size;
+        mesh.material.needsUpdate = true;
+      }
+    });
     s.dirty = true;
   }, []);
 
@@ -1065,6 +1080,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     });
     setLayout(init);
     applyLayout(init);
+    // 重置点大小
+    setPointSize(DEFAULT_POINT_SIZE);
+    applyPointSize(DEFAULT_POINT_SIZE);
     // 重置座椅模型参数到初始值
     const model = stateRef.current.model;
     if (model) {
@@ -1085,7 +1103,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       modelRx: 0, modelRy: 1.57, modelRz: 0,
       modelScale: 1,
     }));
-  }, [applyLayout]);
+  }, [applyLayout, applyPointSize]);
 
   // 打印当前参数到控制台
   const logParams = useCallback(() => {
@@ -1720,6 +1738,17 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             step={0.1}
             decimals={1}
             onValueChange={v => updateZoneParam(activeZone, 'sz', v)}
+          />
+
+          <Text style={styles.sectionLabel}>点大小</Text>
+          <StepControl
+            label="点大小"
+            value={pointSize}
+            min={0.5}
+            max={10}
+            step={0.5}
+            decimals={1}
+            onValueChange={v => { setPointSize(v); applyPointSize(v); }}
           />
 
           <View style={styles.btnRow}>
