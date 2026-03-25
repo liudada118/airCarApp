@@ -79,20 +79,20 @@ const allConfig = {
     flipHeight: false,
   },
   // 暂时取消侧翼展示
-  // necksit: {
-  //   dataConfig: backConfig,
-  //   name: 'leftsit',
-  //   pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
-  //   flipRow: false,
-  //   flipHeight: true,
-  // },
-  // backsit: {
-  //   dataConfig: backConfig,
-  //   name: 'rightsit',
-  //   pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
-  //   flipRow: false,
-  //   flipHeight: true,
-  // },
+  necksit: {
+    dataConfig: backConfig,
+    name: 'leftsit',
+    pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+    flipRow: false,
+    flipHeight: true,
+  },
+  backsit: {
+    dataConfig: backConfig,
+    name: 'rightsit',
+    pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
+    flipRow: false,
+    flipHeight: true,
+  },
   sitsit: {
     dataConfig: sitConfigBack,
     name: 'centersit',
@@ -580,11 +580,13 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
       position[k + 1] = heightSign * smoothBig[l] * height;
       position[k + 2] = ix * SEPARATION - (amountY * SEPARATION) / 2;
 
-      if (scales) {
-        // 用平滑后的值判断隐藏，避免阈值附近反复闪烁
-        const isHidden = ENABLE_POINT_HIDE && smoothBig[l] <= hideThreshold;
-        scales[j] = isHidden ? 0 : 1;
-      }
+      // if (scales) {
+      //   // 用平滑后的值判断隐藏，避免阈值附近反复闪烁
+      //   const isHidden = ENABLE_POINT_HIDE && smoothBig[l] <= hideThreshold;
+      //   scales[j] = isHidden ? 0 : 1;
+      // }
+
+      scales[j] = 1
 
       const rgb = jetWhite3(0, color, smoothBig[l]);
       colors[k] = rgb[0] / 255;
