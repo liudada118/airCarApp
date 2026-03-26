@@ -1773,7 +1773,7 @@ class SensorVisualizer:
                 self.batch_action_label.config(text="")
 
     def _manual_airbag_action(self, action: str):
-        """手动气囊操作（充气/放气 1秒后自动保持）"""
+        """手动气囊操作（充气/放气后自动保持，臀托3秒，其他部位1秒）"""
         if not self.integrated_system:
             return
 
@@ -1818,8 +1818,10 @@ class SensorVisualizer:
             foreground="#FF5722"
         )
 
-        # 1秒后自动发送保持指令
-        self.manual_action_timer = self.root.after(1000, self._manual_action_complete)
+        # 臀托气囊（7,8）一次充放气持3秒，其他部位1秒
+        hip_airbag_ids = self.integrated_system.hip_airbags if self.integrated_system else [7, 8]
+        action_duration_ms = 3000 if airbag_id in hip_airbag_ids else 1000
+        self.manual_action_timer = self.root.after(action_duration_ms, self._manual_action_complete)
 
     def _manual_action_complete(self):
         """手动动作完成，发送保持指令"""
