@@ -233,7 +233,7 @@ def reset_config():
 
 # ─── 品味记录接口（供 Chaquopy / Native 桥接调用） ─────────────
 
-def trigger_preference_recording(body_shape=None):
+def trigger_preference_recording(body_shape=None, airbag_ops_json=None):
     """
     触发品味记录（用户手动调节完气囊后调用）。
 
@@ -241,11 +241,22 @@ def trigger_preference_recording(body_shape=None):
 
     Args:
         body_shape: 指定体型（可选，默认使用体型三分类识别的结果）
+        airbag_ops_json: 充放气操作次数的JSON字符串（可选）
     Returns:
         JSON 字符串 - 操作结果
     """
     try:
-        result = _system.trigger_preference_recording(body_shape)
+        # 处理空字符串体型（Kotlin传入""表示None）
+        if body_shape is not None and (not isinstance(body_shape, str) or body_shape.strip() == ''):
+            body_shape = None
+        # 解析 airbag_ops JSON
+        airbag_ops = None
+        if airbag_ops_json and isinstance(airbag_ops_json, str) and airbag_ops_json.strip():
+            try:
+                airbag_ops = json.loads(airbag_ops_json)
+            except json.JSONDecodeError:
+                pass
+        result = _system.trigger_preference_recording(body_shape, airbag_ops)
         return json.dumps(_to_builtin(result), ensure_ascii=False)
     except Exception as e:
         import traceback

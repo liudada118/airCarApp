@@ -357,14 +357,17 @@ class SerialModule(
     // ─── 品味记录接口 ─────────────────────────────────────────
 
     @ReactMethod
-    fun triggerPreferenceRecording(bodyShape: String?, promise: Promise) {
+    fun triggerPreferenceRecording(bodyShape: String?, airbagOps: String?, promise: Promise) {
         pythonExecutor.execute {
             try {
                 val module = Python.getInstance().getModule("server")
-                val resultJson = if (bodyShape != null && bodyShape.isNotEmpty()) {
-                    module.callAttr("trigger_preference_recording", bodyShape).toString()
-                } else {
-                    module.callAttr("trigger_preference_recording").toString()
+                val bs = if (bodyShape != null && bodyShape.isNotEmpty()) bodyShape else null
+                val ops = if (airbagOps != null && airbagOps.isNotEmpty()) airbagOps else null
+                val resultJson = when {
+                    bs != null && ops != null -> module.callAttr("trigger_preference_recording", bs, ops).toString()
+                    bs != null -> module.callAttr("trigger_preference_recording", bs).toString()
+                    ops != null -> module.callAttr("trigger_preference_recording", "", ops).toString()
+                    else -> module.callAttr("trigger_preference_recording").toString()
                 }
                 promise.resolve(resultJson)
             } catch (e: Exception) {

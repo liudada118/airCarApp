@@ -485,14 +485,28 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const handleConfirmSave = useCallback(() => {
     setModalType('saving');
 
-    // 调用 Python 的 trigger_preference_recording，让算法采集当前压力数据并记录品味
-    sm?.triggerPreferenceRecording?.(null)?.catch?.(() => {});
+    // 从 cmdCounts 构建 airbag_ops 字典，传递给 Python 品味记录系统
+    const buildOps = (count: number) => ({
+      inflate: count > 0 ? count : 0,
+      deflate: count < 0 ? -count : 0,
+    });
+    const airbagOps = JSON.stringify({
+      lumbar: buildOps(cmdCounts.lumbar),
+      side_wings_left: buildOps(cmdCounts.sideWing),
+      side_wings_right: buildOps(cmdCounts.sideWing),
+      leg_left: buildOps(cmdCounts.legRest),
+      leg_right: buildOps(cmdCounts.legRest),
+      hip: buildOps(cmdCounts.hipFirm),
+    });
+
+    // 调用 Python 的 trigger_preference_recording，传入体型和充放气操作次数
+    sm?.triggerPreferenceRecording?.(bodyShape || null, airbagOps)?.catch?.(() => {});
 
     savingTimerRef.current = setTimeout(() => {
       setModalType(null);
       handleSaveAndRestore();
     }, 5000);
-  }, [handleSaveAndRestore]);
+  }, [handleSaveAndRestore, cmdCounts, bodyShape]);
 
   // 取消保存
   const handleCancelSaving = useCallback(() => {
