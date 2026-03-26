@@ -201,6 +201,7 @@ graph TD
 
 | 2026-03-15 19:58 | Release 打包脚本 | 在 `package.json` 中新增 `npm run release`，封装 `android\gradlew.bat assembleRelease` 命令 |
 | 2026-03-26 08:06 | MUI | release_package(7) 算法包升级 | 替换 integrated_system.py（含阶段枚举管理器）、preference_manager.py、sensor_config.yaml、visualizer.py；新增 preferences.json、test_init_flow.py、test_new_features.py；保持 body_shape_classifier.py 多后端模型加载（JSON→ONNX→pkl） |
+| 2026-03-26 08:30 | MUI | param_mapping 实时生效补齐 | set_param 从 16 条映射扩展到 39 条，新增 control_mode、mode2_adaptive_seconds、mode2_hold_seconds、初始化充气、放气冷却锁、预处理矫正、阶跃下降检测等参数的实时更新映射；mode2 秒→帧特殊转换 |
 
 ## 7. 更新日志
 
@@ -233,6 +234,7 @@ graph TD
 
 | 2026-03-15 19:58 | 配置变更 | 在 `package.json` 中新增 `release` 脚本，执行 `cd android && gradlew.bat assembleRelease` 以统一 Android release APK 打包入口 |
 | 2026-03-26 08:06 | MUI | 新增功能 | 升级 release_package(7)：新增初始化阶段枚举管理器（idle→waiting_recognition→support_inflate→hip_inflate→done），三分类模型结果驱动阶段推进，臀托初始化读取品味 net_ops['hip'] 偏好系数，保持多后端模型加载兼容性 |
+| 2026-03-26 08:30 | MUI | 修复缺陷 | 补齐 set_param 参数映射（16→39 条），确保所有配置修改实时生效：新增 control_mode、mode2 时间参数（秒→帧转换）、初始化充气、放气冷却锁、预处理矫正、阶跃下降检测、body_type_queue_size 等参数 |
 
 ---
 

@@ -2718,9 +2718,43 @@ class IntegratedSeatSystem:
             'backrest_sum_threshold': ('backrest_sum_threshold', 'integrated_system.backrest_sum_threshold'),
             'off_seat_frames_threshold': ('off_seat_frames_threshold', 'integrated_system.off_seat_frames_threshold'),
             'reset_frames_threshold': ('reset_frames_threshold', 'integrated_system.reset_frames_threshold'),
+            'reset_deflate_frames': ('reset_deflate_frames', 'integrated_system.reset_deflate_frames'),
             'use_filtered_sum': ('use_filtered_sum', 'integrated_system.use_filtered_sum'),
             'backrest_buffer_frames': ('backrest_buffer_frames', 'integrated_system.backrest_buffer_frames'),
+
+            # 控制模式参数
             'control_check_interval': ('control_check_interval', 'control.check_interval_frames'),
+            'control_mode': ('control_mode', 'control.mode'),
+            # mode2_adaptive_seconds / mode2_hold_seconds 需要特殊处理（秒→帧转换），见下方后处理
+            'mode2_adaptive_seconds': ('mode2_adaptive_frames', 'control.mode2_adaptive_seconds'),
+            'mode2_hold_seconds': ('mode2_hold_frames', 'control.mode2_hold_seconds'),
+
+            # 初始化充气参数
+            'init_inflate_enabled': ('init_inflate_enabled', 'integrated_system.init_inflate.enabled'),
+            'init_inflate_cycles': ('init_inflate_cycles', 'integrated_system.init_inflate.cycles'),
+            'hip_base_cycles': ('hip_base_cycles', 'integrated_system.init_inflate.hip_base_cycles'),
+            'hip_preference_seconds_per_op': ('hip_preference_seconds_per_op', 'integrated_system.init_inflate.hip_preference_seconds_per_op'),
+
+            # 放气冷却锁参数
+            'deflate_cooldown_enabled': ('deflate_cooldown_enabled', 'integrated_system.deflate_cooldown.enabled'),
+            'deflate_cooldown_max_commands': ('deflate_cooldown_max_commands', 'integrated_system.deflate_cooldown.max_continuous_commands'),
+            'deflate_cooldown_reset_on_no_deflate': ('deflate_cooldown_reset_on_no_deflate', 'integrated_system.deflate_cooldown.reset_on_no_deflate'),
+
+            # 预处理矫正参数
+            'pre_correction_enabled': ('pre_correction_enabled', 'matrix.pre_correction.enabled'),
+            'pre_correction_value': ('pre_correction_value', 'matrix.pre_correction.value'),
+            'pre_correction_multiplier': ('pre_correction_multiplier', 'matrix.pre_correction.multiplier'),
+            'voltage_divider_enabled': ('voltage_divider_enabled', 'matrix.voltage_divider_correction.enabled'),
+            'voltage_divider_value': ('voltage_divider_value', 'matrix.voltage_divider_correction.value'),
+
+            # 阶跃下降检测参数
+            'step_drop_enabled': ('step_drop_enabled', 'integrated_system.step_drop_detection.enabled'),
+            'step_drop_window_frames': ('step_drop_window_frames', 'integrated_system.step_drop_detection.window_frames'),
+            'step_drop_history_gap_frames': ('step_drop_history_gap_frames', 'integrated_system.step_drop_detection.history_gap_frames'),
+            'step_drop_pressure_threshold': ('step_drop_pressure_threshold', 'integrated_system.step_drop_detection.pressure_threshold'),
+            'step_drop_ratio': ('step_drop_ratio', 'integrated_system.step_drop_detection.drop_ratio'),
+            'step_drop_confirm_cycles': ('step_drop_confirm_cycles', 'integrated_system.step_drop_detection.confirm_cycles'),
+            'step_drop_deflate_cycles': ('step_drop_deflate_cycles', 'integrated_system.step_drop_detection.deflate_cycles'),
 
             # 活体检测参数（需要同步到detector对象）
             'living_window_size': ('living_detector.window_size', 'living_detection.window_size_frames'),
@@ -2729,6 +2763,7 @@ class IntegratedSeatSystem:
             'living_queue_size': ('living_queue_size', 'living_detection.queue_size'),
 
             # 体型检测参数（需要同步到detector对象）
+            'body_type_queue_size': ('body_type_queue_size', 'body_type_detection.queue_size'),
             'body_threshold': ('body_type_detector.threshold', 'body_type_detection.threshold'),
             'body_min_component': ('body_type_detector.min_component_size', 'body_type_detection.min_component_size'),
             'body_adult_threshold': ('body_type_detector.body_size_adult_threshold', 'body_type_detection.body_size_adult_threshold'),
@@ -2769,11 +2804,23 @@ class IntegratedSeatSystem:
 
         print(f"[集成系统] 参数已更新: {short_name} = {value} (配置路径: {config_path})")
 
-        # 特殊处理：队列大小变化时重建队列
+        # 特殊处理：需要额外转换或联动的参数
         if short_name == 'living_queue_size':
             old_queue = list(self.living_result_queue)
             self.living_result_queue = deque(old_queue[-value:], maxlen=value)
             print(f"[集成系统] 活体队列大小已更新: maxlen={value}, 当前长度={len(self.living_result_queue)}")
+
+        elif short_name == 'mode2_adaptive_seconds':
+            # 秒→帧转换：运行时变量存的是帧数
+            hz = self.config.get('system.hz', 13)
+            self.mode2_adaptive_frames = int(value * hz)
+            print(f"[集成系统] mode2自适应阶段: {value}秒 -> {self.mode2_adaptive_frames}帧")
+
+        elif short_name == 'mode2_hold_seconds':
+            # 秒→帧转换：运行时变量存的是帧数
+            hz = self.config.get('system.hz', 13)
+            self.mode2_hold_frames = int(value * hz)
+            print(f"[集成系统] mode2保压阶段: {value}秒 -> {self.mode2_hold_frames}帧")
 
         # 自动保存配置到文件
         if auto_save:
