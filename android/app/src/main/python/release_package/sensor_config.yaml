@@ -9,7 +9,7 @@ system:
 control:
   check_interval_frames: 4  # 控制逻辑检查间隔（帧数），每4帧执行一次气囊调节判断
   # 控制模式: mode1=体验版（保持当前控制逻辑和频率）, mode2=量产版（自适应与保压交替）
-  mode: mode1
+  mode: mode2
   # Mode2 量产版参数（仅mode2生效）
   mode2_adaptive_seconds: 5   # 自适应调节阶段持续秒数
   mode2_hold_seconds: 10      # 保压阶段持续秒数
