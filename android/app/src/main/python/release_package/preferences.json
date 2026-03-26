@@ -1,0 +1,66 @@
+{
+  "version": "1.1",
+  "preferences": {
+    "高大": {
+      "ratios": {
+        "lumbar_ratio": 0.4375,
+        "wing_ratio": 0.9876074276124253,
+        "left_leg_ratio": 0.7669999999999999,
+        "right_leg_ratio": 0.9795916552163982
+      },
+      "thresholds": {
+        "lumbar": {
+          "inflate": 0.7375,
+          "deflate": 0.1375
+        },
+        "side_wings": {
+          "inflate_left": 0.7876074276124252,
+          "deflate_left": 1.1876074276124253
+        },
+        "leg_support": {
+          "left_inflate": 0.567,
+          "left_deflate": 0.9669999999999999,
+          "right_inflate": 0.7795916552163982,
+          "right_deflate": 1.1795916552163983
+        }
+      },
+      "sample_frames": 30,
+      "timestamp": "2026-03-26 19:53:00",
+      "filter_mode": "clamp",
+      "airbag_ops": {
+        "lumbar": {
+          "inflate": 0,
+          "deflate": 0
+        },
+        "side_wings_left": {
+          "inflate": 0,
+          "deflate": 0
+        },
+        "side_wings_right": {
+          "inflate": 0,
+          "deflate": 0
+        },
+        "leg_left": {
+          "inflate": 0,
+          "deflate": 0
+        },
+        "leg_right": {
+          "inflate": 0,
+          "deflate": 0
+        },
+        "hip": {
+          "inflate": 1,
+          "deflate": 0
+        }
+      },
+      "net_ops": {
+        "lumbar": 0,
+        "side_wings_left": 0,
+        "side_wings_right": 0,
+        "leg_left": 0,
+        "leg_right": 0,
+        "hip": 1
+      }
+    }
+  }
+}

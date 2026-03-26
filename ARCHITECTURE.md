@@ -1,6 +1,6 @@
 # 架构文档
 
-> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-15 19:58
+> 本文档由 Manus 自动生成和维护。最后更新于：2026-03-26 08:06
 
 ## 1. 项目概述
 
@@ -29,9 +29,12 @@
 │   │       ├── java/       # Kotlin Native 模块
 │   │       │   └── .../    # (SerialModule, SerialManager, FrameParser)
 │   │       └── python/     # Chaquopy Python 源代码
-│   │           ├── release_package/ # 算法核心包
-│   │           │   ├── integrated_system.py # 算法主入口
+│   │           ├── release_package/ # 算法核心包 (release_package(7))
+│   │           │   ├── integrated_system.py # 算法主入口（含阶段枚举管理器）
 │   │           │   ├── config.py            # 配置管理
+│   │           │   ├── body_shape_classifier.py # 体型三分类器（多后端：JSON→ONNX→pkl）
+│   │           │   ├── preference_manager.py # 品味管理器（个性化调节区间）
+│   │           │   ├── preferences.json      # 预设品味数据
 │   │           │   └── ...
 │   │           └── server.py              # Python 服务端接口 (被 Native 调用)
 ├── src/                    # React Native 源代码
@@ -120,6 +123,20 @@ graph TD
     - 算法返回的 `body_type` 字段包含体型识别结果（轻盈型、均衡型、稳健型）。
     - `HomeScreen` 气囊状态区域根据体型显示"当前为XX型自适应调节状态"。
 
+6.  **初始化阶段枚举管理器（release_package(7) 新增）**
+    - 入座后按 `idle → waiting_recognition → support_inflate → hip_inflate → done` 五阶段推进。
+    - `waiting_recognition`：等待活体确认 + 体型三分类完成，不发送充放气指令。
+    - `support_inflate`：活体确认后启动支撑气囊（腰托/侧翼）初始化充气。
+    - `hip_inflate`：支撑气囊完成后，读取品味 `net_ops['hip']` 调整臀托初始化时间（基础 2s ± 品味偏移）。
+    - `done`：全部初始化完成，进入自适应调节。
+    - 三分类模型完成后自动推进初始化流程（`_try_advance_init_phase`）。
+
+7.  **品味记录与 hip 偏好系数**
+    - 用户在自定义气囊页面调节后，`handleConfirmSave` 调用 `triggerPreferenceRecording(bodyShape, airbagOps)`。
+    - `airbagOps` 包含各区域的充放气操作次数（含 `hip` 字段）。
+    - `preference_manager.start_recording()` 采集 30 帧压力数据，`_finalize_recording()` 计算并保存 `net_ops['hip']`。
+    - 下次入座时 `_start_hip_init()` 读取 `net_ops['hip']`，正数额外充气、负数额外放气、0 跳过。
+
 5.  **连接状态管理**
     - `TopBar` 组件在未连接/连接异常状态时显示"重新连接"按钮。
     - `ConnectionErrorModal` 弹窗同时提供重连按钮。
@@ -183,6 +200,7 @@ graph TD
 | 2026-03-06 00:30 | baocun v6 | 性能优化 | 移除生产环境 console.log（41→条全部加 __DEV__ 保护）；子组件添加 React.memo（AdjustButtons/CustomAirbagLabel/CustomSeatDiagram）；useMemo 缓存 totalOps/leftZones/rightZones；NativeEventEmitter 实例移至组件外部；日志 ScrollView 改用 requestAnimationFrame + animated:false |
 
 | 2026-03-15 19:58 | Release 打包脚本 | 在 `package.json` 中新增 `npm run release`，封装 `android\gradlew.bat assembleRelease` 命令 |
+| 2026-03-26 08:06 | MUI | release_package(7) 算法包升级 | 替换 integrated_system.py（含阶段枚举管理器）、preference_manager.py、sensor_config.yaml、visualizer.py；新增 preferences.json、test_init_flow.py、test_new_features.py；保持 body_shape_classifier.py 多后端模型加载（JSON→ONNX→pkl） |
 
 ## 7. 更新日志
 
@@ -214,6 +232,7 @@ graph TD
 | 2026-03-06 00:30 | 性能优化 | 移除生产环境 console.log（41条→全部加 __DEV__ 保护）；子组件添加 React.memo；useMemo 缓存计算结果；优化 NativeEventEmitter 和日志滚动性能 |
 
 | 2026-03-15 19:58 | 配置变更 | 在 `package.json` 中新增 `release` 脚本，执行 `cd android && gradlew.bat assembleRelease` 以统一 Android release APK 打包入口 |
+| 2026-03-26 08:06 | MUI | 新增功能 | 升级 release_package(7)：新增初始化阶段枚举管理器（idle→waiting_recognition→support_inflate→hip_inflate→done），三分类模型结果驱动阶段推进，臀托初始化读取品味 net_ops['hip'] 偏好系数，保持多后端模型加载兼容性 |
 
 ---
 

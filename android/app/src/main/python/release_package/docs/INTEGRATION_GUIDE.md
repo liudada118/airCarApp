@@ -158,6 +158,7 @@ def on_new_sensor_data(raw_144: np.ndarray):
 | `backrest_sum` | `float` | 靠背中间矩阵压力总和 |
 | `living_confidence` | `float` | 活体检测置信度 `[0.0, 1.0]` |
 | `body_features` | `Dict` | 体型检测详细特征数据 |
+| `init_phase` | `str` | 初始化流程阶段：`"idle"`, `"waiting_recognition"`, `"support_inflate"`, `"hip_inflate"`, `"done"` |
 | `frame_count` | `int` | 当前帧计数（从1开始） |
 
 **`body_features` 子字段（体型检测已启用时）：**
