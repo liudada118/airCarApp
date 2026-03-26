@@ -300,11 +300,12 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
         </View>
       </View>
 
-      {/* ─── 坐垫前端(腿托): 9(cushionRL) 10(cushionRR) ─── */}
+      {/* ─── 坐垫前端(腿托): 9(cushionRL-左腿) 10(cushionRR-右腿) ─── */}
+      {/* 坐在椅子上的人的左腿在屏幕右侧，右腿在屏幕左侧（正面视图） */}
       <View
         style={[
           styles.zone,
-          getZoneStyle('cushionRL'),
+          getZoneStyle('cushionRR'),
           {
             top: 267 * s,
             left: 77 * s,
@@ -313,12 +314,12 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
             borderRadius: 10 * s,
           },
         ]}>
-        {renderArrow('cushionRL', 8 * s)}
+        {renderArrow('cushionRR', 8 * s)}
       </View>
       <View
         style={[
           styles.zone,
-          getZoneStyle('cushionRR'),
+          getZoneStyle('cushionRL'),
           {
             top: 268 * s,
             right: 75 * s,
@@ -327,7 +328,7 @@ const SeatDiagram: React.FC<SeatDiagramProps> = ({
             borderRadius: 10 * s,
           },
         ]}>
-        {renderArrow('cushionRR', 8 * s)}
+        {renderArrow('cushionRL', 8 * s)}
       </View>
     </View>
   );

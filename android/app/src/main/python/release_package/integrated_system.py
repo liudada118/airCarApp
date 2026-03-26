@@ -2582,6 +2582,9 @@ class IntegratedSeatSystem:
             'use_filtered_sum': ('use_filtered_sum', 'integrated_system.use_filtered_sum'),
             'backrest_buffer_frames': ('backrest_buffer_frames', 'integrated_system.backrest_buffer_frames'),
             'control_check_interval': ('control_check_interval', 'control.check_interval_frames'),
+            'control_mode': ('control_mode', 'control.mode'),
+            'mode2_adaptive_seconds': (None, 'control.mode2_adaptive_seconds'),
+            'mode2_hold_seconds': (None, 'control.mode2_hold_seconds'),
 
             # 活体检测参数（需要同步到detector对象）
             'living_window_size': ('living_detector.window_size', 'living_detection.window_size_frames'),
@@ -2623,7 +2626,8 @@ class IntegratedSeatSystem:
         obj_path, config_path = param_mapping[short_name]
 
         # 1. 更新对象属性
-        self._set_nested_attr(obj_path, value)
+        if obj_path is not None:
+            self._set_nested_attr(obj_path, value)
 
         # 2. 更新配置
         self.config.set(config_path, value)
@@ -2635,6 +2639,23 @@ class IntegratedSeatSystem:
             old_queue = list(self.living_result_queue)
             self.living_result_queue = deque(old_queue[-value:], maxlen=value)
             print(f"[集成系统] 活体队列大小已更新: maxlen={value}, 当前长度={len(self.living_result_queue)}")
+
+        # 特殊处理：控制模式切换时重置Mode2子状态机
+        if short_name == 'control_mode':
+            self.mode2_sub_state = 'adaptive'
+            self.mode2_sub_counter = 0
+            print(f"[集成系统] 控制模式已切换为: {value}，Mode2子状态机已重置")
+
+        # 特殊处理：Mode2参数变更时重新计算帧数
+        if short_name == 'mode2_adaptive_seconds':
+            hz = self.config.get('system.hz', 13)
+            self.mode2_adaptive_frames = int(value * hz)
+            print(f"[集成系统] Mode2自适应帧数已更新: {self.mode2_adaptive_frames}帧 ({value}秒 * {hz}Hz)")
+
+        if short_name == 'mode2_hold_seconds':
+            hz = self.config.get('system.hz', 13)
+            self.mode2_hold_frames = int(value * hz)
+            print(f"[集成系统] Mode2保压帧数已更新: {self.mode2_hold_frames}帧 ({value}秒 * {hz}Hz)")
 
         # 自动保存配置到文件
         if auto_save:
