@@ -8,7 +8,6 @@ import {
   CAN_ID_BACKREST,
   CAN_ID_CUSHION,
   calculateStats,
-  detectActiveRegion,
 } from "@/lib/canProtocol";
 import {
   ShieldCheck,
@@ -105,6 +104,8 @@ export default function DataPanel() {
     adcThreshold,
     frameRate,
     frameCount,
+    backrestTrackedRegion,
+    cushionTrackedRegion,
   } = useCANContext();
 
   const [showActiveOnly, setShowActiveOnly] = useState(false);
@@ -115,7 +116,7 @@ export default function DataPanel() {
   const isActive = connectionStatus === "connected" || connectionStatus === "simulating";
   const isDemo = connectionStatus === "simulating";
   const currentData = activeDevice === CAN_ID_BACKREST ? backrestData : cushionData;
-  const region = useMemo(() => detectActiveRegion(currentData), [currentData]);
+  const region = activeDevice === CAN_ID_BACKREST ? backrestTrackedRegion : cushionTrackedRegion;
   const stats = useMemo(() => calculateStats(currentData, isActive ? region : undefined), [currentData, region, isActive]);
 
   // 核心指标

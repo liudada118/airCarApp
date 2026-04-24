@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { useCANContext } from "@/contexts/CANContext";
-import { BAUD_RATE_OPTIONS, CAN_ID_BACKREST, detectActiveRegion, formatMatrixSize } from "@/lib/canProtocol";
+import { BAUD_RATE_OPTIONS, CAN_ID_BACKREST, formatMatrixSize } from "@/lib/canProtocol";
 import type { SimulationMode } from "@/lib/canSimulator";
 import {
   Select,
@@ -82,12 +82,16 @@ export default function Sidebar() {
     backrestData,
     cushionData,
     activeDevice,
+    backrestTrackedRegion,
+    cushionTrackedRegion,
+    hasDiscoveredSensors,
+    resetTrackers,
   } = useCANContext();
 
   const [filterOpen, setFilterOpen] = useState(true);
 
   const currentData = activeDevice === CAN_ID_BACKREST ? backrestData : cushionData;
-  const region = detectActiveRegion(currentData);
+  const region = activeDevice === CAN_ID_BACKREST ? backrestTrackedRegion : cushionTrackedRegion;
   const isConnected = connectionStatus === "connected";
   const isSimulating = connectionStatus === "simulating";
   const isActive = isConnected || isSimulating;

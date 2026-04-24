@@ -5,15 +5,13 @@
  */
 import { useState, useEffect } from "react";
 import { useCANContext } from "@/contexts/CANContext";
-import { CAN_ID_BACKREST, detectActiveRegion, formatMatrixSize } from "@/lib/canProtocol";
+import { CAN_ID_BACKREST, formatMatrixSize } from "@/lib/canProtocol";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Grid3x3, Zap, Hash, Clock, Moon, Sun } from "lucide-react";
 
 export default function Header() {
-  const { connectionStatus, adcThreshold, frameRate, frameCount, backrestData, cushionData, activeDevice } = useCANContext();
-
-  const currentData = activeDevice === CAN_ID_BACKREST ? backrestData : cushionData;
-  const region = detectActiveRegion(currentData);
+  const { connectionStatus, adcThreshold, frameRate, frameCount, activeDevice, backrestTrackedRegion, cushionTrackedRegion } = useCANContext();
+  const region = activeDevice === CAN_ID_BACKREST ? backrestTrackedRegion : cushionTrackedRegion;
   const { theme, toggleTheme } = useTheme();
   const [time, setTime] = useState(new Date());
 

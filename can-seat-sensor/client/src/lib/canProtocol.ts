@@ -194,10 +194,172 @@ export function parseCANMessage(frame: CANFrame, currentData: SensorData): Senso
   };
 }
 
-// ─── 自动识别有效矩阵区域 ─────────────────────────────────
+// ─── 有效传感器位置累积追踪器 ─────────────────────────────
 /**
- * 扫描矩阵数据，找出实际有非零数据的行列范围
- * 返回的rows/cols是实际有效的传感器行列数
+ * ActiveSensorTracker：通过累积记忆非零值位置来自动识别有效传感器区域
+ *
+ * 核心逻辑：
+ * - 未按压时：所有位置值为0，无法区分有效传感器和空位置
+ * - 按压时：有效传感器值>0，空位置保持0
+ * - 因此：一旦某位置出现过非零值，就永久标记为"有效传感器"
+ * - 有效区域 = 所有被标记位置的最小包围矩形
+ *
+ * 使用方式：
+ * - 每次收到新的矩阵数据时调用 update(matrix)
+ * - 通过 getRegion() 获取当前识别到的有效区域
+ * - 通过 reset() 清除累积记忆（断开连接时调用）
+ */
+export class ActiveSensorTracker {
+  /** 累积记忆：曾经出现过非零值的位置 */
+  private seenNonZero: boolean[][];
+  /** 是否已锁定区域（收到足够数据后锁定，避免频繁变化） */
+  private locked: boolean;
+  /** 锁定的区域 */
+  private lockedRegion: ActiveRegion | null;
+  /** 连续稳定帧计数（用于判断何时锁定） */
+  private stableCount: number;
+  /** 上一次的区域签名（用于判断稳定性） */
+  private lastSignature: string;
+
+  constructor() {
+    this.seenNonZero = Array.from({ length: MAX_MATRIX_ROWS }, () =>
+      Array(MAX_MATRIX_COLS).fill(false)
+    );
+    this.locked = false;
+    this.lockedRegion = null;
+    this.stableCount = 0;
+    this.lastSignature = "";
+  }
+
+  /** 用新的矩阵数据更新累积记忆 */
+  update(matrix: number[][]): void {
+    let hasNewDiscovery = false;
+    for (let r = 0; r < MAX_MATRIX_ROWS; r++) {
+      for (let c = 0; c < MAX_MATRIX_COLS; c++) {
+        const val = matrix[r]?.[c];
+        if (val !== undefined && val > 0 && !this.seenNonZero[r][c]) {
+          this.seenNonZero[r][c] = true;
+          hasNewDiscovery = true;
+        }
+      }
+    }
+
+    // 如果有新发现，解锁以重新计算
+    if (hasNewDiscovery) {
+      this.locked = false;
+      this.lockedRegion = null;
+      this.stableCount = 0;
+    }
+
+    // 稳定性检测：连续10帧区域不变则锁定
+    if (!this.locked) {
+      const sig = this.computeSignature();
+      if (sig === this.lastSignature && sig !== "") {
+        this.stableCount++;
+        if (this.stableCount >= 10) {
+          this.locked = true;
+          this.lockedRegion = this.computeRegion();
+        }
+      } else {
+        this.stableCount = 0;
+        this.lastSignature = sig;
+      }
+    }
+  }
+
+  /** 获取当前识别到的有效区域 */
+  getRegion(): ActiveRegion {
+    if (this.locked && this.lockedRegion) {
+      return this.lockedRegion;
+    }
+    return this.computeRegion();
+  }
+
+  /** 是否已经发现了有效传感器 */
+  hasDiscoveredSensors(): boolean {
+    for (let r = 0; r < MAX_MATRIX_ROWS; r++) {
+      for (let c = 0; c < MAX_MATRIX_COLS; c++) {
+        if (this.seenNonZero[r][c]) return true;
+      }
+    }
+    return false;
+  }
+
+  /** 获取累积记忆的有效位置掩码（用于UI高亮） */
+  getActiveMask(): boolean[][] {
+    return this.seenNonZero.map(row => [...row]);
+  }
+
+  /** 重置累积记忆 */
+  reset(): void {
+    this.seenNonZero = Array.from({ length: MAX_MATRIX_ROWS }, () =>
+      Array(MAX_MATRIX_COLS).fill(false)
+    );
+    this.locked = false;
+    this.lockedRegion = null;
+    this.stableCount = 0;
+    this.lastSignature = "";
+  }
+
+  /** 计算区域签名（用于稳定性检测） */
+  private computeSignature(): string {
+    const bits: string[] = [];
+    for (let r = 0; r < MAX_MATRIX_ROWS; r++) {
+      for (let c = 0; c < MAX_MATRIX_COLS; c++) {
+        if (this.seenNonZero[r][c]) bits.push(`${r},${c}`);
+      }
+    }
+    return bits.join("|");
+  }
+
+  /** 根据累积记忆计算有效区域 */
+  private computeRegion(): ActiveRegion {
+    let minRow = MAX_MATRIX_ROWS, maxRow = -1;
+    let minCol = MAX_MATRIX_COLS, maxCol = -1;
+    let totalActive = 0;
+
+    for (let r = 0; r < MAX_MATRIX_ROWS; r++) {
+      for (let c = 0; c < MAX_MATRIX_COLS; c++) {
+        if (this.seenNonZero[r][c]) {
+          totalActive++;
+          if (r < minRow) minRow = r;
+          if (r > maxRow) maxRow = r;
+          if (c < minCol) minCol = c;
+          if (c > maxCol) maxCol = c;
+        }
+      }
+    }
+
+    // 没有发现任何有效传感器时，返回全矩阵
+    if (maxRow < 0) {
+      return {
+        rows: MAX_MATRIX_ROWS,
+        cols: MAX_MATRIX_COLS,
+        startRow: 0,
+        startCol: 0,
+        totalActive: 0,
+        totalValid: MAX_SENSOR_COUNT,
+      };
+    }
+
+    const rows = maxRow - minRow + 1;
+    const cols = maxCol - minCol + 1;
+
+    return {
+      rows,
+      cols,
+      startRow: minRow,
+      startCol: minCol,
+      totalActive,
+      totalValid: rows * cols,
+    };
+  }
+}
+
+// ─── 自动识别有效矩阵区域（即时版，不依赖累积记忆） ──────
+/**
+ * 扫描矩阵数据，找出当前帧中有非零数据的行列范围
+ * 用于不需要累积记忆的场景（如模拟器、统计计算）
  */
 export interface ActiveRegion {
   rows: number;

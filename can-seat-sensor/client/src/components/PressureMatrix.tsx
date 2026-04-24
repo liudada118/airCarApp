@@ -1,6 +1,12 @@
 /**
  * 中央矩阵显示区域
- * ADC数值点阵 — 自动识别有效传感器区域并自适应填满显示
+ * ADC数值点阵 — 使用累积记忆自动识别有效传感器区域并自适应填满显示
+ *
+ * 核心逻辑：
+ * - 未按压时：所有位置值为0，显示完整10×10矩阵
+ * - 按压后：通过 ActiveSensorTracker 累积记忆非零位置
+ * - 自动裁剪到包含所有有效传感器的最小矩形
+ * - 无论5×5传感器接在10×10矩阵的哪些位置，都能正确识别和显示
  */
 import { useMemo, useState, useCallback } from "react";
 import { useCANContext } from "@/contexts/CANContext";
@@ -9,13 +15,14 @@ import {
   CAN_ID_CUSHION,
   pressureToColor,
   getTextColorForValue,
-  detectActiveRegion,
-  extractSubMatrix,
   calculateStats,
   formatMatrixSize,
+  extractSubMatrix,
+  MAX_MATRIX_ROWS,
+  MAX_MATRIX_COLS,
   type ActiveRegion,
 } from "@/lib/canProtocol";
-import { Grid3x3 } from "lucide-react";
+import { Grid3x3, Scan, Maximize2 } from "lucide-react";
 
 export default function PressureMatrix() {
   const {
@@ -25,6 +32,9 @@ export default function PressureMatrix() {
     setActiveDevice,
     adcThreshold,
     connectionStatus,
+    backrestTrackedRegion,
+    cushionTrackedRegion,
+    hasDiscoveredSensors,
   } = useCANContext();
 
   const [hoveredCell, setHoveredCell] = useState<{
@@ -36,17 +46,20 @@ export default function PressureMatrix() {
   const currentData =
     activeDevice === CAN_ID_BACKREST ? backrestData : cushionData;
 
+  const trackedRegion =
+    activeDevice === CAN_ID_BACKREST
+      ? backrestTrackedRegion
+      : cushionTrackedRegion;
+
   const isActive =
     connectionStatus === "connected" || connectionStatus === "simulating";
   const isDemo = connectionStatus === "simulating";
 
-  // 检测有效区域
-  const region: ActiveRegion = useMemo(
-    () => detectActiveRegion(currentData),
-    [currentData]
-  );
+  // 使用追踪器提供的区域（累积记忆）
+  // 如果尚未发现有效传感器，显示完整10×10矩阵
+  const region: ActiveRegion = trackedRegion;
 
-  // 提取子矩阵
+  // 提取子矩阵（根据追踪到的区域裁剪）
   const subMatrix = useMemo(
     () => (isActive ? extractSubMatrix(currentData, region) : []),
     [currentData, region, isActive]
@@ -73,6 +86,9 @@ export default function PressureMatrix() {
     setHoveredCell(null);
   }, []);
 
+  // 是否已自动裁剪（区域小于10×10）
+  const isCropped = region.rows < MAX_MATRIX_ROWS || region.cols < MAX_MATRIX_COLS;
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* 工具栏 */}
@@ -83,6 +99,19 @@ export default function PressureMatrix() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 自动识别状态指示 */}
+          {isActive && hasDiscoveredSensors && isCropped && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-blue-500/10 text-blue-600 border border-blue-500/20 flex items-center gap-1">
+              <Scan className="w-3 h-3" />
+              自动识别 {region.rows}×{region.cols}
+            </span>
+          )}
+          {isActive && !hasDiscoveredSensors && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-orange-500/10 text-orange-600 border border-orange-500/20 flex items-center gap-1">
+              <Maximize2 className="w-3 h-3" />
+              等待按压识别
+            </span>
+          )}
           {adcThreshold > 0 && (
             <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-primary/10 text-primary border border-primary/20">
               过滤: ADC&gt;{adcThreshold}
@@ -127,7 +156,12 @@ export default function PressureMatrix() {
         <div className="ml-auto text-[11px] text-muted-foreground font-mono">
           {isActive ? (
             <>
-              {formatMatrixSize(region)}（{totalPoints}有效点）
+              {formatMatrixSize(region)}（{totalPoints}点）
+              {isCropped && (
+                <span className="text-blue-500 ml-1">
+                  [起始:{region.startRow + 1},{region.startCol + 1}]
+                </span>
+              )}
               {" · "}AVG:{" "}
               <span className="text-primary font-medium">{stats.avg}</span>
               {" · "}MAX:{" "}

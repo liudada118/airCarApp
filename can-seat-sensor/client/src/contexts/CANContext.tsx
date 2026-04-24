@@ -3,6 +3,11 @@
  * 支持两种连接模式：
  * 1. WebUSB (candleLight/gs_usb) — 直接通过USB与CAN适配器通信
  * 2. Web Serial — 通过串口连接CAN适配器
+ *
+ * 集成 ActiveSensorTracker：
+ * - 自动累积记忆有效传感器位置（值>0的位置）
+ * - 提供 trackedRegion 供 PressureMatrix 使用
+ * - 断开连接时重置累积记忆
  */
 import { createContext, useContext, useCallback, useState, useRef, useEffect } from "react";
 import {
@@ -11,25 +16,26 @@ import {
   type SensorData,
   type LogEntry,
   type SerialConfig,
+  type ActiveRegion,
   DEFAULT_SERIAL_CONFIG,
-  BAUD_RATE_OPTIONS,
   createEmptySensorData,
   SENSOR_MAP,
   FRAME_DELIMITER,
   parseCANMessage,
   bytesToHex,
   type CANFrame,
+  ActiveSensorTracker,
+  MAX_MATRIX_ROWS,
+  MAX_MATRIX_COLS,
 } from "@/lib/canProtocol";
 import {
   CANSimulator,
   DEFAULT_SIMULATOR_CONFIG,
   type SimulatorConfig,
-  type SimulationMode,
 } from "@/lib/canSimulator";
 import {
   CandleLightDevice,
   type CANFrameRaw,
-  type CandleLightStatus,
 } from "@/lib/candleLight";
 import { nanoid } from "nanoid";
 
@@ -53,68 +59,50 @@ export interface SerialPortEntry {
 
 // ─── Context 类型 ───────────────────────────────────────
 export interface CANContextValue {
-  // 连接模式
   transportMode: TransportMode;
   setTransportMode: (mode: TransportMode) => void;
   isWebUSBAvailable: boolean;
   isSerialAvailable: boolean;
-
-  // 连接状态
   connectionStatus: ConnectionStatus;
   isSimulating: boolean;
-
-  // 设备数据
   backrestData: SensorData;
   cushionData: SensorData;
   activeDevice: number;
   setActiveDevice: (canId: number) => void;
-
-  // CAN 波特率配置
   canBitrate: number;
   setCanBitrate: (rate: number) => void;
-
-  // 串口配置 (仅 serial 模式)
   config: SerialConfig;
   setConfig: (c: SerialConfig) => void;
-
-  // WebUSB 设备 (仅 webusb 模式)
   usbDevices: USBDeviceEntry[];
   selectedUSBDeviceIndex: number;
   setSelectedUSBDeviceIndex: (idx: number) => void;
   scanUSBDevices: () => Promise<void>;
   requestUSBDevice: () => Promise<void>;
-
-  // 串口设备 (仅 serial 模式)
   ports: SerialPortEntry[];
   selectedPortIndex: number;
   setSelectedPortIndex: (idx: number) => void;
   refreshPorts: () => Promise<void>;
   requestNewPort: () => Promise<void>;
-
-  // 连接操作
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
-
-  // 模拟器
   simulatorConfig: SimulatorConfig;
   setSimulatorConfig: (c: Partial<SimulatorConfig>) => void;
   startSimulation: () => void;
   stopSimulation: () => void;
-
-  // 过滤
   adcThreshold: number;
   setAdcThreshold: (v: number) => void;
-
-  // 日志
   logs: LogEntry[];
   clearLogs: () => void;
-
-  // 错误
   error: string | null;
-
-  // 帧率
   frameRate: number;
   frameCount: number;
+  // 有效传感器追踪
+  backrestTrackedRegion: ActiveRegion;
+  cushionTrackedRegion: ActiveRegion;
+  backrestActiveMask: boolean[][];
+  cushionActiveMask: boolean[][];
+  hasDiscoveredSensors: boolean;
+  resetTrackers: () => void;
 }
 
 const CANContext = createContext<CANContextValue | null>(null);
@@ -157,9 +145,25 @@ function getSubIdIndex(subId: number): number {
   return SENSOR_MAP.findIndex(m => m.subId === subId);
 }
 
+function createEmptyMask(): boolean[][] {
+  return Array.from({ length: MAX_MATRIX_ROWS }, () =>
+    Array(MAX_MATRIX_COLS).fill(false)
+  );
+}
+
+function defaultFullRegion(): ActiveRegion {
+  return {
+    rows: MAX_MATRIX_ROWS,
+    cols: MAX_MATRIX_COLS,
+    startRow: 0,
+    startCol: 0,
+    totalActive: 0,
+    totalValid: MAX_MATRIX_ROWS * MAX_MATRIX_COLS,
+  };
+}
+
 // ─── Provider ───────────────────────────────────────────
 export function CANProvider({ children }: { children: React.ReactNode }) {
-  // ── 连接模式 ────────────────────────────────────────
   const webUSBAvailable = CandleLightDevice.isAvailable();
   const serialAvailable = (() => {
     try { return "serial" in navigator && !!(navigator as any).serial; } catch { return false; }
@@ -169,7 +173,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
     webUSBAvailable ? "webusb" : "serial"
   );
 
-  // ── 状态 ────────────────────────────────────────────
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("disconnected");
   const [backrestData, setBackrestData] = useState<SensorData>(createEmptySensorData());
   const [cushionData, setCushionData] = useState<SensorData>(createEmptySensorData());
@@ -179,18 +182,53 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [frameRate, setFrameRate] = useState(0);
 
-  // WebUSB 设备列表
   const [usbDevices, setUsbDevices] = useState<USBDeviceEntry[]>([]);
   const [selectedUSBDeviceIndex, setSelectedUSBDeviceIndex] = useState(-1);
-
-  // Serial 端口列表
   const [ports, setPorts] = useState<SerialPortEntry[]>([]);
   const [selectedPortIndex, setSelectedPortIndex] = useState(-1);
 
-  // 模拟器
   const [simulatorConfig, setSimulatorConfigState] = useState<SimulatorConfig>({ ...DEFAULT_SIMULATOR_CONFIG });
   const [adcThreshold, setAdcThreshold] = useState(5);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+
+  // ── 有效传感器追踪器 ────────────────────────────────
+  const backrestTrackerRef = useRef(new ActiveSensorTracker());
+  const cushionTrackerRef = useRef(new ActiveSensorTracker());
+  const [backrestTrackedRegion, setBackrestTrackedRegion] = useState<ActiveRegion>(defaultFullRegion());
+  const [cushionTrackedRegion, setCushionTrackedRegion] = useState<ActiveRegion>(defaultFullRegion());
+  const [backrestActiveMask, setBackrestActiveMask] = useState<boolean[][]>(createEmptyMask());
+  const [cushionActiveMask, setCushionActiveMask] = useState<boolean[][]>(createEmptyMask());
+  const [hasDiscoveredSensors, setHasDiscoveredSensors] = useState(false);
+
+  const updateTrackerState = useCallback((canId: number, matrix: number[][]) => {
+    if (canId === CAN_ID_BACKREST) {
+      backrestTrackerRef.current.update(matrix);
+      const region = backrestTrackerRef.current.getRegion();
+      setBackrestTrackedRegion(region);
+      setBackrestActiveMask(backrestTrackerRef.current.getActiveMask());
+      if (backrestTrackerRef.current.hasDiscoveredSensors()) {
+        setHasDiscoveredSensors(true);
+      }
+    } else if (canId === CAN_ID_CUSHION) {
+      cushionTrackerRef.current.update(matrix);
+      const region = cushionTrackerRef.current.getRegion();
+      setCushionTrackedRegion(region);
+      setCushionActiveMask(cushionTrackerRef.current.getActiveMask());
+      if (cushionTrackerRef.current.hasDiscoveredSensors()) {
+        setHasDiscoveredSensors(true);
+      }
+    }
+  }, []);
+
+  const resetTrackers = useCallback(() => {
+    backrestTrackerRef.current.reset();
+    cushionTrackerRef.current.reset();
+    setBackrestTrackedRegion(defaultFullRegion());
+    setCushionTrackedRegion(defaultFullRegion());
+    setBackrestActiveMask(createEmptyMask());
+    setCushionActiveMask(createEmptyMask());
+    setHasDiscoveredSensors(false);
+  }, []);
 
   // Refs
   const simulatorRef = useRef<CANSimulator | null>(null);
@@ -233,27 +271,28 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
   // ── 模拟器数据回调 ──────────────────────────────────
   const handleSimData = useCallback((canId: number, data: SensorData) => {
     frameCountRef.current++;
-    if (canId === CAN_ID_BACKREST) setBackrestData(data);
-    else if (canId === CAN_ID_CUSHION) setCushionData(data);
-  }, []);
+    if (canId === CAN_ID_BACKREST) {
+      setBackrestData(data);
+      updateTrackerState(canId, data.matrix);
+    } else if (canId === CAN_ID_CUSHION) {
+      setCushionData(data);
+      updateTrackerState(canId, data.matrix);
+    }
+  }, [updateTrackerState]);
 
   // ════════════════════════════════════════════════════
   // WebUSB (candleLight) 相关
   // ════════════════════════════════════════════════════
-
-  // 处理 CAN 帧回调
   const handleCANFrame = useCallback((frame: CANFrameRaw) => {
     frameCountRef.current++;
     const canId = frame.canId;
     const timestamp = frame.timestamp;
 
-    // 防御性检查：数据长度至少2字节（subId + 1个数据字节）
     if (!frame.data || frame.data.length < 2) {
       console.warn(`[CAN] 异常帧: canId=0x${canId.toString(16)}, len=${frame.data?.length ?? 0}`);
       return;
     }
 
-    // 日志记录（前50帧详细记录，之后每100帧记录一次）
     const fc = frameCountRef.current;
     if (fc <= 50 || fc % 100 === 0) {
       const subId = frame.data[0];
@@ -269,7 +308,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    // 只处理我们关心的 CAN ID
     if (canId !== CAN_ID_BACKREST && canId !== CAN_ID_CUSHION) {
       if (frameCountRef.current <= 20) {
         console.info(`[CAN] 忽略未知CAN ID: 0x${canId.toString(16).toUpperCase()}`);
@@ -277,21 +315,23 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // 构建 CANFrame 用于解析
-    const canFrame: CANFrame = {
-      canId,
-      rawBytes: frame.data,
-      timestamp,
-    };
+    const canFrame: CANFrame = { canId, rawBytes: frame.data, timestamp };
 
     if (canId === CAN_ID_BACKREST) {
-      setBackrestData(prev => parseCANMessage(canFrame, prev));
+      setBackrestData(prev => {
+        const next = parseCANMessage(canFrame, prev);
+        updateTrackerState(canId, next.matrix);
+        return next;
+      });
     } else {
-      setCushionData(prev => parseCANMessage(canFrame, prev));
+      setCushionData(prev => {
+        const next = parseCANMessage(canFrame, prev);
+        updateTrackerState(canId, next.matrix);
+        return next;
+      });
     }
-  }, [addLog]);
+  }, [addLog, updateTrackerState]);
 
-  // 扫描已授权的 USB 设备
   const scanUSBDevices = useCallback(async () => {
     if (!webUSBAvailable) return;
     const cl = new CandleLightDevice();
@@ -311,7 +351,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
     }
   }, [webUSBAvailable, selectedUSBDeviceIndex]);
 
-  // 请求新的 USB 设备（弹出浏览器选择框）
   const requestUSBDevice = useCallback(async () => {
     if (!webUSBAvailable) {
       setError("当前浏览器不支持 WebUSB API，请使用 Chrome/Edge 浏览器");
@@ -330,17 +369,14 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
     }
   }, [webUSBAvailable, scanUSBDevices]);
 
-  // WebUSB 连接
   const connectWebUSB = useCallback(async () => {
     setConnectionStatus("connecting");
     setError(null);
-
     try {
       let device: USBDevice;
       if (selectedUSBDeviceIndex >= 0 && selectedUSBDeviceIndex < usbDevices.length) {
         device = usbDevices[selectedUSBDeviceIndex].device;
       } else {
-        // 弹出选择框
         const cl = new CandleLightDevice();
         const d = await cl.requestDevice();
         if (!d) {
@@ -353,7 +389,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
       const cl = new CandleLightDevice();
       candleLightRef.current = cl;
 
-      // 注册帧回调
       cl.on("frame", handleCANFrame);
       cl.on("error", (err) => {
         console.error("CandleLight error:", err);
@@ -374,7 +409,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
     }
   }, [selectedUSBDeviceIndex, usbDevices, canBitrate, handleCANFrame]);
 
-  // WebUSB 断开
   const disconnectWebUSB = useCallback(async () => {
     if (candleLightRef.current) {
       await candleLightRef.current.disconnect();
@@ -386,7 +420,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
   // ════════════════════════════════════════════════════
   // Web Serial 相关
   // ════════════════════════════════════════════════════
-
   const refreshPorts = useCallback(async () => {
     if (!serialAvailable) return;
     try {
@@ -417,7 +450,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshPorts, serialAvailable]);
 
-  // 串口数据解析
   const processBuffer = useCallback(() => {
     const buffer = bufferRef.current;
     while (buffer.length >= DATA_LENGTH_TOTAL) {
@@ -432,7 +464,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
       const dataStart = 4;
       const timestamp = Date.now();
 
-      // 靠背数据（前512字节）
       for (const mapping of SENSOR_MAP) {
         const idx = getSubIdIndex(mapping.subId);
         if (idx < 0) continue;
@@ -440,11 +471,14 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
         if (offset + 8 > buffer.length) continue;
         const rawBytes = new Uint8Array(buffer.slice(offset, offset + 8));
         const frame: CANFrame = { canId: CAN_ID_BACKREST, rawBytes, timestamp };
-        setBackrestData(prev => parseCANMessage(frame, prev));
+        setBackrestData(prev => {
+          const next = parseCANMessage(frame, prev);
+          updateTrackerState(CAN_ID_BACKREST, next.matrix);
+          return next;
+        });
         frameCountRef.current++;
       }
 
-      // 坐垫数据（后512字节）
       const cushionStart = dataStart + 512;
       for (const mapping of SENSOR_MAP) {
         const idx = getSubIdIndex(mapping.subId);
@@ -453,13 +487,17 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
         if (offset + 8 > buffer.length) continue;
         const rawBytes = new Uint8Array(buffer.slice(offset, offset + 8));
         const frame: CANFrame = { canId: CAN_ID_CUSHION, rawBytes, timestamp };
-        setCushionData(prev => parseCANMessage(frame, prev));
+        setCushionData(prev => {
+          const next = parseCANMessage(frame, prev);
+          updateTrackerState(CAN_ID_CUSHION, next.matrix);
+          return next;
+        });
         frameCountRef.current++;
       }
 
       buffer.splice(0, DATA_LENGTH_TOTAL);
     }
-  }, []);
+  }, [updateTrackerState]);
 
   const startReading = useCallback(async (port: any) => {
     readingRef.current = true;
@@ -530,7 +568,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
   // ════════════════════════════════════════════════════
   // 统一连接/断开接口
   // ════════════════════════════════════════════════════
-
   const connect = useCallback(async () => {
     if (transportMode === "webusb") {
       await connectWebUSB();
@@ -547,17 +584,19 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
     }
     setBackrestData(createEmptySensorData());
     setCushionData(createEmptySensorData());
-  }, [transportMode, disconnectWebUSB, disconnectSerial]);
+    resetTrackers();
+  }, [transportMode, disconnectWebUSB, disconnectSerial, resetTrackers]);
 
   // ── 模拟器控制 ──────────────────────────────────────
   const startSimulation = useCallback(() => {
     if (simulatorRef.current) simulatorRef.current.stop();
+    resetTrackers();
     const sim = new CANSimulator(simulatorConfig, handleSimData);
     simulatorRef.current = sim;
     sim.startDual();
     setConnectionStatus("simulating");
     setError(null);
-  }, [simulatorConfig, handleSimData]);
+  }, [simulatorConfig, handleSimData, resetTrackers]);
 
   const stopSimulation = useCallback(() => {
     if (simulatorRef.current) {
@@ -567,7 +606,8 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
     setConnectionStatus("disconnected");
     setBackrestData(createEmptySensorData());
     setCushionData(createEmptySensorData());
-  }, []);
+    resetTrackers();
+  }, [resetTrackers]);
 
   const setSimulatorConfig = useCallback((c: Partial<SimulatorConfig>) => {
     setSimulatorConfigState(prev => {
@@ -581,7 +621,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
 
   // ── 事件监听 ────────────────────────────────────────
   useEffect(() => {
-    // WebUSB 设备连接/断开事件
     if (webUSBAvailable) {
       const onUSBConnect = () => scanUSBDevices();
       const onUSBDisconnect = () => scanUSBDevices();
@@ -596,7 +635,6 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
   }, [webUSBAvailable, scanUSBDevices]);
 
   useEffect(() => {
-    // Web Serial 设备连接/断开事件
     if (serialAvailable) {
       let serial: any;
       try { serial = (navigator as any).serial; } catch { return; }
@@ -662,6 +700,12 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
     error,
     frameRate,
     frameCount,
+    backrestTrackedRegion,
+    cushionTrackedRegion,
+    backrestActiveMask,
+    cushionActiveMask,
+    hasDiscoveredSensors,
+    resetTrackers,
   };
 
   return <CANContext.Provider value={value}>{children}</CANContext.Provider>;
