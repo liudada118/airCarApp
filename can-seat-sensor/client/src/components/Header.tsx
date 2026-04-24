@@ -5,12 +5,15 @@
  */
 import { useState, useEffect } from "react";
 import { useCANContext } from "@/contexts/CANContext";
-import { TOTAL_SENSOR_COUNT } from "@/lib/canProtocol";
+import { CAN_ID_BACKREST, detectActiveRegion, formatMatrixSize } from "@/lib/canProtocol";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Grid3x3, Zap, Hash, Clock, Moon, Sun } from "lucide-react";
 
 export default function Header() {
-  const { connectionStatus, adcThreshold, frameRate, frameCount } = useCANContext();
+  const { connectionStatus, adcThreshold, frameRate, frameCount, backrestData, cushionData, activeDevice } = useCANContext();
+
+  const currentData = activeDevice === CAN_ID_BACKREST ? backrestData : cushionData;
+  const region = detectActiveRegion(currentData);
   const { theme, toggleTheme } = useTheme();
   const [time, setTime] = useState(new Date());
 
@@ -52,8 +55,8 @@ export default function Header() {
         {/* 矩阵尺寸 */}
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Grid3x3 className="w-3.5 h-3.5" />
-          <span className="font-mono">10x10</span>
-          <span className="text-[10px]">({TOTAL_SENSOR_COUNT}点)</span>
+          <span className="font-mono">{isActive ? formatMatrixSize(region) : "--"}</span>
+          <span className="text-[10px]">({isActive ? `${region.rows * region.cols}点` : "--"})</span>
         </div>
 
         {/* 帧率 */}

@@ -1,6 +1,7 @@
 /**
  * CAN数据模拟器
  * 用于在没有真实CAN设备时模拟传感器数据
+ * 支持全矩阵(10×10)和子矩阵(如5×5)模拟
  */
 
 import {
@@ -8,43 +9,70 @@ import {
   CAN_ID_BACKREST,
   CAN_ID_CUSHION,
   FRAME_SEND_TIME_MS,
+  MAX_MATRIX_ROWS,
+  MAX_MATRIX_COLS,
+  sensorIdToRowCol,
   type CANFrame,
   type SensorData,
   parseCANMessage,
   createEmptySensorData,
-  MATRIX_ROWS,
-  MATRIX_COLS,
-  isValidSensorPosition,
+  buildValidSensorIds,
 } from "./canProtocol";
 
 export type SimulationMode = "static" | "wave" | "random" | "seated" | "gradient";
 
 export interface SimulatorConfig {
   mode: SimulationMode;
-  interval: number; // ms
-  noiseLevel: number; // 0-50
+  interval: number;
+  noiseLevel: number;
+  /** 模拟的矩阵行数（1-10），0表示自动使用全矩阵 */
+  simulateRows: number;
+  /** 模拟的矩阵列数（1-10），0表示自动使用全矩阵 */
+  simulateCols: number;
 }
 
 export const DEFAULT_SIMULATOR_CONFIG: SimulatorConfig = {
   mode: "seated",
   interval: FRAME_SEND_TIME_MS,
   noiseLevel: 10,
+  simulateRows: 5,  // 默认模拟5×5
+  simulateCols: 5,
 };
+
+// 预计算有效传感器位置集合
+const VALID_SENSOR_SET = new Set(buildValidSensorIds());
+
+/** 检查矩阵位置是否有效（0-indexed） */
+function isValidPosition(row: number, col: number): boolean {
+  const sensorId = ((row + 1) << 4) | (col + 1);
+  return VALID_SENSOR_SET.has(sensorId);
+}
 
 /** 生成模拟的传感器矩阵数据 */
 function generateSimulatedMatrix(
   mode: SimulationMode,
   tick: number,
-  noiseLevel: number
+  noiseLevel: number,
+  activeRows: number,
+  activeCols: number
 ): number[][] {
   const matrix: number[][] = [];
-  const noise = () => Math.floor(Math.random() * noiseLevel * 2) - noiseLevel;
+  const noise = () =>
+    noiseLevel > 0
+      ? Math.floor(Math.random() * noiseLevel * 2) - noiseLevel
+      : 0;
 
-  for (let r = 0; r < MATRIX_ROWS; r++) {
+  for (let r = 0; r < MAX_MATRIX_ROWS; r++) {
     const row: number[] = [];
-    for (let c = 0; c < MATRIX_COLS; c++) {
-      if (!isValidSensorPosition(r, c)) {
+    for (let c = 0; c < MAX_MATRIX_COLS; c++) {
+      if (!isValidPosition(r, c)) {
         row.push(-1);
+        continue;
+      }
+
+      // 超出模拟范围的传感器填0
+      if (r >= activeRows || c >= activeCols) {
+        row.push(0);
         continue;
       }
 
@@ -56,7 +84,7 @@ function generateSimulatedMatrix(
           break;
 
         case "wave": {
-          const phase = (tick * 0.05) + (r * 0.3) + (c * 0.3);
+          const phase = tick * 0.05 + r * 0.4 + c * 0.4;
           value = Math.round(128 + 100 * Math.sin(phase));
           break;
         }
@@ -66,42 +94,45 @@ function generateSimulatedMatrix(
           break;
 
         case "seated": {
-          // 模拟人坐在座椅上的压力分布
-          const centerR = 4.5;
-          const centerC = 4.5;
+          // 根据实际矩阵大小调整中心点
+          const centerR = (activeRows - 1) / 2;
+          const centerC = (activeCols - 1) / 2;
           const distR = Math.abs(r - centerR);
           const distC = Math.abs(c - centerC);
           const dist = Math.sqrt(distR * distR + distC * distC);
+          const maxDist = Math.sqrt(centerR * centerR + centerC * centerC);
 
-          // 中心区域压力最大
-          const basePressure = Math.max(0, 220 - dist * 35);
+          // 中心区域压力最大，边缘递减
+          const basePressure = Math.max(0, 200 * (1 - dist / (maxDist * 1.2)));
 
-          // 添加臀部双峰
-          const leftPeak = Math.exp(-((r - 3.5) ** 2 + (c - 3) ** 2) / 4) * 180;
-          const rightPeak = Math.exp(-((r - 3.5) ** 2 + (c - 6) ** 2) / 4) * 180;
+          // 双峰模拟（臀部两侧）
+          const peakOffset = Math.max(1, activeCols * 0.2);
+          const leftPeak =
+            Math.exp(
+              -((r - centerR * 0.7) ** 2 + (c - (centerC - peakOffset)) ** 2) /
+                Math.max(1, activeRows * 0.4)
+            ) * 160;
+          const rightPeak =
+            Math.exp(
+              -((r - centerR * 0.7) ** 2 + (c - (centerC + peakOffset)) ** 2) /
+                Math.max(1, activeRows * 0.4)
+            ) * 160;
 
-          // 大腿区域
-          const thighLeft = Math.exp(-((r - 6) ** 2 + (c - 3) ** 2) / 6) * 120;
-          const thighRight = Math.exp(-((r - 6) ** 2 + (c - 6) ** 2) / 6) * 120;
+          value = Math.round(Math.min(255, basePressure + leftPeak + rightPeak));
 
-          value = Math.round(
-            Math.min(255, basePressure + leftPeak + rightPeak + thighLeft + thighRight)
-          );
-
-          // 添加呼吸效果
-          const breathe = Math.sin(tick * 0.02) * 8;
+          // 呼吸效果
+          const breathe = Math.sin(tick * 0.02) * 6;
           value = Math.round(Math.max(0, value + breathe));
           break;
         }
 
         case "gradient": {
-          const ratio = (r * MATRIX_COLS + c) / (MATRIX_ROWS * MATRIX_COLS);
+          const ratio = (r * activeCols + c) / (activeRows * activeCols);
           value = Math.round(ratio * 255);
           break;
         }
       }
 
-      // 添加噪声
       value = Math.max(0, Math.min(255, value + noise()));
       row.push(value);
     }
@@ -129,10 +160,9 @@ function matrixToCANFrames(
         rawBytes[i + 1] = 0;
         continue;
       }
-      const row = ((sensorId >> 4) & 0x0F) - 1;
-      const col = (sensorId & 0x0F) - 1;
-      if (row >= 0 && row < MATRIX_ROWS && col >= 0 && col < MATRIX_COLS) {
-        const val = matrix[row][col];
+      const pos = sensorIdToRowCol(sensorId);
+      if (pos && pos.row - 1 < MAX_MATRIX_ROWS && pos.col - 1 < MAX_MATRIX_COLS) {
+        const val = matrix[pos.row - 1][pos.col - 1];
         rawBytes[i + 1] = val >= 0 ? val : 0;
       }
     }
@@ -161,13 +191,18 @@ export class CANSimulator {
     this.stop();
     this.tick = 0;
 
+    const rows = this.config.simulateRows || MAX_MATRIX_ROWS;
+    const cols = this.config.simulateCols || MAX_MATRIX_COLS;
+
     this.timer = setInterval(() => {
       this.tick++;
       const timestamp = Date.now();
       const matrix = generateSimulatedMatrix(
         this.config.mode,
         this.tick,
-        this.config.noiseLevel
+        this.config.noiseLevel,
+        rows,
+        cols
       );
 
       const frames = matrixToCANFrames(matrix, canId, timestamp);
@@ -187,15 +222,20 @@ export class CANSimulator {
     this.stop();
     this.tick = 0;
 
+    const rows = this.config.simulateRows || MAX_MATRIX_ROWS;
+    const cols = this.config.simulateCols || MAX_MATRIX_COLS;
+
     this.timer = setInterval(() => {
       this.tick++;
       const timestamp = Date.now();
 
-      // 靠背数据
+      // 靠背
       const backrestMatrix = generateSimulatedMatrix(
         this.config.mode,
         this.tick,
-        this.config.noiseLevel
+        this.config.noiseLevel,
+        rows,
+        cols
       );
       const backrestFrames = matrixToCANFrames(backrestMatrix, CAN_ID_BACKREST, timestamp);
       let backrestData = createEmptySensorData();
@@ -206,11 +246,13 @@ export class CANSimulator {
       backrestData.frameCount = this.tick;
       this.onData(CAN_ID_BACKREST, backrestData);
 
-      // 坐垫数据（稍有不同的模式）
+      // 坐垫
       const cushionMatrix = generateSimulatedMatrix(
         this.config.mode,
-        this.tick + 50, // 相位偏移
-        this.config.noiseLevel
+        this.tick + 50,
+        this.config.noiseLevel,
+        rows,
+        cols
       );
       const cushionFrames = matrixToCANFrames(cushionMatrix, CAN_ID_CUSHION, timestamp);
       let cushionData = createEmptySensorData();

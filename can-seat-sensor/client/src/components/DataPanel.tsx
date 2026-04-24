@@ -8,10 +8,7 @@ import {
   CAN_ID_BACKREST,
   CAN_ID_CUSHION,
   calculateStats,
-  getDeviceName,
-  canIdToString,
-  MATRIX_ROWS,
-  MATRIX_COLS,
+  detectActiveRegion,
 } from "@/lib/canProtocol";
 import {
   ShieldCheck,
@@ -118,7 +115,8 @@ export default function DataPanel() {
   const isActive = connectionStatus === "connected" || connectionStatus === "simulating";
   const isDemo = connectionStatus === "simulating";
   const currentData = activeDevice === CAN_ID_BACKREST ? backrestData : cushionData;
-  const stats = useMemo(() => calculateStats(currentData), [currentData]);
+  const region = useMemo(() => detectActiveRegion(currentData), [currentData]);
+  const stats = useMemo(() => calculateStats(currentData, isActive ? region : undefined), [currentData, region, isActive]);
 
   // 核心指标
   const rsd = useMemo(() => calcRSD(currentData.matrix), [currentData]);

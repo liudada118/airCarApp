@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { useCANContext } from "@/contexts/CANContext";
-import { BAUD_RATE_OPTIONS } from "@/lib/canProtocol";
+import { BAUD_RATE_OPTIONS, CAN_ID_BACKREST, detectActiveRegion, formatMatrixSize } from "@/lib/canProtocol";
 import type { SimulationMode } from "@/lib/canSimulator";
 import {
   Select,
@@ -79,10 +79,15 @@ export default function Sidebar() {
     error,
     frameRate,
     frameCount,
+    backrestData,
+    cushionData,
+    activeDevice,
   } = useCANContext();
 
   const [filterOpen, setFilterOpen] = useState(true);
 
+  const currentData = activeDevice === CAN_ID_BACKREST ? backrestData : cushionData;
+  const region = detectActiveRegion(currentData);
   const isConnected = connectionStatus === "connected";
   const isSimulating = connectionStatus === "simulating";
   const isActive = isConnected || isSimulating;
@@ -210,7 +215,7 @@ export default function Sidebar() {
               矩阵规格
             </label>
             <div className="h-8 flex items-center px-3 text-xs bg-background rounded-md border border-border text-foreground">
-              10 x 10
+              {isActive ? formatMatrixSize(region) : "10 x 10"}
             </div>
           </div>
 
@@ -350,7 +355,7 @@ export default function Sidebar() {
             </div>
             <div className="flex justify-between">
               <span>传感器数量</span>
-              <span className="font-mono text-foreground">100点</span>
+              <span className="font-mono text-foreground">{isActive ? `${region.rows * region.cols}点` : "--"}</span>
             </div>
             <div className="flex justify-between">
               <span>帧间隔</span>
