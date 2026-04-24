@@ -113,6 +113,7 @@ export interface CANContextValue {
 
   // 帧率
   frameRate: number;
+  frameCount: number;
 }
 
 const CANContext = createContext<CANContextValue | null>(null);
@@ -198,6 +199,7 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
   const readingRef = useRef(false);
   const bufferRef = useRef<number[]>([]);
   const frameCountRef = useRef(0);
+  const [frameCount, setFrameCount] = useState(0);
   const lastFrameTimeRef = useRef(Date.now());
 
   // ── 帧率计算 ────────────────────────────────────────
@@ -206,7 +208,9 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       const elapsed = (now - lastFrameTimeRef.current) / 1000;
       if (elapsed > 0) {
-        setFrameRate(Math.round(frameCountRef.current / elapsed));
+        const count = frameCountRef.current;
+        setFrameRate(Math.round(count / elapsed));
+        setFrameCount(prev => prev + count);
         frameCountRef.current = 0;
         lastFrameTimeRef.current = now;
       }
@@ -629,6 +633,7 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
     clearLogs,
     error,
     frameRate,
+    frameCount,
   };
 
   return <CANContext.Provider value={value}>{children}</CANContext.Provider>;

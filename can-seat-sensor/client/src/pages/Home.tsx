@@ -1,8 +1,7 @@
 /**
- * Design: Automotive HMI Dark Console — CAN Seat Sensor Dashboard
- * Layout: Header + Left sidebar + Center matrix + Right data panel
- * Colors: Deep navy (#0B1120) base, blue (#2563EB) primary, cyan/emerald/amber status
- * Fonts: Space Grotesk (display), DM Sans (body), Fira Code (data)
+ * v2.0 CAN Seat Sensor Dashboard
+ * Layout: Header + Left sidebar (250px) + Center matrix + Right panel (300px)
+ * Theme: Light mode with blue primary, professional industrial UI
  */
 import { CANProvider } from "@/contexts/CANContext";
 import Header from "@/components/Header";
@@ -13,7 +12,7 @@ import DataPanel from "@/components/DataPanel";
 export default function Home() {
   return (
     <CANProvider>
-      <div className="flex flex-col h-screen overflow-hidden">
+      <div className="flex flex-col h-screen overflow-hidden bg-background">
         {/* Top header */}
         <Header />
 
@@ -27,7 +26,7 @@ export default function Home() {
             <PressureMatrix />
           </main>
 
-          {/* Right panel — data analysis */}
+          {/* Right panel — acceptance & metrics */}
           <DataPanel />
         </div>
       </div>
