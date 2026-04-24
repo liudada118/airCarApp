@@ -1,15 +1,13 @@
 /**
  * 中央矩阵显示区域
- * 压力矩阵热力图 + ADC数值点阵
- * 自动识别有效传感器区域并自适应显示
+ * ADC数值点阵 — 自动识别有效传感器区域并自适应填满显示
  */
-import { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useCANContext } from "@/contexts/CANContext";
 import {
   CAN_ID_BACKREST,
   CAN_ID_CUSHION,
   pressureToColor,
-  pressureToRGB,
   getTextColorForValue,
   detectActiveRegion,
   extractSubMatrix,
@@ -18,8 +16,6 @@ import {
   type ActiveRegion,
 } from "@/lib/canProtocol";
 import { Grid3x3 } from "lucide-react";
-
-type ViewMode = "heatmap" | "values";
 
 export default function PressureMatrix() {
   const {
@@ -31,13 +27,11 @@ export default function PressureMatrix() {
     connectionStatus,
   } = useCANContext();
 
-  const [viewMode, setViewMode] = useState<ViewMode>("values");
   const [hoveredCell, setHoveredCell] = useState<{
     row: number;
     col: number;
     value: number;
   } | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const currentData =
     activeDevice === CAN_ID_BACKREST ? backrestData : cushionData;
@@ -58,7 +52,7 @@ export default function PressureMatrix() {
     [currentData, region, isActive]
   );
 
-  // 统计数据（只统计有效区域）
+  // 统计数据
   const stats = useMemo(
     () => calculateStats(currentData, isActive ? region : undefined),
     [currentData, region, isActive]
@@ -67,38 +61,6 @@ export default function PressureMatrix() {
   const displayRows = isActive ? region.rows : 0;
   const displayCols = isActive ? region.cols : 0;
   const totalPoints = displayRows * displayCols;
-
-  // Canvas渲染热力图
-  useEffect(() => {
-    if (viewMode !== "heatmap" || !canvasRef.current || !isActive) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const rows = subMatrix.length;
-    const cols = rows > 0 ? subMatrix[0].length : 0;
-    if (rows === 0 || cols === 0) return;
-
-    canvas.width = cols * 60;
-    canvas.height = rows * 60;
-    const cellW = canvas.width / cols;
-    const cellH = canvas.height / rows;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const val = subMatrix[r]?.[c] ?? -1;
-        if (val < 0) {
-          ctx.fillStyle = "rgba(240, 240, 245, 0.15)";
-        } else {
-          const [red, green, blue] = pressureToRGB(val, adcThreshold);
-          ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
-        }
-        ctx.fillRect(c * cellW, r * cellH, cellW - 0.5, cellH - 0.5);
-      }
-    }
-  }, [subMatrix, viewMode, adcThreshold, isActive]);
 
   const handleCellHover = useCallback(
     (r: number, c: number, val: number) => {
@@ -115,29 +77,9 @@ export default function PressureMatrix() {
     <div className="flex flex-col h-full bg-background">
       {/* 工具栏 */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card">
-        <div className="flex items-center gap-0.5 text-xs">
-          <Grid3x3 className="w-3.5 h-3.5 text-muted-foreground mr-1.5" />
-          <button
-            onClick={() => setViewMode("heatmap")}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              viewMode === "heatmap"
-                ? "text-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            压力矩阵
-          </button>
-          <span className="text-muted-foreground/30">·</span>
-          <button
-            onClick={() => setViewMode("values")}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              viewMode === "values"
-                ? "text-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            ADC数值点阵
-          </button>
+        <div className="flex items-center gap-1.5 text-xs">
+          <Grid3x3 className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="font-medium text-foreground">ADC数值点阵</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -197,7 +139,7 @@ export default function PressureMatrix() {
         </div>
       </div>
 
-      {/* 矩阵显示区域 */}
+      {/* ADC数值点阵 — 填满整个中央区域 */}
       <div className="flex-1 relative overflow-hidden bg-muted/20">
         {!isActive ? (
           /* 空状态 */
@@ -218,66 +160,14 @@ export default function PressureMatrix() {
               </p>
             </div>
           </div>
-        ) : viewMode === "heatmap" ? (
-          /* 热力图视图 */
-          <div className="absolute inset-0 p-4 flex items-center justify-center">
-            <div
-              className="relative"
-              style={{
-                width: "100%",
-                maxWidth: `${Math.min(560, displayCols * 80)}px`,
-                aspectRatio: `${displayCols} / ${displayRows}`,
-              }}
-            >
-              <canvas
-                ref={canvasRef}
-                className="w-full h-full rounded"
-                style={{ imageRendering: "pixelated" }}
-              />
-              {/* 悬停交互层 */}
-              <div
-                className="absolute inset-0 grid"
-                style={{
-                  gridTemplateColumns: `repeat(${displayCols}, 1fr)`,
-                  gridTemplateRows: `repeat(${displayRows}, 1fr)`,
-                }}
-              >
-                {subMatrix.map((row, r) =>
-                  row.map((val, c) => (
-                    <div
-                      key={`h-${r}-${c}`}
-                      className="relative cursor-crosshair"
-                      onMouseEnter={() => handleCellHover(r, c, val)}
-                      onMouseLeave={handleCellLeave}
-                    >
-                      {hoveredCell?.row === r &&
-                        hoveredCell?.col === c &&
-                        val >= 0 && (
-                          <div className="absolute z-50 -top-9 left-1/2 -translate-x-1/2 bg-popover border border-border rounded px-2 py-1 text-xs font-mono whitespace-nowrap shadow-md">
-                            <span className="text-muted-foreground">
-                              [{r + region.startRow},{c + region.startCol}]
-                            </span>
-                            <span className="mx-1 text-border">|</span>
-                            <span className="text-primary font-semibold">
-                              {val}
-                            </span>
-                          </div>
-                        )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
         ) : (
-          /* ADC数值点阵视图 */
-          <div className="absolute inset-0 flex items-center justify-center p-3">
+          /* ADC数值点阵 — 网格填满容器 */
+          <div className="absolute inset-0 p-1">
             <div
-              className="grid gap-px"
+              className="w-full h-full grid gap-px"
               style={{
-                gridTemplateColumns: `repeat(${displayCols}, minmax(40px, 1fr))`,
-                maxWidth: `${displayCols * 56}px`,
-                width: "100%",
+                gridTemplateColumns: `repeat(${displayCols}, 1fr)`,
+                gridTemplateRows: `repeat(${displayRows}, 1fr)`,
               }}
             >
               {subMatrix.map((row, r) =>
@@ -294,19 +184,17 @@ export default function PressureMatrix() {
                       key={`v-${r}-${c}`}
                       className={`
                         flex items-center justify-center
-                        text-[12px] font-mono leading-none
+                        font-mono leading-none select-none
                         transition-all duration-75
                         ${!isValid ? "opacity-5" : filtered ? "opacity-30" : ""}
-                        ${isHovered && isValid ? "ring-2 ring-primary/60 z-10 scale-110" : ""}
+                        ${isHovered && isValid ? "ring-2 ring-primary/60 z-10 scale-105" : ""}
                       `}
                       style={{
                         backgroundColor: isValid ? bgColor : "transparent",
                         color: txtColor,
-                        height: `${Math.max(32, Math.min(48, 320 / displayRows))}px`,
+                        fontSize: displayRows <= 5 ? "16px" : displayRows <= 10 ? "12px" : "10px",
                       }}
-                      onMouseEnter={() =>
-                        handleCellHover(r, c, val)
-                      }
+                      onMouseEnter={() => handleCellHover(r, c, val)}
                       onMouseLeave={handleCellLeave}
                     >
                       {isValid ? val : ""}
