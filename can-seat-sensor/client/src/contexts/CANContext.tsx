@@ -22,6 +22,7 @@ import {
   SENSOR_MAP,
   FRAME_DELIMITER,
   parseCANMessage,
+  parseCANMessageWithPositions,
   bytesToHex,
   type CANFrame,
   ActiveSensorTracker,
@@ -200,9 +201,9 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
   const [cushionActiveMask, setCushionActiveMask] = useState<boolean[][]>(createEmptyMask());
   const [hasDiscoveredSensors, setHasDiscoveredSensors] = useState(false);
 
-  const updateTrackerState = useCallback((canId: number, matrix: number[][]) => {
+  const updateTrackerState = useCallback((canId: number, matrix: number[][], writtenPositions?: Set<string>) => {
     if (canId === CAN_ID_BACKREST) {
-      backrestTrackerRef.current.update(matrix);
+      backrestTrackerRef.current.update(matrix, writtenPositions);
       const region = backrestTrackerRef.current.getRegion();
       setBackrestTrackedRegion(region);
       setBackrestActiveMask(backrestTrackerRef.current.getActiveMask());
@@ -210,7 +211,7 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
         setHasDiscoveredSensors(true);
       }
     } else if (canId === CAN_ID_CUSHION) {
-      cushionTrackerRef.current.update(matrix);
+      cushionTrackerRef.current.update(matrix, writtenPositions);
       const region = cushionTrackerRef.current.getRegion();
       setCushionTrackedRegion(region);
       setCushionActiveMask(cushionTrackerRef.current.getActiveMask());
@@ -268,15 +269,25 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
 
   const clearLogs = useCallback(() => setLogs([]), []);
 
-  // ── 模拟器数据回调 ──────────────────────────────────
+  // ── 模拟器数据回调 ────────────────────────────────
   const handleSimData = useCallback((canId: number, data: SensorData) => {
     frameCountRef.current++;
+    // 从模拟器矩阵中提取所有有效位置（val >= 0）作为 writtenPositions
+    // 这样即使传感器值为0，只要是有效位置就会被 tracker 记忆
+    const writtenPositions = new Set<string>();
+    for (let r = 0; r < data.matrix.length; r++) {
+      for (let c = 0; c < (data.matrix[r]?.length ?? 0); c++) {
+        if (data.matrix[r][c] >= 0) {
+          writtenPositions.add(`${r},${c}`);
+        }
+      }
+    }
     if (canId === CAN_ID_BACKREST) {
       setBackrestData(data);
-      updateTrackerState(canId, data.matrix);
+      updateTrackerState(canId, data.matrix, writtenPositions);
     } else if (canId === CAN_ID_CUSHION) {
       setCushionData(data);
-      updateTrackerState(canId, data.matrix);
+      updateTrackerState(canId, data.matrix, writtenPositions);
     }
   }, [updateTrackerState]);
 
@@ -319,15 +330,15 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
 
     if (canId === CAN_ID_BACKREST) {
       setBackrestData(prev => {
-        const next = parseCANMessage(canFrame, prev);
-        updateTrackerState(canId, next.matrix);
-        return next;
+        const result = parseCANMessageWithPositions(canFrame, prev);
+        updateTrackerState(canId, result.data.matrix, result.writtenPositions);
+        return result.data;
       });
     } else {
       setCushionData(prev => {
-        const next = parseCANMessage(canFrame, prev);
-        updateTrackerState(canId, next.matrix);
-        return next;
+        const result = parseCANMessageWithPositions(canFrame, prev);
+        updateTrackerState(canId, result.data.matrix, result.writtenPositions);
+        return result.data;
       });
     }
   }, [addLog, updateTrackerState]);
@@ -472,9 +483,9 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
         const rawBytes = new Uint8Array(buffer.slice(offset, offset + 8));
         const frame: CANFrame = { canId: CAN_ID_BACKREST, rawBytes, timestamp };
         setBackrestData(prev => {
-          const next = parseCANMessage(frame, prev);
-          updateTrackerState(CAN_ID_BACKREST, next.matrix);
-          return next;
+          const result = parseCANMessageWithPositions(frame, prev);
+          updateTrackerState(CAN_ID_BACKREST, result.data.matrix, result.writtenPositions);
+          return result.data;
         });
         frameCountRef.current++;
       }
@@ -488,9 +499,9 @@ export function CANProvider({ children }: { children: React.ReactNode }) {
         const rawBytes = new Uint8Array(buffer.slice(offset, offset + 8));
         const frame: CANFrame = { canId: CAN_ID_CUSHION, rawBytes, timestamp };
         setCushionData(prev => {
-          const next = parseCANMessage(frame, prev);
-          updateTrackerState(CAN_ID_CUSHION, next.matrix);
-          return next;
+          const result = parseCANMessageWithPositions(frame, prev);
+          updateTrackerState(CAN_ID_CUSHION, result.data.matrix, result.writtenPositions);
+          return result.data;
         });
         frameCountRef.current++;
       }

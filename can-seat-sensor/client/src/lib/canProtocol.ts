@@ -161,32 +161,32 @@ export function createEmptySensorData(): SensorData {
 }
 
 // ─── CAN报文解析 ──────────────────────────────────────────
-/** 解析单个CAN报文，更新传感器矩阵 */
+/** 解析结果，包含更新后的数据和本帧写入的位置集合 */
+export interface ParseResult {
+  data: SensorData;
+  /** 本帧实际写入的矩阵位置（"row,col" 格式，0-indexed） */
+  writtenPositions: Set<string>;
+}
+
+/** 解析单个CAN报文，更新传感器矩阵，同时记录写入位置 */
 export function parseCANMessage(frame: CANFrame, currentData: SensorData): SensorData {
   const bytes = frame.rawBytes;
-  if (bytes.length < 2) return currentData; // 至少需要subId + 1个数据字节
-
+  if (bytes.length < 2) return currentData;
   const subId = bytes[0];
   const mapping = SUB_ID_LOOKUP.get(subId);
   if (!mapping) return currentData;
-
   const newMatrix = currentData.matrix.map((row) => [...row]);
   let updated = false;
-
   for (let i = 0; i < 7; i++) {
     const sensorId = mapping.sensors[i];
     if (sensorId === null) continue;
-    if (i + 1 >= bytes.length) break; // 防止越界
-
+    if (i + 1 >= bytes.length) break;
     const pos = sensorIdToRowCol(sensorId);
     if (!pos) continue;
-
     newMatrix[pos.row - 1][pos.col - 1] = bytes[i + 1];
     updated = true;
   }
-
   if (!updated) return currentData;
-
   return {
     matrix: newMatrix,
     lastUpdate: frame.timestamp,
@@ -194,7 +194,39 @@ export function parseCANMessage(frame: CANFrame, currentData: SensorData): Senso
   };
 }
 
-// ─── 有效传感器位置累积追踪器 ─────────────────────────────
+/** 解析单个CAN报文，返回更新后的数据和写入位置 */
+export function parseCANMessageWithPositions(frame: CANFrame, currentData: SensorData): ParseResult {
+  const bytes = frame.rawBytes;
+  const writtenPositions = new Set<string>();
+  if (bytes.length < 2) return { data: currentData, writtenPositions };
+  const subId = bytes[0];
+  const mapping = SUB_ID_LOOKUP.get(subId);
+  if (!mapping) return { data: currentData, writtenPositions };
+  const newMatrix = currentData.matrix.map((row) => [...row]);
+  let updated = false;
+  for (let i = 0; i < 7; i++) {
+    const sensorId = mapping.sensors[i];
+    if (sensorId === null) continue;
+    if (i + 1 >= bytes.length) break;
+    const pos = sensorIdToRowCol(sensorId);
+    if (!pos) continue;
+    const r = pos.row - 1;
+    const c = pos.col - 1;
+    newMatrix[r][c] = bytes[i + 1];
+    writtenPositions.add(`${r},${c}`);
+    updated = true;
+  }
+  if (!updated) return { data: currentData, writtenPositions: new Set() };
+  return {
+    data: {
+      matrix: newMatrix,
+      lastUpdate: frame.timestamp,
+      frameCount: currentData.frameCount + 1,
+    },
+    writtenPositions,
+  };
+}
+// ─── 有效传感器位置累积追踪器器 ─────────────────────────────
 /**
  * ActiveSensorTracker：通过累积记忆非零值位置来自动识别有效传感器区域
  *
@@ -231,15 +263,33 @@ export class ActiveSensorTracker {
     this.lastSignature = "";
   }
 
-  /** 用新的矩阵数据更新累积记忆 */
-  update(matrix: number[][]): void {
+  /**
+   * 用新的矩阵数据更新累积记忆
+   * 同时接收本帧中实际被写入的位置集合（writtenPositions）
+   * 这样即使传感器值为0，只要协议帧中包含了该位置，就标记为有效
+   */
+  update(matrix: number[][], writtenPositions?: Set<string>): void {
     let hasNewDiscovery = false;
-    for (let r = 0; r < MAX_MATRIX_ROWS; r++) {
-      for (let c = 0; c < MAX_MATRIX_COLS; c++) {
-        const val = matrix[r]?.[c];
-        if (val !== undefined && val > 0 && !this.seenNonZero[r][c]) {
-          this.seenNonZero[r][c] = true;
-          hasNewDiscovery = true;
+    if (writtenPositions && writtenPositions.size > 0) {
+      // 优先使用协议帧中实际写入的位置（最准确）
+      writtenPositions.forEach((key) => {
+        const [r, c] = key.split(',').map(Number);
+        if (r >= 0 && r < MAX_MATRIX_ROWS && c >= 0 && c < MAX_MATRIX_COLS) {
+          if (!this.seenNonZero[r][c]) {
+            this.seenNonZero[r][c] = true;
+            hasNewDiscovery = true;
+          }
+        }
+      });
+    } else {
+      // 回退：基于非零值检测（兼容旧调用方式）
+      for (let r = 0; r < MAX_MATRIX_ROWS; r++) {
+        for (let c = 0; c < MAX_MATRIX_COLS; c++) {
+          const val = matrix[r]?.[c];
+          if (val !== undefined && val > 0 && !this.seenNonZero[r][c]) {
+            this.seenNonZero[r][c] = true;
+            hasNewDiscovery = true;
+          }
         }
       }
     }
