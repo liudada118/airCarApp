@@ -1,0 +1,507 @@
+/**
+ * Design: Dark Tech Dashboard — Seat airbag visualization with interactive zones
+ * Left: Seat diagram with clickable airbag zones (SVG overlay aligned to image)
+ * Right: Control panel for selected airbag + quick actions + hex preview
+ */
+import { useState, useMemo, useCallback } from "react";
+import { useSerialContext } from "@/contexts/SerialContext";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import {
+  GearLevel,
+  WorkMode,
+  DataDirection,
+  GEAR_LABELS,
+  GEAR_COLORS,
+  AIRBAG_LAYOUT,
+  encodeFrame,
+  bytesToHex,
+  createDefaultFrame,
+  type FrameData,
+} from "@/lib/protocol";
+import { cn } from "@/lib/utils";
+import { Send, Save, RotateCcw, Zap, Wind } from "lucide-react";
+
+const SEAT_IMG =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663390129888/Q9sJLLGbMLYzkLTt6EE66b/seat-diagram-cku5rB2r5MCmzkjcBahZYF.webp";
+
+/**
+ * SVG overlay positions calibrated to the seat-diagram image via pixel analysis.
+ * The image is 1792×2400 (aspect 0.747). The viewBox uses 100×134 to match.
+ * Coordinates were derived by detecting cyan regions in the source image and
+ * converting pixel bounding-boxes to viewBox units.
+ */
+const ZONE_RECTS: Record<number, { x: number; y: number; w: number; h: number }> = {
+  1:  { x: 33, y: 37, w: 15, h: 7 },   // 左肩
+  2:  { x: 51, y: 37, w: 15, h: 7 },   // 右肩
+  3:  { x: 30, y: 63, w: 6,  h: 18 },  // 左侧翼
+  4:  { x: 64, y: 63, w: 6,  h: 18 },  // 右侧翼
+  5:  { x: 40, y: 63, w: 20, h: 9 },   // 上腰部
+  6:  { x: 40, y: 72, w: 20, h: 9 },   // 下腰部
+  7:  { x: 32, y: 90, w: 18, h: 11 },  // 左大腿
+  8:  { x: 50, y: 90, w: 18, h: 11 },  // 右大腿
+  9:  { x: 31, y: 103, w: 17, h: 6 },  // 左前坐垫
+  10: { x: 52, y: 103, w: 17, h: 6 },  // 右前坐垫
+};
+
+export default function AirbagControl() {
+  const { isConnected, send, addCommand, lastReceived } = useSerialContext();
+  const [frame, setFrame] = useState<FrameData>(createDefaultFrame);
+  const [selectedAirbag, setSelectedAirbag] = useState<number | null>(null);
+  const [commandName, setCommandName] = useState("");
+
+  const visibleAirbags = useMemo(
+    () => AIRBAG_LAYOUT.filter((a) => a.id <= 10),
+    []
+  );
+
+  const updateAirbagGear = useCallback((id: number, gear: GearLevel) => {
+    setFrame((prev) => ({
+      ...prev,
+      airbags: prev.airbags.map((a) => (a.id === id ? { ...a, gear } : a)),
+    }));
+  }, []);
+
+  const setAllGear = useCallback((gear: GearLevel) => {
+    setFrame((prev) => ({
+      ...prev,
+      airbags: prev.airbags.map((a) => ({ ...a, gear })),
+    }));
+  }, []);
+
+  const handleSend = useCallback(async () => {
+    const sendFrame = { ...frame, direction: DataDirection.Send };
+    const encoded = encodeFrame(sendFrame);
+    await send(encoded);
+    toast.success("指令已发送");
+  }, [frame, send]);
+
+  const handleSave = useCallback(() => {
+    const sendFrame = { ...frame, direction: DataDirection.Send };
+    const encoded = encodeFrame(sendFrame);
+    const name = commandName.trim() || `指令_${new Date().toLocaleTimeString()}`;
+    addCommand({ name, frame: sendFrame, rawHex: bytesToHex(encoded) });
+    setCommandName("");
+    toast.success(`指令 "${name}" 已保存`);
+  }, [frame, commandName, addCommand]);
+
+  const handleReset = useCallback(() => {
+    setFrame(createDefaultFrame());
+    setSelectedAirbag(null);
+    toast.info("已重置为全部保压");
+  }, []);
+
+  const getAirbagGear = (id: number): GearLevel =>
+    frame.airbags.find((a) => a.id === id)?.gear ?? GearLevel.Stop;
+
+  const getReceivedGear = (id: number): GearLevel | null => {
+    if (!lastReceived) return null;
+    return lastReceived.airbags.find((a) => a.id === id)?.gear ?? null;
+  };
+
+  const hexPreview = useMemo(() => {
+    const sendFrame = { ...frame, direction: DataDirection.Send };
+    return bytesToHex(encodeFrame(sendFrame));
+  }, [frame]);
+
+  return (
+    <div className="flex flex-col xl:flex-row gap-4 lg:gap-6 h-full">
+      {/* ── Left: Seat Visualization ─────────────────────────── */}
+      <div className="xl:w-[480px] shrink-0">
+        <Card className="bg-card border-border h-full">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-[Space_Grotesk] font-semibold">
+                座椅气囊分布
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">模式</Label>
+                <Select
+                  value={String(frame.workMode)}
+                  onValueChange={(v) =>
+                    setFrame((prev) => ({ ...prev, workMode: Number(v) as WorkMode }))
+                  }
+                >
+                  <SelectTrigger className="w-24 h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">自动</SelectItem>
+                    <SelectItem value="1">手动</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-0">
+            {/* Seat image + SVG overlay */}
+            <div className="relative mx-auto" style={{ maxWidth: 380 }}>
+              <img
+                src={SEAT_IMG}
+                alt="座椅气囊分布图"
+                className="w-full h-auto opacity-50 select-none pointer-events-none"
+                draggable={false}
+              />
+
+              {/* Interactive SVG overlay – viewBox matches image aspect ratio */}
+              <svg
+                viewBox="0 0 100 134"
+                className="absolute inset-0 w-full h-full"
+                preserveAspectRatio="xMidYMid meet"
+              >
+                {Object.entries(ZONE_RECTS).map(([idStr, rect]) => {
+                  const id = Number(idStr);
+                  const gear = getAirbagGear(id);
+                  const recvGear = getReceivedGear(id);
+                  const isSelected = selectedAirbag === id;
+                  const isActive = gear !== GearLevel.Stop;
+                  const color = GEAR_COLORS[gear];
+
+                  return (
+                    <g
+                      key={id}
+                      onClick={() => setSelectedAirbag(id)}
+                      className="cursor-pointer"
+                    >
+                      {/* Glow background when active */}
+                      {isActive && (
+                        <rect
+                          x={rect.x - 1}
+                          y={rect.y - 1}
+                          width={rect.w + 2}
+                          height={rect.h + 2}
+                          rx={3}
+                          fill={color}
+                          fillOpacity={0.15}
+                          className="airbag-active"
+                        />
+                      )}
+
+                      {/* Main zone rect */}
+                      <rect
+                        x={rect.x}
+                        y={rect.y}
+                        width={rect.w}
+                        height={rect.h}
+                        rx={2.5}
+                        fill={isActive ? color : "rgba(100,116,139,0.08)"}
+                        fillOpacity={isActive ? 0.4 : 1}
+                        stroke={isSelected ? "#ffffff" : isActive ? color : "rgba(148,163,184,0.25)"}
+                        strokeWidth={isSelected ? 1 : 0.5}
+                        className="transition-all duration-300"
+                      />
+
+                      {/* Received status indicator dot (top-right) */}
+                      {recvGear !== null && recvGear !== GearLevel.Stop && (
+                        <circle
+                          cx={rect.x + rect.w - 2.5}
+                          cy={rect.y + 2.5}
+                          r={1.8}
+                          fill={GEAR_COLORS[recvGear]}
+                          stroke="#0B1120"
+                          strokeWidth={0.4}
+                          className="animate-pulse"
+                        />
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap gap-3 mt-4 justify-center">
+              {Object.entries(GEAR_LABELS).map(([key, label]) => {
+                const gear = Number(key) as GearLevel;
+                return (
+                  <div key={key} className="flex items-center gap-1.5">
+                    <div
+                      className="w-2.5 h-2.5 rounded-sm"
+                      style={{ backgroundColor: GEAR_COLORS[gear] }}
+                    />
+                    <span className="text-[11px] text-muted-foreground">{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Quick Actions ─────────────────────────────── */}
+            <div className="mt-5 pt-4 border-t border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-[Space_Grotesk] font-semibold text-muted-foreground tracking-wide uppercase">快速操作</span>
+              </div>
+
+              {/* Row 1: Preset buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                  onClick={() => {
+                    setAllGear(GearLevel.Gear1);
+                    toast.info("已设置全部1档充气");
+                  }}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  全部1档充气
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300"
+                  onClick={() => {
+                    setAllGear(GearLevel.Gear2);
+                    toast.info("已设置全部2档充气");
+                  }}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  全部2档充气
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                  onClick={() => {
+                    setAllGear(GearLevel.Gear3);
+                    toast.info("已设置全部3档充气");
+                  }}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  全部3档充气
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  onClick={() => {
+                    setAllGear(GearLevel.Gear0);
+                    toast.info("已设置全部放气");
+                  }}
+                >
+                  <Wind className="w-3.5 h-3.5" />
+                  全部放气
+                </Button>
+              </div>
+
+              {/* Row 2: Reset + Send */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 h-9 text-xs gap-1.5"
+                  onClick={handleReset}
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  全部保压
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSend}
+                  disabled={!isConnected}
+                  className="flex-1 h-9 text-xs gap-1.5 bg-primary hover:bg-primary/90 shadow-[0_0_12px_-4px] shadow-primary/40"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  发送当前指令
+                </Button>
+              </div>
+
+              {/* Row 3: Save */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={commandName}
+                  onChange={(e) => setCommandName(e.target.value)}
+                  placeholder="指令名称（可选）"
+                  className="flex-1 h-8 px-3 text-xs rounded-md border border-border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <Button variant="outline" size="sm" onClick={handleSave} className="h-8 text-xs gap-1.5">
+                  <Save className="w-3.5 h-3.5" />
+                  保存
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Right: Control Panel ─────────────────────────────── */}
+      <div className="flex-1 flex flex-col gap-4 min-w-0">
+        {/* Selected airbag control */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-[Space_Grotesk] font-semibold">
+              {selectedAirbag
+                ? `气囊 ${selectedAirbag} — ${AIRBAG_LAYOUT.find((a) => a.id === selectedAirbag)?.name}`
+                : "点击座椅图选择气囊"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {selectedAirbag ? (
+              <div className="space-y-4">
+                {/* Gear buttons */}
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(GEAR_LABELS).map(([key, label]) => {
+                    const gear = Number(key) as GearLevel;
+                    const isActive = getAirbagGear(selectedAirbag) === gear;
+                    return (
+                      <Button
+                        key={key}
+                        variant={isActive ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => updateAirbagGear(selectedAirbag, gear)}
+                        className={cn("text-xs min-w-[72px]", isActive && "shadow-[0_0_12px_-2px]")}
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: GEAR_COLORS[gear],
+                                boxShadow: `0 0 12px -2px ${GEAR_COLORS[gear]}`,
+                                color: gear === GearLevel.Gear3 ? "#000" : "#fff",
+                              }
+                            : {}
+                        }
+                      >
+                        {label}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                {/* Received status */}
+                {lastReceived && (
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-accent/50 border border-border">
+                    <span className="text-xs text-muted-foreground">从机反馈:</span>
+                    <Badge
+                      variant="outline"
+                      className="text-xs"
+                      style={{
+                        borderColor: GEAR_COLORS[getReceivedGear(selectedAirbag) ?? GearLevel.Stop],
+                        color: GEAR_COLORS[getReceivedGear(selectedAirbag) ?? GearLevel.Stop],
+                      }}
+                    >
+                      {GEAR_LABELS[getReceivedGear(selectedAirbag) ?? GearLevel.Stop]}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {lastReceived.workMode === WorkMode.Auto ? "自动模式" : "手动模式"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground py-2">
+                请在左侧座椅图上点击气囊区域进行选择，然后设置档位
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* All airbags quick overview */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-[Space_Grotesk] font-semibold">
+                全部气囊状态
+              </CardTitle>
+              <div className="flex gap-1.5">
+                <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleReset}>
+                  <RotateCcw className="w-3 h-3 mr-1" />
+                  全部保压
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7"
+                  onClick={() => setAllGear(GearLevel.Gear1)}
+                >
+                  <Zap className="w-3 h-3 mr-1" />
+                  全部1档
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-5 gap-2">
+              {visibleAirbags.map((ab) => {
+                const gear = getAirbagGear(ab.id);
+                const isActive = gear !== GearLevel.Stop;
+                return (
+                  <button
+                    key={ab.id}
+                    onClick={() => setSelectedAirbag(ab.id)}
+                    className={cn(
+                      "p-2 rounded-lg border text-center transition-all duration-200",
+                      selectedAirbag === ab.id
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-accent/30 hover:bg-accent/60"
+                    )}
+                  >
+                    <div
+                      className="text-xs font-[Space_Grotesk] font-semibold"
+                      style={{ color: isActive ? GEAR_COLORS[gear] : undefined }}
+                    >
+                      {ab.id}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                      {GEAR_LABELS[gear]}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Hex preview + actions */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-[Space_Grotesk] font-semibold">
+              指令预览
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-3">
+            <div className="p-3 rounded-lg bg-background border border-border overflow-x-auto">
+              <code className="hex-display text-primary/90 break-all leading-relaxed">
+                {hexPreview}
+              </code>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={commandName}
+                onChange={(e) => setCommandName(e.target.value)}
+                placeholder="指令名称（可选）"
+                className="flex-1 h-9 px-3 text-sm rounded-lg border border-border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleSave} className="gap-1.5 text-xs">
+                  <Save className="w-3.5 h-3.5" />
+                  保存指令
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSend}
+                  disabled={!isConnected}
+                  className="gap-1.5 text-xs bg-primary hover:bg-primary/90"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  发送
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
