@@ -118,3 +118,7 @@ vite.config.ts.timestamp-*
 
 # Python
 __pycache__/
+
+# 本地临时目录与机器专属脚本(不应提交)
+.tmp/
+/连接平板并运行.bat
