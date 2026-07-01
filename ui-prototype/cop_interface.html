@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>重心COP监测 · 自适应座椅系统</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-primary:    #070B14;
+      --bg-card:       #0D1526;
+      --border:        rgba(0, 200, 255, 0.15);
+      --border-glow:   rgba(0, 200, 255, 0.4);
+      --accent-blue:   #00C8FF;
+      --accent-cyan:   #00FFD1;
+      --accent-green:  #39FF8E;
+      --accent-orange: #FF8C42;
+      --accent-red:    #FF4D6A;
+      --accent-yellow: #FFD166;
+      --text-primary:  #E8F4FF;
+      --text-secondary:#7FA8C9;
+      --text-dim:      #3A5A7A;
+    }
+    html {
+      background: var(--bg-primary);
+    }
+    body {
+      width: 1920px;
+      height: 720px;
+      overflow: hidden;
+      background: var(--bg-primary);
+      font-family: 'PingFang SC', 'HarmonyOS Sans', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+      color: var(--text-primary);
+      transform-origin: top left;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,200,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,200,255,0.025) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ===== 顶部栏 ===== */
+    .topbar {
+      position: relative; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 54px; padding: 0 32px;
+      background: linear-gradient(180deg, rgba(0,200,255,0.07) 0%, transparent 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    .tb-left { display: flex; align-items: center; gap: 18px; }
+    .tb-logo {
+      font-size: 14px; font-weight: 800; letter-spacing: 3px;
+      color: var(--accent-blue);
+      text-shadow: 0 0 14px rgba(0,200,255,0.7);
+    }
+    .tb-sep { width: 1px; height: 22px; background: var(--border); }
+    .tb-page { font-size: 13px; color: var(--text-secondary); letter-spacing: 1px; }
+    .tb-center { display: flex; align-items: center; gap: 40px; }
+    .tb-stat .v { font-size: 17px; font-weight: 700; color: var(--accent-cyan); font-variant-numeric: tabular-nums; text-align: center; }
+    .tb-stat .l { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-align: center; margin-top: 1px; }
+    .tb-right { display: flex; align-items: center; gap: 20px; }
+    .live-badge {
+      display: flex; align-items: center; gap: 7px;
+      padding: 5px 14px; border-radius: 20px;
+      background: rgba(0,200,255,0.08); border: 1px solid var(--border-glow);
+      font-size: 12px; color: var(--accent-blue);
+    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); animation: blink 1.4s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .tb-time { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* ===== 主布局 ===== */
+    .main {
+      position: relative; z-index: 5;
+      display: grid;
+      grid-template-columns: 400px 1fr 360px;
+      gap: 12px;
+      padding: 12px 18px;
+      height: calc(720px - 54px);
+    }
+
+    /* ===== 卡片 ===== */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      position: relative; overflow: hidden;
+    }
+    .card::after {
+      content: '';
+      position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0,200,255,0.4), transparent);
+    }
+    .ct {
+      font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
+      color: var(--text-secondary); text-transform: uppercase;
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .ct::before {
+      content: ''; width: 3px; height: 11px; border-radius: 2px;
+      background: var(--accent-blue); box-shadow: 0 0 8px var(--accent-blue); flex-shrink: 0;
+    }
+    .ct-extra { margin-left: auto; font-size: 10px; color: var(--text-dim); font-weight: 400; letter-spacing: 0; }
+
+    /* ===== 左列 ===== */
+    .col-l { display: flex; flex-direction: column; gap: 10px; }
+    .cop-card { flex: 1; }
+    .cop-inner { height: calc(100% - 34px); display: flex; align-items: center; justify-content: center; }
+    #copCanvas { border-radius: 8px; }
+
+    .offset-card { flex-shrink: 0; height: 118px; }
+    .offset-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; height: calc(100% - 34px); }
+    .om {
+      background: rgba(0,200,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    }
+    .om-v { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .om-l { font-size: 10px; color: var(--text-dim); }
+    .om-s { font-size: 10px; color: var(--text-secondary); }
+    .c-warn  { color: var(--accent-orange); text-shadow: 0 0 8px rgba(255,140,66,0.5); }
+    .c-info  { color: var(--accent-blue);   text-shadow: 0 0 8px rgba(0,200,255,0.5); }
+    .c-alert { color: var(--accent-red);    text-shadow: 0 0 8px rgba(255,77,106,0.5); }
+    .c-good  { color: var(--accent-green);  text-shadow: 0 0 8px rgba(57,255,142,0.5); }
+
+    /* ===== 中列 ===== */
+    .col-m { display: flex; flex-direction: column; gap: 10px; }
+    .press-card { flex: 1; }
+    .press-inner { display: flex; gap: 14px; height: calc(100% - 34px); align-items: stretch; }
+    .seat-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+    .seat-lbl { font-size: 10px; color: var(--text-dim); letter-spacing: 1.5px; }
+    .seat-canvas-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
+    #backCanvas, #cushionCanvas { border-radius: 8px; display: block; }
+    .legend-col { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 4px 0; }
+    .legend-bar {
+      width: 12px; height: 130px; border-radius: 6px;
+      background: linear-gradient(180deg,#FF4D6A 0%,#FF8C42 25%,#FFD166 50%,#39FF8E 75%,#00C8FF 100%);
+    }
+    .legend-ticks { display: flex; flex-direction: column; justify-content: space-between; height: 130px; }
+    .legend-ticks span { font-size: 9px; color: var(--text-dim); }
+    .legend-row { display: flex; align-items: center; gap: 4px; }
+
+    .hist-card { flex-shrink: 0; height: 106px; }
+    .hist-inner { display: flex; gap: 10px; height: calc(100% - 34px); align-items: center; }
+    .hist-chart { flex: 1; height: 100%; display: flex; align-items: center; }
+    #histCanvas { border-radius: 6px; }
+    .hist-stats { display: flex; flex-direction: column; gap: 6px; min-width: 130px; }
+    .hs-row { display: flex; justify-content: space-between; font-size: 11px; }
+    .hs-l { color: var(--text-dim); }
+    .hs-v { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* ===== 右列 ===== */
+    .col-r { display: flex; flex-direction: column; gap: 10px; }
+
+    /* 健康评分 */
+    .health-card { flex-shrink: 0; height: 148px; }
+    .health-inner { display: flex; align-items: center; gap: 14px; height: calc(100% - 34px); }
+    .score-wrap { position: relative; flex-shrink: 0; }
+    #scoreCanvas { display: block; }
+    .score-overlay {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      text-align: center;
+    }
+    .score-n { font-size: 26px; font-weight: 800; color: var(--accent-cyan); line-height: 1; }
+    .score-u { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+    .health-bars { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .hb-row { display: flex; align-items: center; gap: 8px; }
+    .hb-lbl { font-size: 10px; color: var(--text-secondary); width: 56px; flex-shrink: 0; }
+    .hb-bg { flex: 1; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .hb-fill { height: 100%; border-radius: 3px; }
+    .hb-val { font-size: 10px; font-weight: 600; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* AI方案 */
+    .ai-card { flex: 1; }
+    .ai-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 9px; color: var(--accent-cyan);
+      background: rgba(0,255,209,0.08); border: 1px solid rgba(0,255,209,0.2);
+      border-radius: 8px; padding: 2px 7px; margin-left: 6px;
+    }
+    .plans { display: flex; flex-direction: column; gap: 7px; height: calc(100% - 34px); overflow: hidden; }
+    .plan {
+      border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px;
+      background: rgba(255,255,255,0.015); cursor: pointer; transition: all 0.2s;
+      position: relative; overflow: hidden; flex: 1;
+    }
+    .plan:hover { border-color: var(--accent-blue); background: rgba(0,200,255,0.04); }
+    .plan.rec { border-color: rgba(0,255,209,0.45); background: rgba(0,255,209,0.05); }
+    .plan.rec::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    }
+    .plan.sel { border-color: var(--accent-blue); background: rgba(0,200,255,0.07); }
+    .ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
+    .pn { font-size: 12px; font-weight: 600; }
+    .pb { font-size: 9px; padding: 2px 6px; border-radius: 6px; font-weight: 600; }
+    .pb-ai  { background: rgba(0,255,209,0.12); color: var(--accent-cyan); border: 1px solid rgba(0,255,209,0.25); }
+    .pb-std { background: rgba(0,200,255,0.1);  color: var(--accent-blue); border: 1px solid rgba(0,200,255,0.2); }
+    .pb-adv { background: rgba(255,140,66,0.1); color: var(--accent-orange); border: 1px solid rgba(255,140,66,0.2); }
+    .pd { font-size: 10px; color: var(--text-dim); line-height: 1.45; }
+    .pe { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
+    .et { font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(0,200,255,0.07); color: var(--text-secondary); border: 1px solid rgba(0,200,255,0.1); }
+
+    /* 一键调节 */
+    .adj-card { flex-shrink: 0; height: 94px; }
+    .adj-inner { height: calc(100% - 34px); display: flex; flex-direction: column; gap: 7px; justify-content: center; }
+    .adj-btn {
+      width: 100%; height: 38px; border-radius: 9px; border: none; cursor: pointer;
+      font-size: 13px; font-weight: 700; letter-spacing: 1px;
+      background: linear-gradient(135deg, #00C8FF 0%, #00FFD1 100%);
+      color: #070B14; transition: all 0.2s;
+      box-shadow: 0 0 18px rgba(0,200,255,0.28);
+    }
+    .adj-btn:hover { transform: translateY(-1px); box-shadow: 0 0 28px rgba(0,200,255,0.45); }
+    .adj-btn.done { background: linear-gradient(135deg, #39FF8E 0%, #00FFD1 100%); }
+    .prog-wrap { display: none; }
+    .prog-wrap.show { display: block; }
+    .prog-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .prog-fill { height: 100%; width: 0%; border-radius: 3px; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); transition: width 0.1s linear; }
+    .prog-lbl { font-size: 10px; color: var(--text-dim); margin-top: 3px; display: flex; justify-content: space-between; }
+
+    /* ===== 气囊浮层 ===== */
+    .overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(7,11,20,0.88);
+      display: none; align-items: center; justify-content: center;
+      backdrop-filter: blur(6px);
+    }
+    .overlay.show { display: flex; }
+    .modal {
+      background: var(--bg-card); border: 1px solid var(--border-glow);
+      border-radius: 18px; padding: 30px 40px; text-align: center; min-width: 420px;
+      box-shadow: 0 0 60px rgba(0,200,255,0.12);
+    }
+    .modal-t { font-size: 16px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 6px; }
+    .modal-s { font-size: 11px; color: var(--text-dim); margin-bottom: 22px; }
+    .ab-row { display: flex; justify-content: center; gap: 18px; margin-bottom: 22px; }
+    .ab-zone { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .ab-circle {
+      border-radius: 50%; border: 2px solid var(--accent-blue);
+      background: rgba(0,200,255,0.06); transition: all 0.35s;
+    }
+    .ab-circle.inflate { background: rgba(0,200,255,0.28); box-shadow: 0 0 18px rgba(0,200,255,0.4); }
+    .ab-lbl { font-size: 10px; color: var(--text-dim); }
+    .ab-prog-bg { width: 100%; height: 7px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+    .ab-prog-fill { height: 100%; width: 0%; border-radius: 4px; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); box-shadow: 0 0 8px var(--accent-blue); transition: width 0.12s linear; }
+    .ab-prog-text { font-size: 11px; color: var(--text-secondary); margin-top: 7px; }
+
+    /* ===== Toast ===== */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(16px);
+      background: rgba(57,255,142,0.12); border: 1px solid var(--accent-green);
+      color: var(--accent-green); font-size: 13px; font-weight: 600;
+      padding: 9px 22px; border-radius: 22px;
+      backdrop-filter: blur(10px); opacity: 0; transition: all 0.3s; z-index: 999;
+      box-shadow: 0 0 18px rgba(57,255,142,0.18);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- 顶部栏 -->
+<div class="topbar">
+  <div class="tb-left">
+    <span class="tb-logo">ADAPTIVE SEAT</span>
+    <div class="tb-sep"></div>
+    <span class="tb-page">重心 COP 智能监测</span>
+  </div>
+  <div class="tb-center">
+    <div class="tb-stat"><div class="v" id="speedV">68</div><div class="l">车速 km/h</div></div>
+    <div class="tb-stat"><div class="v">主驾</div><div class="l">当前座位</div></div>
+    <div class="tb-stat"><div class="v" id="durV">00:42</div><div class="l">持续监测</div></div>
+    <div class="tb-stat"><div class="v">城市路</div><div class="l">路况类型</div></div>
+  </div>
+  <div class="tb-right">
+    <div class="live-badge"><div class="live-dot"></div><span>实时监测中</span></div>
+    <div class="tb-time" id="clockEl">--:--</div>
+  </div>
+</div>
+
+<!-- 主内容 -->
+<div class="main">
+
+  <!-- 左列 -->
+  <div class="col-l">
+    <div class="card cop-card">
+      <div class="ct">
+        COP 实时重心坐标
+        <span class="ct-extra">X: <span id="copX" style="color:var(--accent-cyan)">-12.3</span> mm &nbsp; Y: <span id="copY" style="color:var(--accent-orange)">+8.7</span> mm</span>
+      </div>
+      <div class="cop-inner">
+        <canvas id="copCanvas" width="368" height="258"></canvas>
+      </div>
+    </div>
+    <div class="card offset-card">
+      <div class="ct">偏移量化指标</div>
+      <div class="offset-grid">
+        <div class="om">
+          <div class="om-v c-warn" id="offLR">12.3<span style="font-size:11px">mm</span></div>
+          <div class="om-l">左右偏移</div><div class="om-s">偏左</div>
+        </div>
+        <div class="om">
+          <div class="om-v c-info" id="offFB">8.7<span style="font-size:11px">mm</span></div>
+          <div class="om-l">前后偏移</div><div class="om-s">偏前</div>
+        </div>
+        <div class="om">
+          <div class="om-v c-alert" id="offTotal">15.2<span style="font-size:11px">mm</span></div>
+          <div class="om-l">综合偏移</div><div class="om-s">中度偏移</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 中列 -->
+  <div class="col-m">
+    <div class="card press-card">
+      <div class="ct">
+        体压分布热力图
+        <span class="ct-extra">峰值压力 <span style="color:var(--accent-red)">3.2 kPa</span></span>
+      </div>
+      <div class="press-inner">
+        <div class="seat-col">
+          <div class="seat-lbl">靠 背</div>
+          <div class="seat-canvas-wrap"><canvas id="backCanvas" width="200" height="290"></canvas></div>
+        </div>
+        <div class="seat-col">
+          <div class="seat-lbl">坐 垫</div>
+          <div class="seat-canvas-wrap"><canvas id="cushionCanvas" width="200" height="180"></canvas></div>
+        </div>
+        <div class="legend-col">
+          <div class="legend-row">
+            <div class="legend-bar"></div>
+            <div class="legend-ticks">
+              <span>高</span><span></span><span>中</span><span></span><span>低</span>
+            </div>
+          </div>
+          <div style="font-size:9px;color:var(--text-dim);text-align:center;margin-top:4px;">压力<br>等级</div>
+        </div>
+      </div>
+    </div>
+    <div class="card hist-card">
+      <div class="ct">
+        COP 轨迹历史（近5分钟）
+        <span class="ct-extra">采样率 50Hz</span>
+      </div>
+      <div class="hist-inner">
+        <div class="hist-chart">
+          <canvas id="histCanvas" width="560" height="60"></canvas>
+        </div>
+        <div class="hist-stats">
+          <div class="hs-row"><span class="hs-l">平均偏移</span><span class="hs-v c-warn">11.8 mm</span></div>
+          <div class="hs-row"><span class="hs-l">最大偏移</span><span class="hs-v c-alert">22.4 mm</span></div>
+          <div class="hs-row"><span class="hs-l">偏移趋势</span><span class="hs-v" style="color:var(--accent-orange)">↗ 加剧</span></div>
+          <div class="hs-row"><span class="hs-l">稳定指数</span><span class="hs-v c-info">72%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右列 -->
+  <div class="col-r">
+
+    <!-- 健康评分 -->
+    <div class="card health-card">
+      <div class="ct">坐姿健康评分</div>
+      <div class="health-inner">
+        <div class="score-wrap">
+          <canvas id="scoreCanvas" width="96" height="96"></canvas>
+          <div class="score-overlay">
+            <div class="score-n" id="scoreN">72</div>
+            <div class="score-u">/ 100</div>
+          </div>
+        </div>
+        <div class="health-bars">
+          <div class="hb-row">
+            <span class="hb-lbl">脊柱支撑</span>
+            <div class="hb-bg"><div class="hb-fill" style="width:68%;background:linear-gradient(90deg,#00C8FF,#00FFD1)"></div></div>
+            <span class="hb-val c-info">68</span>
+          </div>
+          <div class="hb-row">
+            <span class="hb-lbl">腰部压力</span>
+            <div class="hb-bg"><div class="hb-fill" style="width:55%;background:linear-gradient(90deg,#FF8C42,#FFD166)"></div></div>
+            <span class="hb-val c-warn">55</span>
+          </div>
+          <div class="hb-row">
+            <span class="hb-lbl">坐骨均衡</span>
+            <div class="hb-bg"><div class="hb-fill" style="width:42%;background:linear-gradient(90deg,#FF4D6A,#FF8C42)"></div></div>
+            <span class="hb-val c-alert">42</span>
+          </div>
+          <div class="hb-row">
+            <span class="hb-lbl">颈椎负荷</span>
+            <div class="hb-bg"><div class="hb-fill" style="width:80%;background:linear-gradient(90deg,#39FF8E,#00FFD1)"></div></div>
+            <span class="hb-val c-good">80</span>
+          </div>
+          <div class="hb-row">
+            <span class="hb-lbl">久坐时长</span>
+            <div class="hb-bg"><div class="hb-fill" style="width:60%;background:linear-gradient(90deg,#FF8C42,#FFD166)"></div></div>
+            <span class="hb-val c-warn">42min</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI方案 -->
+    <div class="card ai-card">
+      <div class="ct">
+        AI 自适应方案推荐
+        <span class="ai-tag">✦ 智能排序</span>
+      </div>
+      <div class="plans">
+        <div class="plan rec sel" onclick="selPlan(this)">
+          <div class="ph"><span class="pn">⚡ 腰部均衡支撑方案</span><span class="pb pb-ai">AI 首推</span></div>
+          <div class="pd">检测到重心持续偏左，腰椎右侧承压不足。左腰气囊充气 +18%，右腰气囊放气 -10%，恢复脊柱对称支撑。</div>
+          <div class="pe"><span class="et">左腰气囊 +18%</span><span class="et">右腰气囊 -10%</span><span class="et">预计改善 85%</span></div>
+        </div>
+        <div class="plan" onclick="selPlan(this)">
+          <div class="ph"><span class="pn">坐骨减压方案</span><span class="pb pb-std">标准</span></div>
+          <div class="pd">坐垫左侧压力峰值超阈值，通过坐垫气囊分散压力，缓解坐骨神经压迫。</div>
+          <div class="pe"><span class="et">坐垫左侧 -15%</span><span class="et">坐垫右侧 +8%</span><span class="et">预计改善 72%</span></div>
+        </div>
+        <div class="plan" onclick="selPlan(this)">
+          <div class="ph"><span class="pn">疲劳缓解按摩方案</span><span class="pb pb-adv">进阶</span></div>
+          <div class="pd">持续驾驶42分钟，结合COP漂移趋势判断疲劳累积，启动腰背部气囊循环按摩模式。</div>
+          <div class="pe"><span class="et">循环按摩 3min</span><span class="et">腰背4区联动</span><span class="et">疲劳缓解</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 一键调节 -->
+    <div class="card adj-card">
+      <div class="ct">一键自适应调节</div>
+      <div class="adj-inner">
+        <button class="adj-btn" id="adjBtn" onclick="doAdjust()">一键执行推荐方案</button>
+        <div class="prog-wrap" id="progWrap">
+          <div class="prog-bg"><div class="prog-fill" id="progFill"></div></div>
+          <div class="prog-lbl"><span id="progStep">正在调节气囊压力...</span><span id="progPct">0%</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 气囊浮层 -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-t">气囊自适应调节中</div>
+    <div class="modal-s">正在根据 AI 推荐方案精准调节座椅各区域气囊压力</div>
+    <div class="ab-row">
+      <div class="ab-zone"><div class="ab-circle" id="ab1" style="width:54px;height:54px"></div><div class="ab-lbl">左腰气囊</div></div>
+      <div class="ab-zone"><div class="ab-circle" id="ab2" style="width:46px;height:46px"></div><div class="ab-lbl">右腰气囊</div></div>
+      <div class="ab-zone"><div class="ab-circle" id="ab3" style="width:42px;height:42px"></div><div class="ab-lbl">坐垫左侧</div></div>
+      <div class="ab-zone"><div class="ab-circle" id="ab4" style="width:42px;height:42px"></div><div class="ab-lbl">坐垫右侧</div></div>
+      <div class="ab-zone"><div class="ab-circle" id="ab5" style="width:36px;height:36px"></div><div class="ab-lbl">颈枕支撑</div></div>
+    </div>
+    <div class="ab-prog-bg"><div class="ab-prog-fill" id="abFill"></div></div>
+    <div class="ab-prog-text" id="abText">初始化调节模块...</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">✓ 调节完成，坐姿已优化</div>
+
+<script>
+/* ===== 自适应缩放 ===== */
+function scaleBody() {
+  const sw = window.innerWidth, sh = window.innerHeight;
+  const sx = sw / 1920, sy = sh / 720;
+  const s = Math.min(sx, sy);
+  document.body.style.transform = `scale(${s})`;
+  document.body.style.marginLeft = ((sw - 1920*s)/2) + 'px';
+  document.body.style.marginTop  = ((sh - 720*s)/2) + 'px';
+}
+scaleBody();
+window.addEventListener('resize', scaleBody);
+
+/* ===== 时钟 ===== */
+function tick() {
+  const n = new Date();
+  document.getElementById('clockEl').textContent =
+    String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
+}
+tick(); setInterval(tick, 10000);
+
+/* ===== 持续时长 ===== */
+let secs = 42*60;
+setInterval(() => {
+  secs++;
+  document.getElementById('durV').textContent =
+    String(Math.floor(secs/60)).padStart(2,'0') + ':' + String(secs%60).padStart(2,'0');
+}, 1000);
+
+/* ===== 工具 ===== */
+const lerp = (a,b,t) => a+(b-a)*t;
+const clamp = (v,lo,hi) => Math.max(lo,Math.min(hi,v));
+
+/* ===== COP 图 ===== */
+const cc = document.getElementById('copCanvas');
+const ctx = cc.getContext('2d');
+const CW = cc.width, CH = cc.height;
+const ox = CW/2, oy = CH/2, SC = 7.5;
+
+let pts = [], cx = -12.3, cy2 = 8.7, vx = 0.3, vy = -0.2;
+
+function genPt() {
+  vx += (Math.random()-.5)*.45; vy += (Math.random()-.5)*.45;
+  vx = clamp(vx,-.9,.9); vy = clamp(vy,-.9,.9);
+  cx += vx; cy2 += vy;
+  cx = clamp(cx,-22,22); cy2 = clamp(cy2,-18,18);
+  cx += (-10-cx)*.022; cy2 += (6-cy2)*.022;
+  pts.push({x:cx,y:cy2});
+  if (pts.length>130) pts.shift();
+}
+for(let i=0;i<80;i++) genPt();
+
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+
+function drawCop() {
+  ctx.clearRect(0,0,CW,CH);
+  ctx.fillStyle='rgba(0,0,0,0.35)'; rr(ctx,0,0,CW,CH,8); ctx.fill();
+
+  // 网格
+  ctx.strokeStyle='rgba(0,200,255,0.07)'; ctx.lineWidth=1;
+  for(let x=ox%40;x<CW;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
+  for(let y=oy%40;y<CH;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
+
+  // 区域圆
+  [[20,'rgba(255,77,106,0.05)','rgba(255,77,106,0.2)'],[14,'rgba(255,140,66,0.05)','rgba(255,140,66,0.2)'],[7,'rgba(57,255,142,0.07)','rgba(57,255,142,0.25)']].forEach(([r,f,s])=>{
+    ctx.beginPath(); ctx.arc(ox,oy,r*SC,0,Math.PI*2);
+    ctx.fillStyle=f; ctx.fill();
+    ctx.strokeStyle=s; ctx.lineWidth=1; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+  });
+
+  // 轴
+  ctx.strokeStyle='rgba(0,200,255,0.28)'; ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ox,4);ctx.lineTo(ox,CH-4);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(4,oy);ctx.lineTo(CW-4,oy);ctx.stroke();
+
+  // 轴标签
+  ctx.fillStyle='rgba(122,168,201,0.55)'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('前',ox,14); ctx.fillText('后',ox,CH-4);
+  ctx.textAlign='right'; ctx.fillText('左',20,oy+4);
+  ctx.textAlign='left';  ctx.fillText('右',CW-4,oy+4);
+
+  // 刻度
+  ctx.fillStyle='rgba(122,168,201,0.35)'; ctx.font='9px sans-serif';
+  [-20,-10,10,20].forEach(v=>{
+    ctx.textAlign='center'; ctx.fillText(v,ox+v*SC,oy+12);
+    ctx.textAlign='right';  ctx.fillText(v,ox-4,oy-v*SC+3);
+  });
+
+  // 轨迹
+  if(pts.length>1){
+    for(let i=1;i<pts.length;i++){
+      const a=(i/pts.length)*0.75;
+      ctx.beginPath();
+      ctx.moveTo(ox+pts[i-1].x*SC, oy-pts[i-1].y*SC);
+      ctx.lineTo(ox+pts[i].x*SC,   oy-pts[i].y*SC);
+      ctx.strokeStyle=`rgba(0,200,255,${a})`; ctx.lineWidth=1.5; ctx.stroke();
+    }
+  }
+
+  // 当前点
+  const lp=pts[pts.length-1];
+  const px=ox+lp.x*SC, py=oy-lp.y*SC;
+  const g=ctx.createRadialGradient(px,py,0,px,py,20);
+  g.addColorStop(0,'rgba(0,255,209,0.45)'); g.addColorStop(1,'rgba(0,255,209,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(px,py,20,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2);
+  ctx.fillStyle='#00FFD1'; ctx.shadowColor='#00FFD1'; ctx.shadowBlur=14; ctx.fill(); ctx.shadowBlur=0;
+
+  document.getElementById('copX').textContent=lp.x.toFixed(1);
+  document.getElementById('copY').textContent=(lp.y>=0?'+':'')+lp.y.toFixed(1);
+}
+
+/* ===== 热力图 ===== */
+function heatCol(v){
+  const stops=[[0,[0,200,255]],[.25,[57,255,142]],[.5,[255,209,102]],[.75,[255,140,66]],[1,[255,77,106]]];
+  let c0,c1,t;
+  for(let i=0;i<stops.length-1;i++){
+    if(v>=stops[i][0]&&v<=stops[i+1][0]){
+      t=(v-stops[i][0])/(stops[i+1][0]-stops[i][0]);
+      c0=stops[i][1];c1=stops[i+1][1];break;
+    }
+  }
+  if(!c0){c0=stops[stops.length-1][1];c1=c0;t=0;}
+  return [Math.round(lerp(c0[0],c1[0],t)),Math.round(lerp(c0[1],c1[1],t)),Math.round(lerp(c0[2],c1[2],t))];
+}
+
+const backData=[
+  [.1,.2,.3,.35,.35,.3,.2,.1],[.15,.3,.5,.55,.55,.5,.3,.15],[.2,.4,.65,.7,.7,.65,.4,.2],
+  [.25,.45,.7,.75,.75,.7,.45,.25],[.3,.5,.72,.8,.8,.72,.5,.3],[.35,.55,.75,.85,.82,.75,.55,.35],
+  [.4,.6,.8,.9,.88,.8,.6,.4],[.5,.7,.85,.95,.92,.82,.65,.45],[.55,.75,.88,.98,.9,.8,.6,.4],
+  [.4,.6,.75,.82,.78,.7,.55,.35],[.25,.4,.55,.6,.58,.5,.38,.22],[.1,.2,.3,.35,.33,.28,.18,.1],
+];
+const cushData=[
+  [.2,.45,.7,.75,.72,.65,.4,.2],[.3,.6,.85,.92,.88,.8,.55,.3],
+  [.4,.7,.95,1,.96,.88,.62,.35],[.38,.65,.9,.95,.9,.82,.58,.32],
+  [.25,.5,.72,.78,.74,.65,.45,.25],[.1,.25,.4,.45,.42,.35,.22,.1],
+];
+
+let phase=0;
+
+function drawHeat(canvas,data,isBack){
+  const c=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+  const rows=data.length,cols=data[0].length;
+  const cw=W/cols,ch=H/rows;
+  const blur=Math.max(cw,ch)*.95;
+  c.clearRect(0,0,W,H);
+  c.fillStyle='rgba(10,18,34,0.92)';
+  c.beginPath(); c.roundRect(3,3,W-6,H-6,isBack?14:10); c.fill();
+  for(let r=0;r<rows;r++){
+    for(let col=0;col<cols;col++){
+      let v=clamp(data[r][col]+Math.sin(phase*.05+r*.5+col*.3)*.06,0,1);
+      const x=col*cw+cw/2, y=r*ch+ch/2;
+      const [R,G,B]=heatCol(v);
+      const g=c.createRadialGradient(x,y,0,x,y,blur);
+      g.addColorStop(0,`rgba(${R},${G},${B},${v*.85})`);
+      g.addColorStop(1,'rgba(0,0,0,0)');
+      c.fillStyle=g; c.beginPath(); c.arc(x,y,blur,0,Math.PI*2); c.fill();
+    }
+  }
+  c.strokeStyle='rgba(0,200,255,0.18)'; c.lineWidth=1;
+  c.beginPath(); c.roundRect(3,3,W-6,H-6,isBack?14:10); c.stroke();
+  if(isBack){
+    c.fillStyle='rgba(255,255,255,0.22)'; c.font='10px sans-serif'; c.textAlign='center';
+    c.fillText('颈部',W/2,16); c.fillText('腰部',W/2,H*.6); c.fillText('臀部',W/2,H-8);
+  }
+}
+
+/* ===== 历史图 ===== */
+const hc=document.getElementById('histCanvas');
+const hctx=hc.getContext('2d');
+let histD=[];
+for(let i=0;i<300;i++) histD.push(8+Math.sin(i*.1)*4+Math.random()*3);
+
+function drawHist(){
+  const W=hc.width,H=hc.height;
+  hctx.clearRect(0,0,W,H);
+  hctx.fillStyle='rgba(0,0,0,0.2)'; hctx.fillRect(0,0,W,H);
+  const thY=H-(15/30)*H;
+  hctx.strokeStyle='rgba(255,140,66,0.35)'; hctx.lineWidth=1; hctx.setLineDash([4,4]);
+  hctx.beginPath(); hctx.moveTo(0,thY); hctx.lineTo(W,thY); hctx.stroke(); hctx.setLineDash([]);
+  hctx.fillStyle='rgba(255,140,66,0.45)'; hctx.font='9px sans-serif'; hctx.textAlign='right';
+  hctx.fillText('阈值 15mm',W-4,thY-3);
+  hctx.beginPath();
+  const step=W/histD.length;
+  histD.forEach((v,i)=>{const x=i*step,y=H-(v/30)*H; i===0?hctx.moveTo(x,y):hctx.lineTo(x,y);});
+  hctx.strokeStyle='rgba(0,200,255,0.8)'; hctx.lineWidth=1.5; hctx.stroke();
+  hctx.lineTo(W,H); hctx.lineTo(0,H); hctx.closePath();
+  const g=hctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'rgba(0,200,255,0.18)'); g.addColorStop(1,'rgba(0,200,255,0)');
+  hctx.fillStyle=g; hctx.fill();
+}
+
+/* ===== 评分环 ===== */
+function drawRing(score){
+  const c=document.getElementById('scoreCanvas').getContext('2d');
+  const W=96,H=96,r=38;
+  c.clearRect(0,0,W,H);
+  c.beginPath(); c.arc(W/2,H/2,r,0,Math.PI*2);
+  c.strokeStyle='rgba(255,255,255,0.06)'; c.lineWidth=8; c.stroke();
+  const angle=(score/100)*Math.PI*2-Math.PI/2;
+  const g=c.createLinearGradient(W/2-r,H/2,W/2+r,H/2);
+  if(score>=80){g.addColorStop(0,'#39FF8E');g.addColorStop(1,'#00FFD1');}
+  else if(score>=60){g.addColorStop(0,'#00C8FF');g.addColorStop(1,'#00FFD1');}
+  else{g.addColorStop(0,'#FF8C42');g.addColorStop(1,'#FFD166');}
+  c.beginPath(); c.arc(W/2,H/2,r,-Math.PI/2,angle);
+  c.strokeStyle=g; c.lineWidth=8; c.lineCap='round';
+  c.shadowColor='#00C8FF'; c.shadowBlur=10; c.stroke(); c.shadowBlur=0;
+}
+drawRing(72);
+
+/* ===== 方案选择 ===== */
+function selPlan(el){
+  document.querySelectorAll('.plan').forEach(p=>p.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+/* ===== 一键调节 ===== */
+let busy=false;
+function doAdjust(){
+  if(busy) return; busy=true;
+  document.getElementById('overlay').classList.add('show');
+  const steps=['初始化调节模块...','读取当前气囊压力...','计算目标压力值...','左腰气囊充气中...','右腰气囊放气中...','坐垫压力均衡调节...','颈枕位置微调...','验证调节效果...','保存配置...'];
+  const seq=[[0],[1],[2,3],[4],[0,1,2,3,4]];
+  const abs=['ab1','ab2','ab3','ab4','ab5'];
+  abs.forEach(id=>document.getElementById(id).classList.remove('inflate'));
+  let pct=0,si=0;
+  const fill=document.getElementById('abFill'), txt=document.getElementById('abText');
+  const t=setInterval(()=>{
+    pct+=1.2; if(pct>100) pct=100;
+    fill.style.width=pct+'%';
+    const ni=Math.floor((pct/100)*steps.length);
+    if(ni<steps.length&&ni!==si){si=ni;txt.textContent=steps[si];if(si<seq.length)seq[si].forEach(i=>document.getElementById(abs[i]).classList.add('inflate'));}
+    if(pct>=100){
+      clearInterval(t);
+      setTimeout(()=>{
+        document.getElementById('overlay').classList.remove('show');
+        busy=false;
+        // 更新数据
+        document.getElementById('offLR').innerHTML='4.2<span style="font-size:11px">mm</span>';
+        document.getElementById('offFB').innerHTML='2.1<span style="font-size:11px">mm</span>';
+        document.getElementById('offTotal').innerHTML='4.7<span style="font-size:11px">mm</span>';
+        document.getElementById('offLR').className='om-v c-good';
+        document.getElementById('offFB').className='om-v c-good';
+        document.getElementById('offTotal').className='om-v c-good';
+        document.getElementById('scoreN').textContent='88';
+        drawRing(88);
+        cx=-4.2; cy2=2.1;
+        const toast=document.getElementById('toast');
+        toast.classList.add('show');
+        setTimeout(()=>toast.classList.remove('show'),2500);
+      },400);
+    }
+  },30);
+}
+
+/* ===== 主循环 ===== */
+function loop(){
+  genPt(); phase++;
+  const lp=pts[pts.length-1];
+  histD.push(Math.sqrt(lp.x*lp.x+lp.y*lp.y));
+  if(histD.length>300) histD.shift();
+  drawCop();
+  drawHeat(document.getElementById('backCanvas'),backData,true);
+  drawHeat(document.getElementById('cushionCanvas'),cushData,false);
+  drawHist();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
