@@ -1,367 +1,343 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <title>重心COP监测 · 自适应座椅系统</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root {
-      --bg-primary:    #070B14;
-      --bg-card:       #0D1526;
-      --border:        rgba(0, 200, 255, 0.15);
-      --border-glow:   rgba(0, 200, 255, 0.4);
-      --accent-blue:   #00C8FF;
-      --accent-cyan:   #00FFD1;
-      --accent-green:  #39FF8E;
-      --accent-orange: #FF8C42;
-      --accent-red:    #FF4D6A;
-      --accent-yellow: #FFD166;
-      --text-primary:  #E8F4FF;
-      --text-secondary:#7FA8C9;
-      --text-dim:      #3A5A7A;
-    }
-    html {
-      background: var(--bg-primary);
-    }
-    body {
-      width: 1920px;
-      height: 720px;
-      overflow: hidden;
-      background: var(--bg-primary);
-      font-family: 'PingFang SC', 'HarmonyOS Sans', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
-      color: var(--text-primary);
-      transform-origin: top left;
-    }
-    body::before {
-      content: '';
-      position: fixed; inset: 0;
-      background-image:
-        linear-gradient(rgba(0,200,255,0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,200,255,0.025) 1px, transparent 1px);
-      background-size: 48px 48px;
-      pointer-events: none; z-index: 0;
-    }
+<meta charset="UTF-8"/>
+<title>重心COP监测 · 自适应座椅系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#070B14;--card:#0D1526;--card2:#101C30;
+  --b:rgba(0,200,255,.14);--bg2:rgba(0,200,255,.38);
+  --blue:#00C8FF;--cyan:#00FFD1;--green:#39FF8E;
+  --orange:#FF8C42;--red:#FF4D6A;--yellow:#FFD166;--purple:#B06EFF;
+  --t1:#E8F4FF;--t2:#7FA8C9;--t3:#3A5A7A;
+}
+html{background:var(--bg);}
+body{
+  width:1920px;height:720px;overflow:hidden;
+  background:var(--bg);
+  font-family:'PingFang SC','HarmonyOS Sans','Noto Sans SC','Microsoft YaHei',sans-serif;
+  color:var(--t1);transform-origin:top left;
+}
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(0,200,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,200,255,.025) 1px,transparent 1px);
+  background-size:48px 48px;pointer-events:none;z-index:0;
+}
 
-    /* ===== 顶部栏 ===== */
-    .topbar {
-      position: relative; z-index: 10;
-      display: flex; align-items: center; justify-content: space-between;
-      height: 54px; padding: 0 32px;
-      background: linear-gradient(180deg, rgba(0,200,255,0.07) 0%, transparent 100%);
-      border-bottom: 1px solid var(--border);
-    }
-    .tb-left { display: flex; align-items: center; gap: 18px; }
-    .tb-logo {
-      font-size: 14px; font-weight: 800; letter-spacing: 3px;
-      color: var(--accent-blue);
-      text-shadow: 0 0 14px rgba(0,200,255,0.7);
-    }
-    .tb-sep { width: 1px; height: 22px; background: var(--border); }
-    .tb-page { font-size: 13px; color: var(--text-secondary); letter-spacing: 1px; }
-    .tb-center { display: flex; align-items: center; gap: 40px; }
-    .tb-stat .v { font-size: 17px; font-weight: 700; color: var(--accent-cyan); font-variant-numeric: tabular-nums; text-align: center; }
-    .tb-stat .l { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-align: center; margin-top: 1px; }
-    .tb-right { display: flex; align-items: center; gap: 20px; }
-    .live-badge {
-      display: flex; align-items: center; gap: 7px;
-      padding: 5px 14px; border-radius: 20px;
-      background: rgba(0,200,255,0.08); border: 1px solid var(--border-glow);
-      font-size: 12px; color: var(--accent-blue);
-    }
-    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); animation: blink 1.4s infinite; }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-    .tb-time { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* ── 顶部栏 ── */
+.topbar{
+  position:relative;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  height:52px;padding:0 28px;
+  background:linear-gradient(180deg,rgba(0,200,255,.07) 0%,transparent 100%);
+  border-bottom:1px solid var(--b);
+}
+.tb-l{display:flex;align-items:center;gap:16px;}
+.logo{font-size:13px;font-weight:800;letter-spacing:3px;color:var(--blue);text-shadow:0 0 14px rgba(0,200,255,.7);}
+.sep{width:1px;height:20px;background:var(--b);}
+.page-title{font-size:13px;color:var(--t2);letter-spacing:1px;}
+.tb-c{display:flex;align-items:center;gap:36px;}
+.ts .v{font-size:16px;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums;text-align:center;}
+.ts .l{font-size:10px;color:var(--t3);letter-spacing:1px;text-align:center;margin-top:1px;}
+.tb-r{display:flex;align-items:center;gap:18px;}
+.live{display:flex;align-items:center;gap:7px;padding:4px 13px;border-radius:20px;background:rgba(0,200,255,.08);border:1px solid var(--bg2);font-size:12px;color:var(--blue);}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 1.4s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.clock{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;}
 
-    /* ===== 主布局 ===== */
-    .main {
-      position: relative; z-index: 5;
-      display: grid;
-      grid-template-columns: 400px 1fr 360px;
-      gap: 12px;
-      padding: 12px 18px;
-      height: calc(720px - 54px);
-    }
+/* ── 场景标签栏 ── */
+.scene-bar{
+  position:relative;z-index:9;
+  display:flex;align-items:center;gap:0;
+  height:44px;padding:0 28px;
+  background:rgba(0,0,0,.25);
+  border-bottom:1px solid var(--b);
+}
+.scene-tab{
+  display:flex;align-items:center;gap:8px;
+  padding:0 20px;height:100%;cursor:pointer;
+  font-size:12px;font-weight:600;letter-spacing:.5px;color:var(--t3);
+  border-bottom:2px solid transparent;transition:all .2s;
+  position:relative;
+}
+.scene-tab .icon{font-size:15px;}
+.scene-tab:hover{color:var(--t2);}
+.scene-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.scene-tab.active .icon{filter:drop-shadow(0 0 6px var(--blue));}
+.scene-badge{
+  font-size:9px;padding:1px 6px;border-radius:8px;font-weight:700;
+  background:rgba(255,77,106,.15);color:var(--red);border:1px solid rgba(255,77,106,.3);
+}
+.scene-badge.ok{background:rgba(57,255,142,.1);color:var(--green);border-color:rgba(57,255,142,.25);}
+.scene-badge.warn{background:rgba(255,140,66,.12);color:var(--orange);border-color:rgba(255,140,66,.28);}
+.scene-badge.info{background:rgba(0,200,255,.1);color:var(--blue);border-color:rgba(0,200,255,.25);}
 
-    /* ===== 卡片 ===== */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px;
-      position: relative; overflow: hidden;
-    }
-    .card::after {
-      content: '';
-      position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(0,200,255,0.4), transparent);
-    }
-    .ct {
-      font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
-      color: var(--text-secondary); text-transform: uppercase;
-      margin-bottom: 10px;
-      display: flex; align-items: center; gap: 7px;
-    }
-    .ct::before {
-      content: ''; width: 3px; height: 11px; border-radius: 2px;
-      background: var(--accent-blue); box-shadow: 0 0 8px var(--accent-blue); flex-shrink: 0;
-    }
-    .ct-extra { margin-left: auto; font-size: 10px; color: var(--text-dim); font-weight: 400; letter-spacing: 0; }
+/* ── 主内容 ── */
+.main{
+  position:relative;z-index:5;
+  display:grid;
+  grid-template-columns:390px 1fr 350px;
+  gap:11px;
+  padding:11px 18px;
+  height:calc(720px - 52px - 44px);
+}
 
-    /* ===== 左列 ===== */
-    .col-l { display: flex; flex-direction: column; gap: 10px; }
-    .cop-card { flex: 1; }
-    .cop-inner { height: calc(100% - 34px); display: flex; align-items: center; justify-content: center; }
-    #copCanvas { border-radius: 8px; }
+/* ── 卡片 ── */
+.card{
+  background:var(--card);border:1px solid var(--b);
+  border-radius:12px;padding:13px;position:relative;overflow:hidden;
+}
+.card::after{
+  content:'';position:absolute;top:0;left:20%;right:20%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,200,255,.38),transparent);
+}
+.ct{
+  font-size:11px;font-weight:600;letter-spacing:1.5px;color:var(--t2);
+  text-transform:uppercase;margin-bottom:9px;
+  display:flex;align-items:center;gap:7px;
+}
+.ct::before{content:'';width:3px;height:11px;border-radius:2px;background:var(--blue);box-shadow:0 0 8px var(--blue);flex-shrink:0;}
+.ct-r{margin-left:auto;font-size:10px;color:var(--t3);font-weight:400;letter-spacing:0;}
 
-    .offset-card { flex-shrink: 0; height: 118px; }
-    .offset-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; height: calc(100% - 34px); }
-    .om {
-      background: rgba(0,200,255,0.04);
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-    }
-    .om-v { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .om-l { font-size: 10px; color: var(--text-dim); }
-    .om-s { font-size: 10px; color: var(--text-secondary); }
-    .c-warn  { color: var(--accent-orange); text-shadow: 0 0 8px rgba(255,140,66,0.5); }
-    .c-info  { color: var(--accent-blue);   text-shadow: 0 0 8px rgba(0,200,255,0.5); }
-    .c-alert { color: var(--accent-red);    text-shadow: 0 0 8px rgba(255,77,106,0.5); }
-    .c-good  { color: var(--accent-green);  text-shadow: 0 0 8px rgba(57,255,142,0.5); }
+/* ── 左列 ── */
+.col-l{display:flex;flex-direction:column;gap:10px;}
+.cop-card{flex:1;}
+.cop-inner{height:calc(100% - 32px);display:flex;align-items:center;justify-content:center;}
+#copCanvas{border-radius:8px;}
+.off-card{flex-shrink:0;height:112px;}
+.off-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;height:calc(100% - 32px);}
+.om{background:rgba(0,200,255,.04);border:1px solid var(--b);border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
+.om-v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;}
+.om-l{font-size:10px;color:var(--t3);}
+.om-s{font-size:10px;color:var(--t2);}
+.cw{color:var(--orange);text-shadow:0 0 8px rgba(255,140,66,.5);}
+.ci{color:var(--blue);text-shadow:0 0 8px rgba(0,200,255,.5);}
+.ca{color:var(--red);text-shadow:0 0 8px rgba(255,77,106,.5);}
+.cg{color:var(--green);text-shadow:0 0 8px rgba(57,255,142,.5);}
 
-    /* ===== 中列 ===== */
-    .col-m { display: flex; flex-direction: column; gap: 10px; }
-    .press-card { flex: 1; }
-    .press-inner { display: flex; gap: 14px; height: calc(100% - 34px); align-items: stretch; }
-    .seat-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
-    .seat-lbl { font-size: 10px; color: var(--text-dim); letter-spacing: 1.5px; }
-    .seat-canvas-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
-    #backCanvas, #cushionCanvas { border-radius: 8px; display: block; }
-    .legend-col { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 4px 0; }
-    .legend-bar {
-      width: 12px; height: 130px; border-radius: 6px;
-      background: linear-gradient(180deg,#FF4D6A 0%,#FF8C42 25%,#FFD166 50%,#39FF8E 75%,#00C8FF 100%);
-    }
-    .legend-ticks { display: flex; flex-direction: column; justify-content: space-between; height: 130px; }
-    .legend-ticks span { font-size: 9px; color: var(--text-dim); }
-    .legend-row { display: flex; align-items: center; gap: 4px; }
+/* ── 中列 ── */
+.col-m{display:flex;flex-direction:column;gap:10px;}
 
-    .hist-card { flex-shrink: 0; height: 106px; }
-    .hist-inner { display: flex; gap: 10px; height: calc(100% - 34px); align-items: center; }
-    .hist-chart { flex: 1; height: 100%; display: flex; align-items: center; }
-    #histCanvas { border-radius: 6px; }
-    .hist-stats { display: flex; flex-direction: column; gap: 6px; min-width: 130px; }
-    .hs-row { display: flex; justify-content: space-between; font-size: 11px; }
-    .hs-l { color: var(--text-dim); }
-    .hs-v { font-weight: 600; font-variant-numeric: tabular-nums; }
+/* 场景信息面板 */
+.scene-panel{flex-shrink:0;}
+.sp-content{display:flex;gap:12px;align-items:stretch;}
+.sp-status{
+  flex-shrink:0;width:160px;
+  background:rgba(0,0,0,.2);border:1px solid var(--b);border-radius:9px;
+  padding:10px 12px;display:flex;flex-direction:column;gap:6px;
+}
+.sp-status-title{font-size:10px;color:var(--t3);letter-spacing:1px;}
+.sp-status-val{font-size:18px;font-weight:700;}
+.sp-status-sub{font-size:10px;color:var(--t2);line-height:1.5;}
+.sp-metrics{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.sp-metric{
+  background:rgba(0,0,0,.15);border:1px solid var(--b);border-radius:8px;
+  padding:7px 10px;display:flex;flex-direction:column;gap:2px;
+}
+.sp-metric-l{font-size:9px;color:var(--t3);letter-spacing:.5px;}
+.sp-metric-v{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;}
+.sp-action{
+  flex-shrink:0;width:170px;
+  background:rgba(0,0,0,.15);border:1px solid var(--b);border-radius:9px;
+  padding:10px 12px;display:flex;flex-direction:column;gap:7px;justify-content:center;
+}
+.sp-action-title{font-size:10px;color:var(--t3);letter-spacing:1px;}
+.sp-action-item{
+  display:flex;align-items:flex-start;gap:6px;
+  font-size:11px;color:var(--t2);line-height:1.45;
+}
+.sp-action-item::before{content:'›';color:var(--blue);font-size:13px;line-height:1.3;flex-shrink:0;}
 
-    /* ===== 右列 ===== */
-    .col-r { display: flex; flex-direction: column; gap: 10px; }
+/* 热力图 */
+.press-card{flex:1;}
+.press-inner{display:flex;gap:12px;height:calc(100% - 32px);align-items:stretch;}
+.seat-col{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;}
+.seat-lbl{font-size:10px;color:var(--t3);letter-spacing:1.5px;}
+.seat-cw{flex:1;display:flex;align-items:center;justify-content:center;}
+#backCanvas,#cushionCanvas{border-radius:8px;display:block;}
+.legend-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:4px 0;}
+.leg-bar{width:11px;height:120px;border-radius:6px;background:linear-gradient(180deg,#FF4D6A 0%,#FF8C42 25%,#FFD166 50%,#39FF8E 75%,#00C8FF 100%);}
+.leg-ticks{display:flex;flex-direction:column;justify-content:space-between;height:120px;}
+.leg-ticks span{font-size:9px;color:var(--t3);}
+.leg-row{display:flex;align-items:center;gap:4px;}
 
-    /* 健康评分 */
-    .health-card { flex-shrink: 0; height: 148px; }
-    .health-inner { display: flex; align-items: center; gap: 14px; height: calc(100% - 34px); }
-    .score-wrap { position: relative; flex-shrink: 0; }
-    #scoreCanvas { display: block; }
-    .score-overlay {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      text-align: center;
-    }
-    .score-n { font-size: 26px; font-weight: 800; color: var(--accent-cyan); line-height: 1; }
-    .score-u { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
-    .health-bars { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-    .hb-row { display: flex; align-items: center; gap: 8px; }
-    .hb-lbl { font-size: 10px; color: var(--text-secondary); width: 56px; flex-shrink: 0; }
-    .hb-bg { flex: 1; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
-    .hb-fill { height: 100%; border-radius: 3px; }
-    .hb-val { font-size: 10px; font-weight: 600; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+/* ── 右列 ── */
+.col-r{display:flex;flex-direction:column;gap:10px;}
 
-    /* AI方案 */
-    .ai-card { flex: 1; }
-    .ai-tag {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 9px; color: var(--accent-cyan);
-      background: rgba(0,255,209,0.08); border: 1px solid rgba(0,255,209,0.2);
-      border-radius: 8px; padding: 2px 7px; margin-left: 6px;
-    }
-    .plans { display: flex; flex-direction: column; gap: 7px; height: calc(100% - 34px); overflow: hidden; }
-    .plan {
-      border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px;
-      background: rgba(255,255,255,0.015); cursor: pointer; transition: all 0.2s;
-      position: relative; overflow: hidden; flex: 1;
-    }
-    .plan:hover { border-color: var(--accent-blue); background: rgba(0,200,255,0.04); }
-    .plan.rec { border-color: rgba(0,255,209,0.45); background: rgba(0,255,209,0.05); }
-    .plan.rec::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-      background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
-    }
-    .plan.sel { border-color: var(--accent-blue); background: rgba(0,200,255,0.07); }
-    .ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
-    .pn { font-size: 12px; font-weight: 600; }
-    .pb { font-size: 9px; padding: 2px 6px; border-radius: 6px; font-weight: 600; }
-    .pb-ai  { background: rgba(0,255,209,0.12); color: var(--accent-cyan); border: 1px solid rgba(0,255,209,0.25); }
-    .pb-std { background: rgba(0,200,255,0.1);  color: var(--accent-blue); border: 1px solid rgba(0,200,255,0.2); }
-    .pb-adv { background: rgba(255,140,66,0.1); color: var(--accent-orange); border: 1px solid rgba(255,140,66,0.2); }
-    .pd { font-size: 10px; color: var(--text-dim); line-height: 1.45; }
-    .pe { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
-    .et { font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(0,200,255,0.07); color: var(--text-secondary); border: 1px solid rgba(0,200,255,0.1); }
+/* 健康评分 */
+.health-card{flex-shrink:0;height:138px;}
+.health-inner{display:flex;align-items:center;gap:13px;height:calc(100% - 32px);}
+.score-wrap{position:relative;flex-shrink:0;}
+#scoreCanvas{display:block;}
+.score-ov{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;}
+.score-n{font-size:24px;font-weight:800;color:var(--cyan);line-height:1;}
+.score-u{font-size:9px;color:var(--t3);margin-top:2px;}
+.hbars{flex:1;display:flex;flex-direction:column;gap:5px;}
+.hb{display:flex;align-items:center;gap:7px;}
+.hb-l{font-size:10px;color:var(--t2);width:52px;flex-shrink:0;}
+.hb-bg{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;}
+.hb-f{height:100%;border-radius:2px;}
+.hb-v{font-size:10px;font-weight:600;min-width:30px;text-align:right;font-variant-numeric:tabular-nums;}
 
-    /* 一键调节 */
-    .adj-card { flex-shrink: 0; height: 94px; }
-    .adj-inner { height: calc(100% - 34px); display: flex; flex-direction: column; gap: 7px; justify-content: center; }
-    .adj-btn {
-      width: 100%; height: 38px; border-radius: 9px; border: none; cursor: pointer;
-      font-size: 13px; font-weight: 700; letter-spacing: 1px;
-      background: linear-gradient(135deg, #00C8FF 0%, #00FFD1 100%);
-      color: #070B14; transition: all 0.2s;
-      box-shadow: 0 0 18px rgba(0,200,255,0.28);
-    }
-    .adj-btn:hover { transform: translateY(-1px); box-shadow: 0 0 28px rgba(0,200,255,0.45); }
-    .adj-btn.done { background: linear-gradient(135deg, #39FF8E 0%, #00FFD1 100%); }
-    .prog-wrap { display: none; }
-    .prog-wrap.show { display: block; }
-    .prog-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
-    .prog-fill { height: 100%; width: 0%; border-radius: 3px; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); transition: width 0.1s linear; }
-    .prog-lbl { font-size: 10px; color: var(--text-dim); margin-top: 3px; display: flex; justify-content: space-between; }
+/* AI方案 */
+.ai-card{flex:1;}
+.ai-tag{display:inline-flex;align-items:center;gap:4px;font-size:9px;color:var(--cyan);background:rgba(0,255,209,.08);border:1px solid rgba(0,255,209,.2);border-radius:8px;padding:2px 7px;margin-left:6px;}
+.plans{display:flex;flex-direction:column;gap:6px;height:calc(100% - 32px);overflow:hidden;}
+.plan{border:1px solid var(--b);border-radius:9px;padding:8px 11px;background:rgba(255,255,255,.015);cursor:pointer;transition:all .2s;position:relative;overflow:hidden;flex:1;}
+.plan:hover{border-color:var(--blue);background:rgba(0,200,255,.04);}
+.plan.rec{border-color:rgba(0,255,209,.45);background:rgba(0,255,209,.05);}
+.plan.rec::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);}
+.plan.sel{border-color:var(--blue);background:rgba(0,200,255,.07);}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;}
+.pn{font-size:12px;font-weight:600;}
+.pb{font-size:9px;padding:2px 6px;border-radius:6px;font-weight:600;}
+.pb-ai{background:rgba(0,255,209,.12);color:var(--cyan);border:1px solid rgba(0,255,209,.25);}
+.pb-std{background:rgba(0,200,255,.1);color:var(--blue);border:1px solid rgba(0,200,255,.2);}
+.pb-adv{background:rgba(255,140,66,.1);color:var(--orange);border:1px solid rgba(255,140,66,.2);}
+.pb-pur{background:rgba(176,110,255,.1);color:var(--purple);border:1px solid rgba(176,110,255,.2);}
+.pd{font-size:10px;color:var(--t3);line-height:1.45;}
+.pe{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;}
+.et{font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(0,200,255,.07);color:var(--t2);border:1px solid rgba(0,200,255,.1);}
 
-    /* ===== 气囊浮层 ===== */
-    .overlay {
-      position: fixed; inset: 0; z-index: 500;
-      background: rgba(7,11,20,0.88);
-      display: none; align-items: center; justify-content: center;
-      backdrop-filter: blur(6px);
-    }
-    .overlay.show { display: flex; }
-    .modal {
-      background: var(--bg-card); border: 1px solid var(--border-glow);
-      border-radius: 18px; padding: 30px 40px; text-align: center; min-width: 420px;
-      box-shadow: 0 0 60px rgba(0,200,255,0.12);
-    }
-    .modal-t { font-size: 16px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 6px; }
-    .modal-s { font-size: 11px; color: var(--text-dim); margin-bottom: 22px; }
-    .ab-row { display: flex; justify-content: center; gap: 18px; margin-bottom: 22px; }
-    .ab-zone { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-    .ab-circle {
-      border-radius: 50%; border: 2px solid var(--accent-blue);
-      background: rgba(0,200,255,0.06); transition: all 0.35s;
-    }
-    .ab-circle.inflate { background: rgba(0,200,255,0.28); box-shadow: 0 0 18px rgba(0,200,255,0.4); }
-    .ab-lbl { font-size: 10px; color: var(--text-dim); }
-    .ab-prog-bg { width: 100%; height: 7px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
-    .ab-prog-fill { height: 100%; width: 0%; border-radius: 4px; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); box-shadow: 0 0 8px var(--accent-blue); transition: width 0.12s linear; }
-    .ab-prog-text { font-size: 11px; color: var(--text-secondary); margin-top: 7px; }
+/* 一键调节 */
+.adj-card{flex-shrink:0;height:88px;}
+.adj-inner{height:calc(100% - 32px);display:flex;flex-direction:column;gap:6px;justify-content:center;}
+.adj-btn{width:100%;height:36px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:700;letter-spacing:1px;background:linear-gradient(135deg,#00C8FF 0%,#00FFD1 100%);color:#070B14;transition:all .2s;box-shadow:0 0 18px rgba(0,200,255,.28);}
+.adj-btn:hover{transform:translateY(-1px);box-shadow:0 0 28px rgba(0,200,255,.45);}
+.adj-btn.done{background:linear-gradient(135deg,#39FF8E 0%,#00FFD1 100%);}
+.prog-wrap{display:none;}
+.prog-wrap.show{display:block;}
+.prog-bg{width:100%;height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;}
+.prog-fill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,var(--blue),var(--cyan));transition:width .1s linear;}
+.prog-lbl{font-size:10px;color:var(--t3);margin-top:3px;display:flex;justify-content:space-between;}
 
-    /* ===== Toast ===== */
-    .toast {
-      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(16px);
-      background: rgba(57,255,142,0.12); border: 1px solid var(--accent-green);
-      color: var(--accent-green); font-size: 13px; font-weight: 600;
-      padding: 9px 22px; border-radius: 22px;
-      backdrop-filter: blur(10px); opacity: 0; transition: all 0.3s; z-index: 999;
-      box-shadow: 0 0 18px rgba(57,255,142,0.18);
-    }
-    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  </style>
+/* ── 气囊浮层 ── */
+.overlay{position:fixed;inset:0;z-index:500;background:rgba(7,11,20,.88);display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
+.overlay.show{display:flex;}
+.modal{background:var(--card);border:1px solid var(--bg2);border-radius:18px;padding:28px 38px;text-align:center;min-width:400px;box-shadow:0 0 60px rgba(0,200,255,.12);}
+.modal-t{font-size:15px;font-weight:700;color:var(--cyan);margin-bottom:5px;}
+.modal-s{font-size:11px;color:var(--t3);margin-bottom:20px;}
+.ab-row{display:flex;justify-content:center;gap:16px;margin-bottom:20px;}
+.ab-zone{display:flex;flex-direction:column;align-items:center;gap:5px;}
+.ab-c{border-radius:50%;border:2px solid var(--blue);background:rgba(0,200,255,.06);transition:all .35s;}
+.ab-c.inflate{background:rgba(0,200,255,.28);box-shadow:0 0 18px rgba(0,200,255,.4);}
+.ab-l{font-size:10px;color:var(--t3);}
+.ab-pb{width:100%;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;}
+.ab-pf{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,var(--blue),var(--cyan));box-shadow:0 0 8px var(--blue);transition:width .12s linear;}
+.ab-pt{font-size:11px;color:var(--t2);margin-top:6px;}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(14px);background:rgba(57,255,142,.12);border:1px solid var(--green);color:var(--green);font-size:13px;font-weight:600;padding:8px 22px;border-radius:22px;backdrop-filter:blur(10px);opacity:0;transition:all .3s;z-index:999;box-shadow:0 0 18px rgba(57,255,142,.18);}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── 场景特有颜色 ── */
+.scene-0 .ct::before{background:var(--blue);}
+.scene-1 .ct::before{background:var(--orange);}
+.scene-2 .ct::before{background:var(--yellow);}
+.scene-3 .ct::before{background:var(--purple);}
+</style>
 </head>
 <body>
 
 <!-- 顶部栏 -->
 <div class="topbar">
-  <div class="tb-left">
-    <span class="tb-logo">ADAPTIVE SEAT</span>
-    <div class="tb-sep"></div>
-    <span class="tb-page">重心 COP 智能监测</span>
+  <div class="tb-l">
+    <span class="logo">ADAPTIVE SEAT</span>
+    <div class="sep"></div>
+    <span class="page-title">重心 COP 智能监测</span>
   </div>
-  <div class="tb-center">
-    <div class="tb-stat"><div class="v" id="speedV">68</div><div class="l">车速 km/h</div></div>
-    <div class="tb-stat"><div class="v">主驾</div><div class="l">当前座位</div></div>
-    <div class="tb-stat"><div class="v" id="durV">00:42</div><div class="l">持续监测</div></div>
-    <div class="tb-stat"><div class="v">城市路</div><div class="l">路况类型</div></div>
+  <div class="tb-c">
+    <div class="ts"><div class="v" id="speedV">68</div><div class="l">车速 km/h</div></div>
+    <div class="ts"><div class="v">主驾</div><div class="l">当前座位</div></div>
+    <div class="ts"><div class="v" id="durV">00:42</div><div class="l">持续监测</div></div>
+    <div class="ts"><div class="v" id="roadV">城市路</div><div class="l">路况类型</div></div>
+    <div class="ts"><div class="v" id="accelV">0.12g</div><div class="l">纵向加速度</div></div>
   </div>
-  <div class="tb-right">
-    <div class="live-badge"><div class="live-dot"></div><span>实时监测中</span></div>
-    <div class="tb-time" id="clockEl">--:--</div>
+  <div class="tb-r">
+    <div class="live"><div class="dot"></div><span>实时监测中</span></div>
+    <div class="clock" id="clockEl">--:--</div>
+  </div>
+</div>
+
+<!-- 场景标签栏 -->
+<div class="scene-bar">
+  <div class="scene-tab active" onclick="switchScene(0)" id="tab0">
+    <span class="icon">⚖️</span>
+    <span>身体平衡调节</span>
+    <span class="scene-badge warn" id="badge0">偏移中</span>
+  </div>
+  <div class="scene-tab" onclick="switchScene(1)" id="tab1">
+    <span class="icon">🛡️</span>
+    <span>颠簸路况保护</span>
+    <span class="scene-badge ok" id="badge1">正常</span>
+  </div>
+  <div class="scene-tab" onclick="switchScene(2)" id="tab2">
+    <span class="icon">😴</span>
+    <span>疲劳监测提醒</span>
+    <span class="scene-badge warn" id="badge2">42min</span>
+  </div>
+  <div class="scene-tab" onclick="switchScene(3)" id="tab3">
+    <span class="icon">🌀</span>
+    <span>晕车优化体验</span>
+    <span class="scene-badge ok" id="badge3">舒适</span>
   </div>
 </div>
 
 <!-- 主内容 -->
-<div class="main">
+<div class="main" id="mainGrid">
 
   <!-- 左列 -->
   <div class="col-l">
     <div class="card cop-card">
-      <div class="ct">
+      <div class="ct" id="copTitle">
         COP 实时重心坐标
-        <span class="ct-extra">X: <span id="copX" style="color:var(--accent-cyan)">-12.3</span> mm &nbsp; Y: <span id="copY" style="color:var(--accent-orange)">+8.7</span> mm</span>
+        <span class="ct-r">X: <span id="copX" style="color:var(--cyan)">-12.3</span> mm &nbsp; Y: <span id="copY" style="color:var(--orange)">+8.7</span> mm</span>
       </div>
-      <div class="cop-inner">
-        <canvas id="copCanvas" width="368" height="258"></canvas>
-      </div>
+      <div class="cop-inner"><canvas id="copCanvas" width="360" height="230"></canvas></div>
     </div>
-    <div class="card offset-card">
+    <div class="card off-card">
       <div class="ct">偏移量化指标</div>
-      <div class="offset-grid">
-        <div class="om">
-          <div class="om-v c-warn" id="offLR">12.3<span style="font-size:11px">mm</span></div>
-          <div class="om-l">左右偏移</div><div class="om-s">偏左</div>
-        </div>
-        <div class="om">
-          <div class="om-v c-info" id="offFB">8.7<span style="font-size:11px">mm</span></div>
-          <div class="om-l">前后偏移</div><div class="om-s">偏前</div>
-        </div>
-        <div class="om">
-          <div class="om-v c-alert" id="offTotal">15.2<span style="font-size:11px">mm</span></div>
-          <div class="om-l">综合偏移</div><div class="om-s">中度偏移</div>
-        </div>
+      <div class="off-grid">
+        <div class="om"><div class="om-v cw" id="offLR">12.3<span style="font-size:11px">mm</span></div><div class="om-l">左右偏移</div><div class="om-s" id="offLRs">偏左</div></div>
+        <div class="om"><div class="om-v ci" id="offFB">8.7<span style="font-size:11px">mm</span></div><div class="om-l">前后偏移</div><div class="om-s" id="offFBs">偏前</div></div>
+        <div class="om"><div class="om-v ca" id="offTot">15.2<span style="font-size:11px">mm</span></div><div class="om-l">综合偏移</div><div class="om-s" id="offTots">中度偏移</div></div>
       </div>
     </div>
   </div>
 
   <!-- 中列 -->
   <div class="col-m">
+
+    <!-- 场景信息面板 -->
+    <div class="card scene-panel" id="scenePanel">
+      <div class="ct" id="scenePanelTitle">场景状态</div>
+      <div class="sp-content" id="spContent"><!-- 动态填充 --></div>
+    </div>
+
+    <!-- 体压热力图 -->
     <div class="card press-card">
       <div class="ct">
         体压分布热力图
-        <span class="ct-extra">峰值压力 <span style="color:var(--accent-red)">3.2 kPa</span></span>
+        <span class="ct-r">峰值压力 <span style="color:var(--red)" id="peakPressure">3.2 kPa</span></span>
       </div>
       <div class="press-inner">
         <div class="seat-col">
           <div class="seat-lbl">靠 背</div>
-          <div class="seat-canvas-wrap"><canvas id="backCanvas" width="200" height="290"></canvas></div>
+          <div class="seat-cw"><canvas id="backCanvas" width="190" height="260"></canvas></div>
         </div>
         <div class="seat-col">
           <div class="seat-lbl">坐 垫</div>
-          <div class="seat-canvas-wrap"><canvas id="cushionCanvas" width="200" height="180"></canvas></div>
+          <div class="seat-cw"><canvas id="cushionCanvas" width="190" height="160"></canvas></div>
         </div>
         <div class="legend-col">
-          <div class="legend-row">
-            <div class="legend-bar"></div>
-            <div class="legend-ticks">
-              <span>高</span><span></span><span>中</span><span></span><span>低</span>
-            </div>
-          </div>
-          <div style="font-size:9px;color:var(--text-dim);text-align:center;margin-top:4px;">压力<br>等级</div>
+          <div class="leg-row"><div class="leg-bar"></div><div class="leg-ticks"><span>高</span><span></span><span>中</span><span></span><span>低</span></div></div>
+          <div style="font-size:9px;color:var(--t3);text-align:center;margin-top:4px;">压力<br>等级</div>
         </div>
       </div>
     </div>
-    <div class="card hist-card">
-      <div class="ct">
-        COP 轨迹历史（近5分钟）
-        <span class="ct-extra">采样率 50Hz</span>
-      </div>
-      <div class="hist-inner">
-        <div class="hist-chart">
-          <canvas id="histCanvas" width="560" height="60"></canvas>
-        </div>
-        <div class="hist-stats">
-          <div class="hs-row"><span class="hs-l">平均偏移</span><span class="hs-v c-warn">11.8 mm</span></div>
-          <div class="hs-row"><span class="hs-l">最大偏移</span><span class="hs-v c-alert">22.4 mm</span></div>
-          <div class="hs-row"><span class="hs-l">偏移趋势</span><span class="hs-v" style="color:var(--accent-orange)">↗ 加剧</span></div>
-          <div class="hs-row"><span class="hs-l">稳定指数</span><span class="hs-v c-info">72%</span></div>
-        </div>
-      </div>
-    </div>
+
   </div>
 
   <!-- 右列 -->
@@ -372,65 +348,23 @@
       <div class="ct">坐姿健康评分</div>
       <div class="health-inner">
         <div class="score-wrap">
-          <canvas id="scoreCanvas" width="96" height="96"></canvas>
-          <div class="score-overlay">
-            <div class="score-n" id="scoreN">72</div>
-            <div class="score-u">/ 100</div>
-          </div>
+          <canvas id="scoreCanvas" width="90" height="90"></canvas>
+          <div class="score-ov"><div class="score-n" id="scoreN">72</div><div class="score-u">/ 100</div></div>
         </div>
-        <div class="health-bars">
-          <div class="hb-row">
-            <span class="hb-lbl">脊柱支撑</span>
-            <div class="hb-bg"><div class="hb-fill" style="width:68%;background:linear-gradient(90deg,#00C8FF,#00FFD1)"></div></div>
-            <span class="hb-val c-info">68</span>
-          </div>
-          <div class="hb-row">
-            <span class="hb-lbl">腰部压力</span>
-            <div class="hb-bg"><div class="hb-fill" style="width:55%;background:linear-gradient(90deg,#FF8C42,#FFD166)"></div></div>
-            <span class="hb-val c-warn">55</span>
-          </div>
-          <div class="hb-row">
-            <span class="hb-lbl">坐骨均衡</span>
-            <div class="hb-bg"><div class="hb-fill" style="width:42%;background:linear-gradient(90deg,#FF4D6A,#FF8C42)"></div></div>
-            <span class="hb-val c-alert">42</span>
-          </div>
-          <div class="hb-row">
-            <span class="hb-lbl">颈椎负荷</span>
-            <div class="hb-bg"><div class="hb-fill" style="width:80%;background:linear-gradient(90deg,#39FF8E,#00FFD1)"></div></div>
-            <span class="hb-val c-good">80</span>
-          </div>
-          <div class="hb-row">
-            <span class="hb-lbl">久坐时长</span>
-            <div class="hb-bg"><div class="hb-fill" style="width:60%;background:linear-gradient(90deg,#FF8C42,#FFD166)"></div></div>
-            <span class="hb-val c-warn">42min</span>
-          </div>
+        <div class="hbars">
+          <div class="hb"><span class="hb-l">脊柱支撑</span><div class="hb-bg"><div class="hb-f" style="width:68%;background:linear-gradient(90deg,#00C8FF,#00FFD1)"></div></div><span class="hb-v ci">68</span></div>
+          <div class="hb"><span class="hb-l">腰部压力</span><div class="hb-bg"><div class="hb-f" style="width:55%;background:linear-gradient(90deg,#FF8C42,#FFD166)"></div></div><span class="hb-v cw">55</span></div>
+          <div class="hb"><span class="hb-l">坐骨均衡</span><div class="hb-bg"><div class="hb-f" style="width:42%;background:linear-gradient(90deg,#FF4D6A,#FF8C42)"></div></div><span class="hb-v ca">42</span></div>
+          <div class="hb"><span class="hb-l">颈椎负荷</span><div class="hb-bg"><div class="hb-f" style="width:80%;background:linear-gradient(90deg,#39FF8E,#00FFD1)"></div></div><span class="hb-v cg">80</span></div>
+          <div class="hb"><span class="hb-l">久坐时长</span><div class="hb-bg"><div class="hb-f" style="width:60%;background:linear-gradient(90deg,#FF8C42,#FFD166)"></div></div><span class="hb-v cw">42min</span></div>
         </div>
       </div>
     </div>
 
-    <!-- AI方案 -->
+    <!-- AI方案推荐 -->
     <div class="card ai-card">
-      <div class="ct">
-        AI 自适应方案推荐
-        <span class="ai-tag">✦ 智能排序</span>
-      </div>
-      <div class="plans">
-        <div class="plan rec sel" onclick="selPlan(this)">
-          <div class="ph"><span class="pn">⚡ 腰部均衡支撑方案</span><span class="pb pb-ai">AI 首推</span></div>
-          <div class="pd">检测到重心持续偏左，腰椎右侧承压不足。左腰气囊充气 +18%，右腰气囊放气 -10%，恢复脊柱对称支撑。</div>
-          <div class="pe"><span class="et">左腰气囊 +18%</span><span class="et">右腰气囊 -10%</span><span class="et">预计改善 85%</span></div>
-        </div>
-        <div class="plan" onclick="selPlan(this)">
-          <div class="ph"><span class="pn">坐骨减压方案</span><span class="pb pb-std">标准</span></div>
-          <div class="pd">坐垫左侧压力峰值超阈值，通过坐垫气囊分散压力，缓解坐骨神经压迫。</div>
-          <div class="pe"><span class="et">坐垫左侧 -15%</span><span class="et">坐垫右侧 +8%</span><span class="et">预计改善 72%</span></div>
-        </div>
-        <div class="plan" onclick="selPlan(this)">
-          <div class="ph"><span class="pn">疲劳缓解按摩方案</span><span class="pb pb-adv">进阶</span></div>
-          <div class="pd">持续驾驶42分钟，结合COP漂移趋势判断疲劳累积，启动腰背部气囊循环按摩模式。</div>
-          <div class="pe"><span class="et">循环按摩 3min</span><span class="et">腰背4区联动</span><span class="et">疲劳缓解</span></div>
-        </div>
-      </div>
+      <div class="ct">AI 自适应方案推荐 <span class="ai-tag">✦ 智能排序</span></div>
+      <div class="plans" id="planList"><!-- 动态填充 --></div>
     </div>
 
     <!-- 一键调节 -->
@@ -440,7 +374,7 @@
         <button class="adj-btn" id="adjBtn" onclick="doAdjust()">一键执行推荐方案</button>
         <div class="prog-wrap" id="progWrap">
           <div class="prog-bg"><div class="prog-fill" id="progFill"></div></div>
-          <div class="prog-lbl"><span id="progStep">正在调节气囊压力...</span><span id="progPct">0%</span></div>
+          <div class="prog-lbl"><span id="progStep">正在调节...</span><span id="progPct">0%</span></div>
         </div>
       </div>
     </div>
@@ -451,17 +385,17 @@
 <!-- 气囊浮层 -->
 <div class="overlay" id="overlay">
   <div class="modal">
-    <div class="modal-t">气囊自适应调节中</div>
-    <div class="modal-s">正在根据 AI 推荐方案精准调节座椅各区域气囊压力</div>
+    <div class="modal-t" id="modalTitle">气囊自适应调节中</div>
+    <div class="modal-s" id="modalSub">正在根据 AI 推荐方案精准调节座椅各区域气囊压力</div>
     <div class="ab-row">
-      <div class="ab-zone"><div class="ab-circle" id="ab1" style="width:54px;height:54px"></div><div class="ab-lbl">左腰气囊</div></div>
-      <div class="ab-zone"><div class="ab-circle" id="ab2" style="width:46px;height:46px"></div><div class="ab-lbl">右腰气囊</div></div>
-      <div class="ab-zone"><div class="ab-circle" id="ab3" style="width:42px;height:42px"></div><div class="ab-lbl">坐垫左侧</div></div>
-      <div class="ab-zone"><div class="ab-circle" id="ab4" style="width:42px;height:42px"></div><div class="ab-lbl">坐垫右侧</div></div>
-      <div class="ab-zone"><div class="ab-circle" id="ab5" style="width:36px;height:36px"></div><div class="ab-lbl">颈枕支撑</div></div>
+      <div class="ab-zone"><div class="ab-c" id="ab1" style="width:52px;height:52px"></div><div class="ab-l">左腰气囊</div></div>
+      <div class="ab-zone"><div class="ab-c" id="ab2" style="width:44px;height:44px"></div><div class="ab-l">右腰气囊</div></div>
+      <div class="ab-zone"><div class="ab-c" id="ab3" style="width:40px;height:40px"></div><div class="ab-l">坐垫左侧</div></div>
+      <div class="ab-zone"><div class="ab-c" id="ab4" style="width:40px;height:40px"></div><div class="ab-l">坐垫右侧</div></div>
+      <div class="ab-zone"><div class="ab-c" id="ab5" style="width:34px;height:34px"></div><div class="ab-l">颈枕支撑</div></div>
     </div>
-    <div class="ab-prog-bg"><div class="ab-prog-fill" id="abFill"></div></div>
-    <div class="ab-prog-text" id="abText">初始化调节模块...</div>
+    <div class="ab-pb"><div class="ab-pf" id="abFill"></div></div>
+    <div class="ab-pt" id="abText">初始化调节模块...</div>
   </div>
 </div>
 
@@ -469,271 +403,318 @@
 <div class="toast" id="toast">✓ 调节完成，坐姿已优化</div>
 
 <script>
-/* ===== 自适应缩放 ===== */
-function scaleBody() {
-  const sw = window.innerWidth, sh = window.innerHeight;
-  const sx = sw / 1920, sy = sh / 720;
-  const s = Math.min(sx, sy);
-  document.body.style.transform = `scale(${s})`;
-  document.body.style.marginLeft = ((sw - 1920*s)/2) + 'px';
-  document.body.style.marginTop  = ((sh - 720*s)/2) + 'px';
+/* ── 缩放 ── */
+function scale(){
+  const s=Math.min(window.innerWidth/1920,window.innerHeight/720);
+  document.body.style.transform=`scale(${s})`;
+  document.body.style.marginLeft=((window.innerWidth-1920*s)/2)+'px';
+  document.body.style.marginTop=((window.innerHeight-720*s)/2)+'px';
 }
-scaleBody();
-window.addEventListener('resize', scaleBody);
+scale(); window.addEventListener('resize',scale);
 
-/* ===== 时钟 ===== */
-function tick() {
-  const n = new Date();
-  document.getElementById('clockEl').textContent =
-    String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
+/* ── 时钟 ── */
+function tick(){const n=new Date();document.getElementById('clockEl').textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');}
+tick(); setInterval(tick,10000);
+
+/* ── 计时 ── */
+let secs=42*60;
+setInterval(()=>{secs++;document.getElementById('durV').textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0');},1000);
+
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+
+/* ══════════════════════════════
+   四大场景数据配置
+══════════════════════════════ */
+const SCENES = [
+  /* 0 身体平衡调节 */
+  {
+    id:0,
+    panelTitle:'身体平衡调节 · 实时状态',
+    accentColor:'var(--blue)',
+    status:{title:'重心偏移状态',val:'偏左 12.3mm',valClass:'cw',sub:'重心持续偏向左侧，\n左侧气囊需增压补偿'},
+    metrics:[
+      {l:'左侧承压比',v:'62%',c:'cw'},{l:'右侧承压比',v:'38%',c:'ci'},
+      {l:'脊柱偏斜角',v:'4.2°',c:'cw'},{l:'平衡恢复预估',v:'~8s',c:'cg'},
+    ],
+    actions:['左腰气囊充气 +18%，推动身体向右恢复中立','右腰气囊适当放气 -10%，配合平衡调节','坐垫左侧气囊同步增压，均衡坐骨压力'],
+    actionTitle:'气囊调节策略',
+    plans:[
+      {name:'⚡ 腰部均衡支撑',badge:'AI 首推',badgeClass:'pb-ai',rec:true,desc:'检测到重心持续偏左，腰椎右侧承压不足。左腰气囊充气 +18%，右腰气囊放气 -10%，恢复脊柱对称支撑。',tags:['左腰 +18%','右腰 -10%','改善 85%']},
+      {name:'坐骨减压方案',badge:'标准',badgeClass:'pb-std',rec:false,desc:'坐垫左侧压力峰值超阈值，通过坐垫气囊分散压力，缓解坐骨神经压迫。',tags:['坐垫左 -15%','坐垫右 +8%','改善 72%']},
+      {name:'全身姿态重置',badge:'进阶',badgeClass:'pb-adv',rec:false,desc:'综合偏移超过15mm，启动全座椅气囊重新标定，恢复出厂最优支撑状态。',tags:['全区域重置','标定时长 12s','改善 90%']},
+    ],
+    adjLabel:'一键执行平衡调节',
+    adjSteps:['读取气囊压力...','计算左右差值...','左腰气囊充气...','右腰气囊放气...','坐垫均衡调节...','验证平衡效果...','保存配置...'],
+    toastMsg:'✓ 平衡调节完成，重心已居中',
+    copBias:{x:-10,y:6},
+    roadLabel:'城市路',
+  },
+  /* 1 颠簸路况保护 */
+  {
+    id:1,
+    panelTitle:'颠簸路况保护 · 实时状态',
+    accentColor:'var(--orange)',
+    status:{title:'路况颠簸等级',val:'轻度颠簸',valClass:'cw',sub:'COP 晃动幅度 ±18mm\n悬挂已切换越野模式'},
+    metrics:[
+      {l:'COP 晃动幅度',v:'±18mm',c:'cw'},{l:'颠簸频率',v:'2.4Hz',c:'ci'},
+      {l:'悬挂模式',v:'越野模式',c:'cg'},{l:'乘坐舒适度',v:'78分',c:'ci'},
+    ],
+    actions:['已自动切换悬挂至越野模式，降低车身震动传递','腰背气囊增压 +12%，提供额外支撑抵抗颠簸','建议降速至 40km/h 以下，减少颠簸影响'],
+    actionTitle:'自动保护措施',
+    plans:[
+      {name:'⚡ 颠簸主动防护',badge:'AI 首推',badgeClass:'pb-ai',rec:true,desc:'检测到路面颠簸，COP 晃动超阈值。自动增压腰背气囊，配合悬挂模式切换，减少颠簸对脊柱的冲击。',tags:['腰背 +12%','悬挂越野模式','舒适度 +15%']},
+      {name:'全包裹支撑模式',badge:'标准',badgeClass:'pb-std',rec:false,desc:'启动全座椅气囊包裹模式，从四周固定身体，减少颠簸时的身体晃动幅度。',tags:['四周气囊 +8%','固定支撑','晃动 -40%']},
+      {name:'语音提醒驾驶员',badge:'提醒',badgeClass:'pb-pur',rec:false,desc:'通过车机语音提示前排驾驶员当前路况颠簸，建议减速或绕行，保障乘客舒适。',tags:['语音播报','建议减速','路况预警']},
+    ],
+    adjLabel:'一键启动颠簸防护',
+    adjSteps:['检测颠簸强度...','切换悬挂模式...','腰背气囊增压...','侧向气囊固定...','验证防护效果...','保存配置...'],
+    toastMsg:'✓ 颠簸防护已启动，悬挂已切换',
+    copBias:{x:2,y:14},
+    roadLabel:'颠簸路段',
+  },
+  /* 2 疲劳监测提醒 */
+  {
+    id:2,
+    panelTitle:'疲劳监测提醒 · 实时状态',
+    accentColor:'var(--yellow)',
+    status:{title:'疲劳累积评估',val:'中度疲劳',valClass:'cw',sub:'持续驾驶 42 分钟\nCOP 漂移趋势加剧'},
+    metrics:[
+      {l:'持续驾驶时长',v:'42min',c:'cw'},{l:'COP 漂移速率',v:'↗ 加剧',c:'ca'},
+      {l:'坐姿变化次数',v:'3次/10min',c:'ci'},{l:'疲劳预警等级',v:'Lv.2',c:'cw'},
+    ],
+    actions:['启动腰背部气囊循环按摩，每3分钟一个周期','建议在安全区域停车休息 10 分钟','播放舒缓音乐，配合座椅轻微震动缓解疲劳'],
+    actionTitle:'疲劳干预方案',
+    plans:[
+      {name:'⚡ 气囊循环按摩',badge:'AI 首推',badgeClass:'pb-ai',rec:true,desc:'持续驾驶42分钟，COP漂移趋势加剧，判断疲劳累积。启动腰背部4区气囊循环按摩，每3分钟一周期。',tags:['循环按摩 3min','腰背4区联动','疲劳缓解']},
+      {name:'休息提醒 + 音乐',badge:'舒缓',badgeClass:'pb-pur',rec:false,desc:'通过车机屏幕和语音提示建议休息，同时自动播放舒缓音乐，配合座椅微震动辅助放松。',tags:['语音提醒','舒缓音乐','微震动']},
+      {name:'零重力模式',badge:'进阶',badgeClass:'pb-adv',rec:false,desc:'停车后可一键切换零重力座椅模式，靠背后倾至最佳角度，坐垫气囊全面支撑，快速恢复精力。',tags:['靠背后倾 120°','全面支撑','快速恢复']},
+    ],
+    adjLabel:'一键启动疲劳干预',
+    adjSteps:['评估疲劳程度...','启动按摩模式...','腰部气囊循环...','背部气囊循环...','播放舒缓音乐...','设置提醒计时...','干预方案生效...'],
+    toastMsg:'✓ 疲劳干预已启动，气囊按摩中',
+    copBias:{x:-8,y:-4},
+    roadLabel:'高速路',
+  },
+  /* 3 晕车优化体验 */
+  {
+    id:3,
+    panelTitle:'晕车优化体验 · 实时状态',
+    accentColor:'var(--purple)',
+    status:{title:'乘坐舒适度评估',val:'舒适',valClass:'cg',sub:'前后压力变化平稳\n未检测到晕车风险'},
+    metrics:[
+      {l:'前后压力变化',v:'±3.2mm',c:'cg'},{l:'纵向加速度',v:'0.12g',c:'cg'},
+      {l:'舒适度评分',v:'88分',c:'cg'},{l:'晕车风险等级',v:'低风险',c:'cg'},
+    ],
+    actions:['COP前后变化平稳，当前驾驶风格良好','如乘客不适，可开启晕车辅助模式','语音提示：望向窗外远方，保持头部固定'],
+    actionTitle:'晕车预防建议',
+    plans:[
+      {name:'⚡ 晕车辅助模式',badge:'AI 首推',badgeClass:'pb-ai',rec:true,desc:'通过COP监测前后压力变化，量化乘坐舒适度。启动晕车辅助：头枕气囊固定头部，播放缓解音乐，语音引导放松。',tags:['头枕固定','缓解音乐','语音引导']},
+      {name:'驾驶风格提醒',badge:'提醒',badgeClass:'pb-pur',rec:false,desc:'当COP前后变化超过阈值时，提醒驾驶员平稳加减速，减少急刹车和急加速，降低晕车风险。',tags:['驾驶提醒','平稳加速','量化舒适度']},
+      {name:'通风 + 香氛联动',badge:'舒缓',badgeClass:'pb-std',rec:false,desc:'联动车内通风系统，增大新鲜空气流量，同时开启薄荷香氛，缓解晕车症状，改善车内环境。',tags:['通风增强','薄荷香氛','环境优化']},
+    ],
+    adjLabel:'一键启动晕车辅助',
+    adjSteps:['评估晕车风险...','头枕气囊调节...','通风系统联动...','香氛系统启动...','播放缓解音乐...','语音提示播报...','辅助方案生效...'],
+    toastMsg:'✓ 晕车辅助已启动，保持舒适',
+    copBias:{x:1,y:-2},
+    roadLabel:'弯道路段',
+  },
+];
+
+/* ── 当前场景 ── */
+let curScene = 0;
+
+function switchScene(idx) {
+  curScene = idx;
+  // 切换标签激活
+  document.querySelectorAll('.scene-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
+  const sc = SCENES[idx];
+  // 更新路况
+  document.getElementById('roadV').textContent = sc.roadLabel;
+  // 更新场景面板
+  renderScenePanel(sc);
+  // 更新方案列表
+  renderPlans(sc);
+  // 更新调节按钮
+  document.getElementById('adjBtn').textContent = sc.adjLabel;
+  document.getElementById('adjBtn').classList.remove('done');
+  // 更新COP偏向
+  targetBias = sc.copBias;
 }
-tick(); setInterval(tick, 10000);
 
-/* ===== 持续时长 ===== */
-let secs = 42*60;
-setInterval(() => {
-  secs++;
-  document.getElementById('durV').textContent =
-    String(Math.floor(secs/60)).padStart(2,'0') + ':' + String(secs%60).padStart(2,'0');
-}, 1000);
+function renderScenePanel(sc) {
+  document.getElementById('scenePanelTitle').textContent = sc.panelTitle;
+  const sub = sc.status.sub.replace(/\n/g,'<br>');
+  document.getElementById('spContent').innerHTML = `
+    <div class="sp-status">
+      <div class="sp-status-title">${sc.status.title}</div>
+      <div class="sp-status-val ${sc.status.valClass}">${sc.status.val}</div>
+      <div class="sp-status-sub">${sub}</div>
+    </div>
+    <div class="sp-metrics">
+      ${sc.metrics.map(m=>`<div class="sp-metric"><div class="sp-metric-l">${m.l}</div><div class="sp-metric-v ${m.c}">${m.v}</div></div>`).join('')}
+    </div>
+    <div class="sp-action">
+      <div class="sp-action-title">${sc.actionTitle}</div>
+      ${sc.actions.map(a=>`<div class="sp-action-item">${a}</div>`).join('')}
+    </div>
+  `;
+}
 
-/* ===== 工具 ===== */
-const lerp = (a,b,t) => a+(b-a)*t;
-const clamp = (v,lo,hi) => Math.max(lo,Math.min(hi,v));
+function renderPlans(sc) {
+  document.getElementById('planList').innerHTML = sc.plans.map((p,i)=>`
+    <div class="plan ${p.rec?'rec':''} ${i===0?'sel':''}" onclick="selPlan(this)">
+      <div class="ph"><span class="pn">${p.name}</span><span class="pb ${p.badgeClass}">${p.badge}</span></div>
+      <div class="pd">${p.desc}</div>
+      <div class="pe">${p.tags.map(t=>`<span class="et">${t}</span>`).join('')}</div>
+    </div>
+  `).join('');
+}
 
-/* ===== COP 图 ===== */
-const cc = document.getElementById('copCanvas');
-const ctx = cc.getContext('2d');
-const CW = cc.width, CH = cc.height;
-const ox = CW/2, oy = CH/2, SC = 7.5;
+function selPlan(el){document.querySelectorAll('.plan').forEach(p=>p.classList.remove('sel'));el.classList.add('sel');}
 
-let pts = [], cx = -12.3, cy2 = 8.7, vx = 0.3, vy = -0.2;
+// 初始化
+switchScene(0);
 
-function genPt() {
-  vx += (Math.random()-.5)*.45; vy += (Math.random()-.5)*.45;
-  vx = clamp(vx,-.9,.9); vy = clamp(vy,-.9,.9);
-  cx += vx; cy2 += vy;
-  cx = clamp(cx,-22,22); cy2 = clamp(cy2,-18,18);
-  cx += (-10-cx)*.022; cy2 += (6-cy2)*.022;
-  pts.push({x:cx,y:cy2});
-  if (pts.length>130) pts.shift();
+/* ── COP 动画 ── */
+const cc=document.getElementById('copCanvas');
+const ctx=cc.getContext('2d');
+const CW=cc.width,CH=cc.height,ox=CW/2,oy=CH/2,SC=7;
+let pts=[],cx=-12.3,cy2=8.7,vx=.3,vy=-.2;
+var targetBias={x:-10,y:6};
+
+function genPt(){
+  vx+=(Math.random()-.5)*.45; vy+=(Math.random()-.5)*.45;
+  vx=clamp(vx,-.9,.9); vy=clamp(vy,-.9,.9);
+  cx+=vx; cy2+=vy;
+  cx=clamp(cx,-22,22); cy2=clamp(cy2,-18,18);
+  cx+=(targetBias.x-cx)*.025; cy2+=(targetBias.y-cy2)*.025;
+  pts.push({x:cx,y:cy2}); if(pts.length>120) pts.shift();
 }
 for(let i=0;i<80;i++) genPt();
 
 function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
 
-function drawCop() {
+function drawCop(){
   ctx.clearRect(0,0,CW,CH);
-  ctx.fillStyle='rgba(0,0,0,0.35)'; rr(ctx,0,0,CW,CH,8); ctx.fill();
-
-  // 网格
-  ctx.strokeStyle='rgba(0,200,255,0.07)'; ctx.lineWidth=1;
+  ctx.fillStyle='rgba(0,0,0,.35)'; rr(ctx,0,0,CW,CH,8); ctx.fill();
+  ctx.strokeStyle='rgba(0,200,255,.07)'; ctx.lineWidth=1;
   for(let x=ox%40;x<CW;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
   for(let y=oy%40;y<CH;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
-
-  // 区域圆
-  [[20,'rgba(255,77,106,0.05)','rgba(255,77,106,0.2)'],[14,'rgba(255,140,66,0.05)','rgba(255,140,66,0.2)'],[7,'rgba(57,255,142,0.07)','rgba(57,255,142,0.25)']].forEach(([r,f,s])=>{
-    ctx.beginPath(); ctx.arc(ox,oy,r*SC,0,Math.PI*2);
-    ctx.fillStyle=f; ctx.fill();
-    ctx.strokeStyle=s; ctx.lineWidth=1; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+  [[20,'rgba(255,77,106,.05)','rgba(255,77,106,.18)'],[14,'rgba(255,140,66,.05)','rgba(255,140,66,.18)'],[7,'rgba(57,255,142,.07)','rgba(57,255,142,.22)']].forEach(([r,f,s])=>{
+    ctx.beginPath();ctx.arc(ox,oy,r*SC,0,Math.PI*2);ctx.fillStyle=f;ctx.fill();
+    ctx.strokeStyle=s;ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
   });
-
-  // 轴
-  ctx.strokeStyle='rgba(0,200,255,0.28)'; ctx.lineWidth=1;
+  ctx.strokeStyle='rgba(0,200,255,.28)';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(ox,4);ctx.lineTo(ox,CH-4);ctx.stroke();
   ctx.beginPath();ctx.moveTo(4,oy);ctx.lineTo(CW-4,oy);ctx.stroke();
-
-  // 轴标签
-  ctx.fillStyle='rgba(122,168,201,0.55)'; ctx.font='10px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('前',ox,14); ctx.fillText('后',ox,CH-4);
-  ctx.textAlign='right'; ctx.fillText('左',20,oy+4);
-  ctx.textAlign='left';  ctx.fillText('右',CW-4,oy+4);
-
-  // 刻度
-  ctx.fillStyle='rgba(122,168,201,0.35)'; ctx.font='9px sans-serif';
-  [-20,-10,10,20].forEach(v=>{
-    ctx.textAlign='center'; ctx.fillText(v,ox+v*SC,oy+12);
-    ctx.textAlign='right';  ctx.fillText(v,ox-4,oy-v*SC+3);
-  });
-
-  // 轨迹
+  ctx.fillStyle='rgba(122,168,201,.55)';ctx.font='10px sans-serif';ctx.textAlign='center';
+  ctx.fillText('前',ox,13);ctx.fillText('后',ox,CH-3);
+  ctx.textAlign='right';ctx.fillText('左',18,oy+4);
+  ctx.textAlign='left';ctx.fillText('右',CW-4,oy+4);
+  ctx.fillStyle='rgba(122,168,201,.3)';ctx.font='9px sans-serif';
+  [-20,-10,10,20].forEach(v=>{ctx.textAlign='center';ctx.fillText(v,ox+v*SC,oy+11);ctx.textAlign='right';ctx.fillText(v,ox-4,oy-v*SC+3);});
   if(pts.length>1){
     for(let i=1;i<pts.length;i++){
-      const a=(i/pts.length)*0.75;
-      ctx.beginPath();
-      ctx.moveTo(ox+pts[i-1].x*SC, oy-pts[i-1].y*SC);
-      ctx.lineTo(ox+pts[i].x*SC,   oy-pts[i].y*SC);
-      ctx.strokeStyle=`rgba(0,200,255,${a})`; ctx.lineWidth=1.5; ctx.stroke();
+      const a=(i/pts.length)*.75;
+      ctx.beginPath();ctx.moveTo(ox+pts[i-1].x*SC,oy-pts[i-1].y*SC);ctx.lineTo(ox+pts[i].x*SC,oy-pts[i].y*SC);
+      ctx.strokeStyle=`rgba(0,200,255,${a})`;ctx.lineWidth=1.5;ctx.stroke();
     }
   }
-
-  // 当前点
-  const lp=pts[pts.length-1];
-  const px=ox+lp.x*SC, py=oy-lp.y*SC;
+  const lp=pts[pts.length-1],px=ox+lp.x*SC,py=oy-lp.y*SC;
   const g=ctx.createRadialGradient(px,py,0,px,py,20);
-  g.addColorStop(0,'rgba(0,255,209,0.45)'); g.addColorStop(1,'rgba(0,255,209,0)');
-  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(px,py,20,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2);
-  ctx.fillStyle='#00FFD1'; ctx.shadowColor='#00FFD1'; ctx.shadowBlur=14; ctx.fill(); ctx.shadowBlur=0;
-
+  g.addColorStop(0,'rgba(0,255,209,.45)');g.addColorStop(1,'rgba(0,255,209,0)');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(px,py,20,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);
+  ctx.fillStyle='#00FFD1';ctx.shadowColor='#00FFD1';ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
   document.getElementById('copX').textContent=lp.x.toFixed(1);
   document.getElementById('copY').textContent=(lp.y>=0?'+':'')+lp.y.toFixed(1);
 }
 
-/* ===== 热力图 ===== */
+/* ── 热力图 ── */
 function heatCol(v){
-  const stops=[[0,[0,200,255]],[.25,[57,255,142]],[.5,[255,209,102]],[.75,[255,140,66]],[1,[255,77,106]]];
+  const s=[[0,[0,200,255]],[.25,[57,255,142]],[.5,[255,209,102]],[.75,[255,140,66]],[1,[255,77,106]]];
   let c0,c1,t;
-  for(let i=0;i<stops.length-1;i++){
-    if(v>=stops[i][0]&&v<=stops[i+1][0]){
-      t=(v-stops[i][0])/(stops[i+1][0]-stops[i][0]);
-      c0=stops[i][1];c1=stops[i+1][1];break;
-    }
-  }
-  if(!c0){c0=stops[stops.length-1][1];c1=c0;t=0;}
+  for(let i=0;i<s.length-1;i++){if(v>=s[i][0]&&v<=s[i+1][0]){t=(v-s[i][0])/(s[i+1][0]-s[i][0]);c0=s[i][1];c1=s[i+1][1];break;}}
+  if(!c0){c0=s[s.length-1][1];c1=c0;t=0;}
   return [Math.round(lerp(c0[0],c1[0],t)),Math.round(lerp(c0[1],c1[1],t)),Math.round(lerp(c0[2],c1[2],t))];
 }
-
-const backData=[
-  [.1,.2,.3,.35,.35,.3,.2,.1],[.15,.3,.5,.55,.55,.5,.3,.15],[.2,.4,.65,.7,.7,.65,.4,.2],
-  [.25,.45,.7,.75,.75,.7,.45,.25],[.3,.5,.72,.8,.8,.72,.5,.3],[.35,.55,.75,.85,.82,.75,.55,.35],
-  [.4,.6,.8,.9,.88,.8,.6,.4],[.5,.7,.85,.95,.92,.82,.65,.45],[.55,.75,.88,.98,.9,.8,.6,.4],
-  [.4,.6,.75,.82,.78,.7,.55,.35],[.25,.4,.55,.6,.58,.5,.38,.22],[.1,.2,.3,.35,.33,.28,.18,.1],
-];
-const cushData=[
-  [.2,.45,.7,.75,.72,.65,.4,.2],[.3,.6,.85,.92,.88,.8,.55,.3],
-  [.4,.7,.95,1,.96,.88,.62,.35],[.38,.65,.9,.95,.9,.82,.58,.32],
-  [.25,.5,.72,.78,.74,.65,.45,.25],[.1,.25,.4,.45,.42,.35,.22,.1],
-];
-
+const backData=[[.1,.2,.3,.35,.35,.3,.2,.1],[.15,.3,.5,.55,.55,.5,.3,.15],[.2,.4,.65,.7,.7,.65,.4,.2],[.25,.45,.7,.75,.75,.7,.45,.25],[.3,.5,.72,.8,.8,.72,.5,.3],[.35,.55,.75,.85,.82,.75,.55,.35],[.4,.6,.8,.9,.88,.8,.6,.4],[.5,.7,.85,.95,.92,.82,.65,.45],[.55,.75,.88,.98,.9,.8,.6,.4],[.4,.6,.75,.82,.78,.7,.55,.35],[.25,.4,.55,.6,.58,.5,.38,.22],[.1,.2,.3,.35,.33,.28,.18,.1]];
+const cushData=[[.2,.45,.7,.75,.72,.65,.4,.2],[.3,.6,.85,.92,.88,.8,.55,.3],[.4,.7,.95,1,.96,.88,.62,.35],[.38,.65,.9,.95,.9,.82,.58,.32],[.25,.5,.72,.78,.74,.65,.45,.25],[.1,.25,.4,.45,.42,.35,.22,.1]];
 let phase=0;
 
 function drawHeat(canvas,data,isBack){
-  const c=canvas.getContext('2d');
-  const W=canvas.width,H=canvas.height;
-  const rows=data.length,cols=data[0].length;
-  const cw=W/cols,ch=H/rows;
-  const blur=Math.max(cw,ch)*.95;
+  const c=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+  const rows=data.length,cols=data[0].length,cw=W/cols,ch=H/rows,blur=Math.max(cw,ch)*.95;
   c.clearRect(0,0,W,H);
-  c.fillStyle='rgba(10,18,34,0.92)';
-  c.beginPath(); c.roundRect(3,3,W-6,H-6,isBack?14:10); c.fill();
-  for(let r=0;r<rows;r++){
-    for(let col=0;col<cols;col++){
-      let v=clamp(data[r][col]+Math.sin(phase*.05+r*.5+col*.3)*.06,0,1);
-      const x=col*cw+cw/2, y=r*ch+ch/2;
-      const [R,G,B]=heatCol(v);
-      const g=c.createRadialGradient(x,y,0,x,y,blur);
-      g.addColorStop(0,`rgba(${R},${G},${B},${v*.85})`);
-      g.addColorStop(1,'rgba(0,0,0,0)');
-      c.fillStyle=g; c.beginPath(); c.arc(x,y,blur,0,Math.PI*2); c.fill();
-    }
+  c.fillStyle='rgba(10,18,34,.92)';c.beginPath();c.roundRect(3,3,W-6,H-6,isBack?13:9);c.fill();
+  for(let r=0;r<rows;r++)for(let col=0;col<cols;col++){
+    let v=clamp(data[r][col]+Math.sin(phase*.05+r*.5+col*.3)*.06,0,1);
+    const x=col*cw+cw/2,y=r*ch+ch/2;
+    const [R,G,B]=heatCol(v);
+    const g=c.createRadialGradient(x,y,0,x,y,blur);
+    g.addColorStop(0,`rgba(${R},${G},${B},${v*.85})`);g.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=g;c.beginPath();c.arc(x,y,blur,0,Math.PI*2);c.fill();
   }
-  c.strokeStyle='rgba(0,200,255,0.18)'; c.lineWidth=1;
-  c.beginPath(); c.roundRect(3,3,W-6,H-6,isBack?14:10); c.stroke();
-  if(isBack){
-    c.fillStyle='rgba(255,255,255,0.22)'; c.font='10px sans-serif'; c.textAlign='center';
-    c.fillText('颈部',W/2,16); c.fillText('腰部',W/2,H*.6); c.fillText('臀部',W/2,H-8);
-  }
+  c.strokeStyle='rgba(0,200,255,.18)';c.lineWidth=1;c.beginPath();c.roundRect(3,3,W-6,H-6,isBack?13:9);c.stroke();
+  if(isBack){c.fillStyle='rgba(255,255,255,.22)';c.font='10px sans-serif';c.textAlign='center';c.fillText('颈部',W/2,15);c.fillText('腰部',W/2,H*.6);c.fillText('臀部',W/2,H-8);}
 }
 
-/* ===== 历史图 ===== */
-const hc=document.getElementById('histCanvas');
-const hctx=hc.getContext('2d');
-let histD=[];
-for(let i=0;i<300;i++) histD.push(8+Math.sin(i*.1)*4+Math.random()*3);
-
-function drawHist(){
-  const W=hc.width,H=hc.height;
-  hctx.clearRect(0,0,W,H);
-  hctx.fillStyle='rgba(0,0,0,0.2)'; hctx.fillRect(0,0,W,H);
-  const thY=H-(15/30)*H;
-  hctx.strokeStyle='rgba(255,140,66,0.35)'; hctx.lineWidth=1; hctx.setLineDash([4,4]);
-  hctx.beginPath(); hctx.moveTo(0,thY); hctx.lineTo(W,thY); hctx.stroke(); hctx.setLineDash([]);
-  hctx.fillStyle='rgba(255,140,66,0.45)'; hctx.font='9px sans-serif'; hctx.textAlign='right';
-  hctx.fillText('阈值 15mm',W-4,thY-3);
-  hctx.beginPath();
-  const step=W/histD.length;
-  histD.forEach((v,i)=>{const x=i*step,y=H-(v/30)*H; i===0?hctx.moveTo(x,y):hctx.lineTo(x,y);});
-  hctx.strokeStyle='rgba(0,200,255,0.8)'; hctx.lineWidth=1.5; hctx.stroke();
-  hctx.lineTo(W,H); hctx.lineTo(0,H); hctx.closePath();
-  const g=hctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'rgba(0,200,255,0.18)'); g.addColorStop(1,'rgba(0,200,255,0)');
-  hctx.fillStyle=g; hctx.fill();
-}
-
-/* ===== 评分环 ===== */
+/* ── 评分环 ── */
 function drawRing(score){
-  const c=document.getElementById('scoreCanvas').getContext('2d');
-  const W=96,H=96,r=38;
+  const c=document.getElementById('scoreCanvas').getContext('2d'),W=90,H=90,r=36;
   c.clearRect(0,0,W,H);
-  c.beginPath(); c.arc(W/2,H/2,r,0,Math.PI*2);
-  c.strokeStyle='rgba(255,255,255,0.06)'; c.lineWidth=8; c.stroke();
+  c.beginPath();c.arc(W/2,H/2,r,0,Math.PI*2);c.strokeStyle='rgba(255,255,255,.06)';c.lineWidth=7;c.stroke();
   const angle=(score/100)*Math.PI*2-Math.PI/2;
   const g=c.createLinearGradient(W/2-r,H/2,W/2+r,H/2);
   if(score>=80){g.addColorStop(0,'#39FF8E');g.addColorStop(1,'#00FFD1');}
   else if(score>=60){g.addColorStop(0,'#00C8FF');g.addColorStop(1,'#00FFD1');}
   else{g.addColorStop(0,'#FF8C42');g.addColorStop(1,'#FFD166');}
-  c.beginPath(); c.arc(W/2,H/2,r,-Math.PI/2,angle);
-  c.strokeStyle=g; c.lineWidth=8; c.lineCap='round';
-  c.shadowColor='#00C8FF'; c.shadowBlur=10; c.stroke(); c.shadowBlur=0;
+  c.beginPath();c.arc(W/2,H/2,r,-Math.PI/2,angle);
+  c.strokeStyle=g;c.lineWidth=7;c.lineCap='round';c.shadowColor='#00C8FF';c.shadowBlur=10;c.stroke();c.shadowBlur=0;
 }
 drawRing(72);
 
-/* ===== 方案选择 ===== */
-function selPlan(el){
-  document.querySelectorAll('.plan').forEach(p=>p.classList.remove('sel'));
-  el.classList.add('sel');
-}
-
-/* ===== 一键调节 ===== */
+/* ── 一键调节 ── */
 let busy=false;
 function doAdjust(){
-  if(busy) return; busy=true;
+  if(busy)return; busy=true;
+  const sc=SCENES[curScene];
+  document.getElementById('modalTitle').textContent=sc.adjLabel;
+  document.getElementById('modalSub').textContent='正在根据 AI 推荐方案执行自适应调节';
   document.getElementById('overlay').classList.add('show');
-  const steps=['初始化调节模块...','读取当前气囊压力...','计算目标压力值...','左腰气囊充气中...','右腰气囊放气中...','坐垫压力均衡调节...','颈枕位置微调...','验证调节效果...','保存配置...'];
-  const seq=[[0],[1],[2,3],[4],[0,1,2,3,4]];
   const abs=['ab1','ab2','ab3','ab4','ab5'];
   abs.forEach(id=>document.getElementById(id).classList.remove('inflate'));
+  const seq=[[0],[1],[2,3],[4],[0,1,2,3,4]];
   let pct=0,si=0;
-  const fill=document.getElementById('abFill'), txt=document.getElementById('abText');
+  const fill=document.getElementById('abFill'),txt=document.getElementById('abText');
   const t=setInterval(()=>{
-    pct+=1.2; if(pct>100) pct=100;
+    pct+=1.2;if(pct>100)pct=100;
     fill.style.width=pct+'%';
-    const ni=Math.floor((pct/100)*steps.length);
-    if(ni<steps.length&&ni!==si){si=ni;txt.textContent=steps[si];if(si<seq.length)seq[si].forEach(i=>document.getElementById(abs[i]).classList.add('inflate'));}
+    const ni=Math.floor((pct/100)*sc.adjSteps.length);
+    if(ni<sc.adjSteps.length&&ni!==si){si=ni;txt.textContent=sc.adjSteps[si];if(si<seq.length)seq[si].forEach(i=>document.getElementById(abs[i]).classList.add('inflate'));}
     if(pct>=100){
       clearInterval(t);
       setTimeout(()=>{
         document.getElementById('overlay').classList.remove('show');
         busy=false;
-        // 更新数据
-        document.getElementById('offLR').innerHTML='4.2<span style="font-size:11px">mm</span>';
-        document.getElementById('offFB').innerHTML='2.1<span style="font-size:11px">mm</span>';
-        document.getElementById('offTotal').innerHTML='4.7<span style="font-size:11px">mm</span>';
-        document.getElementById('offLR').className='om-v c-good';
-        document.getElementById('offFB').className='om-v c-good';
-        document.getElementById('offTotal').className='om-v c-good';
-        document.getElementById('scoreN').textContent='88';
-        drawRing(88);
-        cx=-4.2; cy2=2.1;
+        document.getElementById('adjBtn').textContent='✓ 已执行';
+        document.getElementById('adjBtn').classList.add('done');
         const toast=document.getElementById('toast');
+        toast.textContent=sc.toastMsg;
         toast.classList.add('show');
-        setTimeout(()=>toast.classList.remove('show'),2500);
+        setTimeout(()=>toast.classList.remove('show'),2600);
       },400);
     }
   },30);
 }
 
-/* ===== 主循环 ===== */
+/* ── 主循环 ── */
 function loop(){
   genPt(); phase++;
-  const lp=pts[pts.length-1];
-  histD.push(Math.sqrt(lp.x*lp.x+lp.y*lp.y));
-  if(histD.length>300) histD.shift();
   drawCop();
   drawHeat(document.getElementById('backCanvas'),backData,true);
   drawHeat(document.getElementById('cushionCanvas'),cushData,false);
-  drawHist();
   requestAnimationFrame(loop);
 }
 loop();
