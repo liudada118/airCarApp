@@ -18,6 +18,8 @@ import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 import {TopBar, SeatDiagram, ConnectionErrorModal, Toast} from '../components';
 import IconFont from '../components/IconFont';
 import CarAirRN from '../components/CarAirRN';
+import AirbagFullFrameModal from '../components/AirbagFullFrameModal';
+import {parseAirbagFullFrame, AirbagFullFrame} from '../utils/airbagFullFrame';
 
 // icon 图片资源
 const iconSitStatus = require('../assets/icons/icon-sitStatus.png');
@@ -47,7 +49,11 @@ const INITIAL_SENSOR_FRAME: number[] = new Array(144).fill(0);
 let hasTriedAutoConnect = false;
 
 /** 是否使用模拟数据（无真实硬件时自动启用） */
-const USE_MOCK = Platform.OS !== 'android';
+// 新板子（1372 字节 float32 帧，算法在单片机内完成）已接入，改为读取真实串口。
+// 注意：新帧目前只用于「板子数据帧」弹窗展示，暂未驱动主界面座椅/3D，
+// 因此主界面的在座/离座、气囊状态在接入新帧前会保持静止，属正常现象。
+// const USE_MOCK = Platform.OS !== 'android';
+const USE_MOCK = true;
 
 interface HomeScreenProps {
   onNavigateToCustomize: () => void;
@@ -135,8 +141,29 @@ function getErrorMessage(error: unknown): string {
   return '连接失败，请检查传感器设备';
 }
 
+// 已知 USB 转串口芯片的厂商 ID（十进制）：
+//   0x1A86=6790  沁恒 CH340/CH341/CH9102
+//   0x0403=1027  FTDI
+//   0x10C4=4292  Silicon Labs CP210x
+//   0x067B=1659  Prolific PL2303
+const KNOWN_SERIAL_VENDOR_IDS = [6790, 1027, 4292, 1659];
+// 明确忽略的非串口设备厂商（避免误当串口打开）：0x2109=8457 VIA Labs USB Hub
+const IGNORED_VENDOR_IDS = [8457];
+
 function pickTargetDevice(devices: SerialDevice[]): SerialDevice | undefined {
-  return devices.find(d => Number(d?.productId ?? 0) !== 0) ?? devices[0];
+  // 打印所有设备，便于排查选错设备的问题
+  // eslint-disable-next-line no-console
+  console.log('[Serial] listDevices =>', JSON.stringify(devices));
+  // 先排除 USB Hub 等已知非串口设备
+  const candidates = devices.filter(
+    d => !IGNORED_VENDOR_IDS.includes(Number(d?.vendorId ?? 0)),
+  );
+  // 优先选已知串口芯片（CH340=0x1A86 等）
+  const known = candidates.find(d =>
+    KNOWN_SERIAL_VENDOR_IDS.includes(Number(d?.vendorId ?? 0)),
+  );
+  if (known) return known;
+  return candidates.find(d => Number(d?.productId ?? 0) !== 0) ?? candidates[0];
 }
 
 // ─── 从新算法结果中提取状态 ──────────────────────────────────────
@@ -471,6 +498,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showCommandModal, setShowCommandModal] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
 
+  // ─── 新板子 1372 字节 float32 数据帧 ──────────────────────────
+  // 每来一帧就存到 ref（不触发重渲染），弹窗打开时用定时器限流刷新显示
+  const airbagFrameRef = useRef<AirbagFullFrame | null>(null);
+  const airbagFrameCountRef = useRef(0);
+  const [showAirbagData, setShowAirbagData] = useState(false);
+  const [airbagDataVersion, setAirbagDataVersion] = useState(0);
+  const [airbagFps, setAirbagFps] = useState(0); // 实测帧率（约每秒更新一次）
+
   // 入座定时充气提示弹窗
   const [seatedInflateToast, setSeatedInflateToast] = useState(false);
   const nonStdFramesRef = useRef<{hex: string; length: number; timestamp: number; csv: string}[]>([]);
@@ -483,6 +518,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const handleAlgoResult = useCallback((resultJson: string) => {
     const parsed = parseAlgoResult(resultJson);
     if (!parsed) return;
+    // 【console 演示】每次算法出结果时打印一行，可在 React Native DevTools 的 Console 看到
+    console.log('[SHROOM演示] 座椅状态=', parsed.seatStatus, ' 体型=', parsed.bodyType);
     // 更新离座状态 ref
     seatStatusRef.current = parsed.seatStatus;
     // 算法判断离座时：清空传感器数据 + 立即清零 3D 图
@@ -816,6 +853,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       }
     });
 
+    // 新板子 1372 字节 float32 数据帧 → 解析后存入 ref（不触发重渲染）
+    const airbagSub = emitter.addListener('onAirbagFullFrame', (event: {data?: string}) => {
+      if (typeof event.data !== 'string' || !event.data) return;
+      const parsed = parseAirbagFullFrame(event.data);
+      if (parsed) {
+        airbagFrameRef.current = parsed;
+        airbagFrameCountRef.current += 1;
+      }
+    });
+
     return () => {
       dataSub.remove();
       resultSub.remove();
@@ -823,12 +870,40 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       algoErrorSub.remove();
       modeSub.remove();
       nonStdSub.remove();
+      airbagSub.remove();
     };
   }, [handleAlgoResult, onAdaptiveChange]);
+
+  // 弹窗打开时按 250ms（约 4Hz）限流刷新显示，避免每帧重渲染卡顿。
+  // 同时每约 1 秒用帧计数实测一次真实帧率（收帧不受限流影响，全部照收）。
+  useEffect(() => {
+    if (!showAirbagData) return;
+    let lastCount = airbagFrameCountRef.current;
+    let lastTime = Date.now();
+    const timer = setInterval(() => {
+      setAirbagDataVersion(v => v + 1);
+      const now = Date.now();
+      const elapsed = now - lastTime;
+      if (elapsed >= 1000) {
+        const count = airbagFrameCountRef.current;
+        setAirbagFps(Math.round(((count - lastCount) * 1000) / elapsed));
+        lastCount = count;
+        lastTime = now;
+      }
+    }, 250);
+    return () => clearInterval(timer);
+  }, [showAirbagData]);
 
   // ─── 解构 algoState，避免大量代码修改 ────────────────────────
   const {seatStatus, algoSeatStatus, bodyShapeInfo, commandStates, rawCommand, livingStatus, bodyType, realtimeData} = algoState;
   const sensorData = sensorDataRef.current;
+
+  // 板子数据帧：随限流版本号重新读取 ref（弹窗打开时约每 250ms 刷新一次）
+  const airbagFrame = useMemo(
+    () => airbagFrameRef.current,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [airbagDataVersion, showAirbagData],
+  );
 
   // ─── 入座定时充气逻辑（cushionFL + cushionFR，每分钟充气3s，最多3次，离座重置）───
   const seatedInflateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1899,6 +1974,23 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         duration={6000}
         onHide={() => setSeatedInflateToast(false)}
       />
+
+      {/* ─── 右下角：板子数据帧按钮 ─── */}
+      <TouchableOpacity
+        style={styles.airbagDataFab}
+        onPress={() => setShowAirbagData(true)}
+        activeOpacity={0.8}>
+        <Text style={styles.airbagDataFabText}>板子数据</Text>
+      </TouchableOpacity>
+
+      {/* 板子数据帧弹窗（1376B / 343×float32） */}
+      <AirbagFullFrameModal
+        visible={showAirbagData}
+        onClose={() => setShowAirbagData(false)}
+        frame={airbagFrame}
+        frameCount={airbagFrameCountRef.current}
+        fps={airbagFps}
+      />
     </View>
   );
 };
@@ -2393,6 +2485,27 @@ const styles = StyleSheet.create({
     color: Colors.textGray,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     lineHeight: 12,
+  },
+  // ─── 右下角 板子数据 按钮 ───
+  airbagDataFab: {
+    position: 'absolute',
+    right: Spacing.xl,
+    bottom: Spacing.xl,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    zIndex: 20,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  airbagDataFabText: {
+    color: Colors.textWhite,
+    fontSize: FontSize.sm,
+    fontWeight: '600',
   },
   // ─── 错误提示 ───
   errorHint: {

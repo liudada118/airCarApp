@@ -8,77 +8,62 @@ data class FrameResult(
     val length: Int
 )
 
+/**
+ * 帧尾扫描解析器。
+ *
+ * 所有帧靠固定帧尾 AA 55 03 99 同步：把连续到达的字节累积起来，
+ * 一旦缓冲区末尾出现帧尾，就把帧尾之前的全部字节当作一帧数据输出。
+ * 这样不依赖固定帧长，能同时支持多种长度的帧：
+ *   - 1372 字节：新板子的 float32 数据帧（343 个 float32 + 帧尾）
+ *   - 144 字节：老压力垫帧（保留，新板子不会发）
+ *   - 51 字节：老气囊模式帧（保留）
+ */
 class FrameParser {
 
     private val delimiter = intArrayOf(0xAA, 0x55, 0x03, 0x99)
-    private val window = IntArray(4)
-    private var windowPos = 0
-    private var windowFilled = 0
-
-    private val expectedLength = 144
-    private var inFrame = false
     private var buf = ByteArray(4096)
     private var idx = 0
 
-    fun feed(b: Int): FrameResult? {
-        updateWindow(b)
+    /** 安全上限：长时间没出现帧尾时丢弃，避免缓冲区无限增长 */
+    private val maxLen = 1 shl 16 // 65536
 
-        if (inFrame) {
-            ensureCapacity()
-            buf[idx++] = b.toByte()
-            if (idx >= expectedLength) {
-                val data = buf.copyOf(idx)
-                val len = idx
-                idx = 0
-                inFrame = false
-                return FrameResult(
+    fun feed(b: Int): FrameResult? {
+        ensureCapacity()
+        buf[idx++] = b.toByte()
+
+        if (idx >= delimiter.size && tailMatches()) {
+            val dataLen = idx - delimiter.size
+            val result = if (dataLen > 0) {
+                val data = buf.copyOf(dataLen)
+                FrameResult(
                     csv = data.joinToString(",") { (it.toInt() and 0xFF).toString() },
-                    length = len
+                    length = dataLen
                 )
+            } else {
+                null // 帧尾紧挨帧尾（数据区为空）→ 忽略
             }
+            idx = 0
+            return result
         }
 
-        if (isDelimiterMatched()) {
-            if (inFrame) {
-                // 在帧内又遇到分隔符 → 当前帧被截断，输出已收集的数据（去掉尾部分隔符字节）
-                val actualLen = (idx - delimiter.size).coerceAtLeast(0)
-                if (actualLen > 0) {
-                    val data = buf.copyOf(actualLen)
-                    idx = 0
-                    inFrame = true  // 新帧开始
-                    return FrameResult(
-                        csv = data.joinToString(",") { (it.toInt() and 0xFF).toString() },
-                        length = actualLen
-                    )
-                }
-                idx = 0
-            }
-            inFrame = true
+        if (idx >= maxLen) {
+            // 迟迟没等到帧尾，判定为脏数据，丢弃重新对齐
+            idx = 0
         }
         return null
     }
 
-    private fun updateWindow(b: Int) {
-        window[windowPos] = b
-        windowPos = (windowPos + 1) % window.size
-        if (windowFilled < window.size) {
-            windowFilled++
-        }
-    }
-
-    private fun isDelimiterMatched(): Boolean {
-        if (windowFilled < window.size) return false
+    /** 检查缓冲区末尾 4 字节是否等于帧尾 */
+    private fun tailMatches(): Boolean {
         for (i in delimiter.indices) {
-            val pos = (windowPos + i) % window.size
-            if (window[pos] != delimiter[i]) return false
+            val pos = idx - delimiter.size + i
+            if ((buf[pos].toInt() and 0xFF) != delimiter[i]) return false
         }
         return true
     }
 
     private fun ensureCapacity() {
         if (idx < buf.size) return
-        val next = ByteArray(buf.size * 2)
-        System.arraycopy(buf, 0, next, 0, buf.size)
-        buf = next
+        buf = buf.copyOf(buf.size * 2)
     }
 }

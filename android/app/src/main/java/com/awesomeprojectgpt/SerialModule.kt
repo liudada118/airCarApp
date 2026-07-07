@@ -788,6 +788,13 @@ class SerialModule(
         val data = frameResult.csv
         val frameLen = frameResult.length
 
+        // 新板子：1372 字节 float32 数据帧（343 个 float32），算法已在单片机内完成，
+        // 这里不跑 Python，直接把原始字节透传给 JS 层解析展示。
+        if (frameLen == 1372) {
+            emitAirbagFullFrame(data)
+            return
+        }
+
         // 非 144 字节的帧都打印到回传面板（包括 51 字节模式帧、气囊回传等）
         if (frameLen != 144) {
             Log.w(logTag, "[NonStdFrame] length=$frameLen data=$data")
@@ -885,6 +892,15 @@ class SerialModule(
         reactContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit("onSerialMode", map)
+    }
+
+    /** 发送新板子 1372 字节 float32 数据帧的原始字节（CSV，0~255）到 JS 端 */
+    private fun emitAirbagFullFrame(data: String) {
+        val map = Arguments.createMap()
+        map.putString("data", data)
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onAirbagFullFrame", map)
     }
 
     /** 发送非标准帧数据到 JS 端 */
