@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1307.97 841.56">
+  <defs>
+    <style>
+      .cls-1 {
+        isolation: isolate;
+      }
+
+      .cls-2 {
+        fill: url(#_grad_69);
+        mix-blend-mode: hard-light;
+        opacity: .5;
+      }
+    </style>
+    <radialGradient id="_grad_69" data-name="grad 69" cx="1725.02" cy="3407.82" fx="1773.11" fy="3434.06" r="667.55" gradientTransform="translate(-1015.11 -1891.54) rotate(.03) scale(.99 .68) skewX(-.52)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#73e889"/>
+      <stop offset=".07" stop-color="#73df96"/>
+      <stop offset=".45" stop-color="#78aee1"/>
+      <stop offset=".63" stop-color="#7a9bff"/>
+      <stop offset=".66" stop-color="#7a9afa" stop-opacity=".95"/>
+      <stop offset=".72" stop-color="#7c98ec" stop-opacity=".83"/>
+      <stop offset=".8" stop-color="#7f96d7" stop-opacity=".63"/>
+      <stop offset=".89" stop-color="#8493b9" stop-opacity=".36"/>
+      <stop offset="1" stop-color="#898f94" stop-opacity=".01"/>
+      <stop offset="1" stop-color="#8a8f93" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g class="cls-1">
+    <g id="_layer_2" data-name="layer_2">
+      <g id="_layer_1-2" data-name="layer_1">
+        <polygon class="cls-2" points="1296.4 841.56 0 840.99 11.57 0 1307.97 .57 1296.4 841.56"/>
+      </g>
+    </g>
+  </g>
+</svg>

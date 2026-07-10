@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 770 453.06">
+  <defs>
+    <style>
+      .cls-1 {
+        isolation: isolate;
+      }
+
+      .cls-2 {
+        fill: url(#_未命名的渐变_48-5);
+      }
+
+      .cls-2, .cls-3, .cls-4, .cls-5, .cls-6, .cls-7, .cls-8, .cls-9, .cls-10, .cls-11, .cls-12, .cls-13, .cls-14, .cls-15, .cls-16, .cls-17, .cls-18, .cls-19, .cls-20, .cls-21, .cls-22, .cls-23, .cls-24, .cls-25 {
+        mix-blend-mode: hard-light;
+      }
+
+      .cls-3 {
+        fill: url(#_未命名的渐变_48-8);
+      }
+
+      .cls-4 {
+        fill: url(#_未命名的渐变_48-4);
+      }
+
+      .cls-5 {
+        fill: url(#_未命名的渐变_48-3);
+      }
+
+      .cls-6 {
+        fill: url(#_未命名的渐变_48-6);
+      }
+
+      .cls-7 {
+        fill: url(#_未命名的渐变_48-2);
+      }
+
+      .cls-8 {
+        fill: url(#_未命名的渐变_48-7);
+      }
+
+      .cls-9 {
+        fill: url(#_未命名的渐变_48-9);
+      }
+
+      .cls-10 {
+        fill: url(#_未命名的渐变_48);
+      }
+
+      .cls-11 {
+        fill: url(#_未命名的渐变_48-19);
+      }
+
+      .cls-12 {
+        fill: url(#_未命名的渐变_48-17);
+      }
+
+      .cls-13 {
+        fill: url(#_未命名的渐变_48-16);
+      }
+
+      .cls-14 {
+        fill: url(#_未命名的渐变_48-18);
+      }
+
+      .cls-15 {
+        fill: url(#_未命名的渐变_48-10);
+      }
+
+      .cls-16 {
+        fill: url(#_未命名的渐变_48-15);
+      }
+
+      .cls-17 {
+        fill: url(#_未命名的渐变_48-13);
+      }
+
+      .cls-18 {
+        fill: url(#_未命名的渐变_48-12);
+      }
+
+      .cls-19 {
+        fill: url(#_未命名的渐变_48-14);
+      }
+
+      .cls-20 {
+        fill: url(#_未命名的渐变_48-11);
+      }
+
+      .cls-21 {
+        fill: url(#_未命名的渐变_48-21);
+      }
+
+      .cls-22 {
+        fill: url(#_未命名的渐变_48-20);
+      }
+
+      .cls-23 {
+        fill: url(#_未命名的渐变_48-22);
+      }
+
+      .cls-24 {
+        fill: url(#_未命名的渐变_48-23);
+      }
+
+      .cls-25 {
+        fill: url(#_未命名的渐变_48-24);
+      }
+    </style>
+    <radialGradient id="_未命名的渐变_48" data-name="未命名的渐变 48" cx="-2078.56" cy="1097.26" fx="-2078.56" fy="1097.26" r="25.61" gradientTransform="translate(2036.77 1877.33) rotate(79.81)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#81e2af"/>
+      <stop offset=".13" stop-color="#81dbb7"/>
+      <stop offset=".34" stop-color="#81cace"/>
+      <stop offset=".6" stop-color="#81aef3"/>
+      <stop offset=".64" stop-color="#82aaf9"/>
+      <stop offset=".67" stop-color="#83aaf6" stop-opacity=".96"/>
+      <stop offset=".72" stop-color="#86aaee" stop-opacity=".86"/>
+      <stop offset=".79" stop-color="#8caae3" stop-opacity=".69"/>
+      <stop offset=".87" stop-color="#95aad2" stop-opacity=".46"/>
+      <stop offset=".95" stop-color="#9faabd" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#a5abb2" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="_未命名的渐变_48-2" data-name="未命名的渐变 48" cx="-2075.27" cy="1218.72" fx="-2075.27" fy="1218.72" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-3" data-name="未命名的渐变 48" cx="-2071.99" cy="1340.17" fx="-2071.99" fy="1340.17" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-4" data-name="未命名的渐变 48" cx="-2068.7" cy="1461.63" fx="-2068.7" fy="1461.63" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-5" data-name="未命名的渐变 48" cx="-2065.42" cy="1583.09" fx="-2065.42" fy="1583.09" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-6" data-name="未命名的渐变 48" cx="-1976.68" cy="1094.05" fx="-1976.68" fy="1094.05" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-7" data-name="未命名的渐变 48" cx="-1973.39" cy="1215.51" fx="-1973.39" fy="1215.51" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-8" data-name="未命名的渐变 48" cx="-1970.11" cy="1336.97" fx="-1970.11" fy="1336.97" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-9" data-name="未命名的渐变 48" cx="-1966.82" cy="1458.43" fx="-1966.82" fy="1458.43" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-10" data-name="未命名的渐变 48" cx="-1963.54" cy="1579.89" fx="-1963.54" fy="1579.89" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-11" data-name="未命名的渐变 48" cx="-1874.53" cy="1090.84" fx="-1874.53" fy="1090.84" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-12" data-name="未命名的渐变 48" cx="-1871.24" cy="1212.3" fx="-1871.24" fy="1212.3" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-13" data-name="未命名的渐变 48" cx="-1867.96" cy="1333.76" fx="-1867.96" fy="1333.76" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-14" data-name="未命名的渐变 48" cx="-1864.67" cy="1455.22" fx="-1864.67" fy="1455.22" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-15" data-name="未命名的渐变 48" cx="-1861.39" cy="1576.67" fx="-1861.39" fy="1576.67" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-16" data-name="未命名的渐变 48" cx="-1769.08" cy="1087.99" fx="-1769.08" fy="1087.99" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-17" data-name="未命名的渐变 48" cx="-1979.79" cy="978.88" fx="-1979.79" fy="978.88" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-18" data-name="未命名的渐变 48" cx="-1877.64" cy="975.67" fx="-1877.64" fy="975.67" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-19" data-name="未命名的渐变 48" cx="-1765.79" cy="1209.45" fx="-1765.79" fy="1209.45" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-20" data-name="未命名的渐变 48" cx="-1762.51" cy="1330.9" fx="-1762.51" fy="1330.9" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-21" data-name="未命名的渐变 48" cx="-1759.22" cy="1452.36" fx="-1759.22" fy="1452.36" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-22" data-name="未命名的渐变 48" cx="-1755.94" cy="1573.82" fx="-1755.94" fy="1573.82" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-23" data-name="未命名的渐变 48" cx="-1960.53" cy="1691.05" fx="-1960.53" fy="1691.05" r="25.61" xlink:href="#_未命名的渐变_48"/>
+    <radialGradient id="_未命名的渐变_48-24" data-name="未命名的渐变 48" cx="-1858.38" cy="1687.84" fx="-1858.38" fy="1687.84" r="25.61" xlink:href="#_未命名的渐变_48"/>
+  </defs>
+  <g class="cls-1">
+    <g id="_图层_2" data-name="图层_2">
+      <g id="_图层_1-2" data-name="图层_1">
+        <g>
+          <circle class="cls-10" cx="589.17" cy="25.62" r="25.61"/>
+          <circle class="cls-7" cx="470.21" cy="50.33" r="25.61"/>
+          <circle class="cls-5" cx="351.25" cy="75.05" r="25.61"/>
+          <circle class="cls-4" cx="232.28" cy="99.76" r="25.61"/>
+          <circle class="cls-2" cx="113.32" cy="124.48" r="25.61"/>
+          <circle class="cls-6" cx="610.35" cy="125.33" r="25.61"/>
+          <circle class="cls-8" cx="491.39" cy="150.04" r="25.61"/>
+          <circle class="cls-3" cx="372.42" cy="174.76" r="25.61"/>
+          <circle class="cls-9" cx="253.46" cy="199.47" r="25.61"/>
+          <circle class="cls-15" cx="134.5" cy="224.19" r="25.61"/>
+          <circle class="cls-20" cx="631.58" cy="225.3" r="25.61"/>
+          <circle class="cls-18" cx="512.61" cy="250.01" r="25.61"/>
+          <circle class="cls-17" cx="393.65" cy="274.73" r="25.61"/>
+          <circle class="cls-19" cx="274.69" cy="299.45" r="25.61"/>
+          <circle class="cls-16" cx="155.73" cy="324.16" r="25.61"/>
+          <circle class="cls-13" cx="653.04" cy="328.58" r="25.61"/>
+          <circle class="cls-12" cx="723.15" cy="101.89" r="25.61"/>
+          <circle class="cls-14" cx="744.38" cy="201.86" r="25.61"/>
+          <circle class="cls-11" cx="534.07" cy="353.3" r="25.61"/>
+          <circle class="cls-22" cx="415.11" cy="378.01" r="25.61"/>
+          <circle class="cls-21" cx="296.15" cy="402.73" r="25.61"/>
+          <circle class="cls-23" cx="177.19" cy="427.45" r="25.61"/>
+          <circle class="cls-24" cx="25.62" cy="246.81" r="25.61"/>
+          <circle class="cls-25" cx="46.85" cy="346.78" r="25.61"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

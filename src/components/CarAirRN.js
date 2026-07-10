@@ -23,7 +23,7 @@ const SEPARATION = 100;
 const POINT_SCALE = 0.005;
 const HIDE_THRESHOLD_RATIO = 0.3;
 const ENABLE_POINT_HIDE = true;
-const MODEL_ASSET = require('../../image/chair3.glb');
+const MODEL_ASSET = require('../assets/3D/carSeatModel.glb');
 const DEFAULT_SETTINGS = {
   gauss: 1.5,
   color: 325, // 色阶映射范围
@@ -908,7 +908,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     camDist: 300,   // 相机距离
     rootRx: 0.21,   // rootGroup X 旋转
     rootRy: -0.54,  // rootGroup Y 旋转
-    rootPx: 71,     // rootGroup X 位移
+    rootPx: 0,      // rootGroup X 位移(0=水平居中；旧值 71 会把座椅推偏)
     rootPy: 13,     // rootGroup Y 位移
     rootPz: -100,   // rootGroup Z 位移
     // pointGroup 整体旋转
@@ -916,9 +916,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     grpRy: DEFAULT_POINT_MAP_ROTATE.y,
     grpRz: DEFAULT_POINT_MAP_ROTATE.z,
     // 座椅模型自身参数
-    modelPx: 234,   // 模型 X 位移
-    modelPy: 6,     // 模型 Y 位移
-    modelPz: 431,   // 模型 Z 位移
+    modelPx: 0,     // 模型 X 位移(新模型起点，运行后用滑块微调)
+    modelPy: 0,     // 模型 Y 位移
+    modelPz: 0,     // 模型 Z 位移
     modelRx: 0,     // 模型 X 旋转
     modelRy: 1.57,  // 模型 Y 旋转
     modelRz: 0,     // 模型 Z 旋转
@@ -1087,9 +1087,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     const model = stateRef.current.model;
     if (model) {
       if (model._basePosition) {
-        model.position.x = model._basePosition.x + 234;
-        model.position.y = model._basePosition.y + 6;
-        model.position.z = model._basePosition.z + 431;
+        model.position.x = model._basePosition.x + 0;
+        model.position.y = model._basePosition.y + 0;
+        model.position.z = model._basePosition.z + 0;
       }
       model.rotation.set(0, 1.57, 0);
       if (model._baseScale) {
@@ -1099,7 +1099,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     }
     setViewParams(prev => ({
       ...prev,
-      modelPx: 234, modelPy: 6, modelPz: 431,
+      modelPx: 0, modelPy: 0, modelPz: 0,
       modelRx: 0, modelRy: 1.57, modelRz: 0,
       modelScale: 1,
     }));
@@ -1310,7 +1310,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     };
     rootGroup.rotation.x = controls.rotationX;
     rootGroup.rotation.y = controls.rotationY;
-    rootGroup.position.x = 71;
+    rootGroup.position.x = 0;   // 0=水平居中(旧值 71 会把座椅推到右边)
     rootGroup.position.y = 13;
     rootGroup.position.z = -100;
 
@@ -1329,9 +1329,11 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           model._basePosition = model.position.clone();
           model._baseScale = model.scale.x; // setScalar 后 xyz相同
           // 应用初始座椅模型参数
-          model.position.x = model._basePosition.x + 234;
-          model.position.y = model._basePosition.y + 6;
-          model.position.z = model._basePosition.z + 431;
+          // 新模型(carSeatModel.glb)已在 loadSeatModel 里自动居中到原点，
+          // 偏移先设 0，运行后用调试面板滑块(modelPx/Py/Pz)微调再填回这里。
+          model.position.x = model._basePosition.x + 0;
+          model.position.y = model._basePosition.y + 0;
+          model.position.z = model._basePosition.z + 0;
           model.rotation.set(0, 1.57, 0);
         }
         applyPointFitToModel(model, pointMeshes, DEFAULT_POINT_FIT_LAYOUT);

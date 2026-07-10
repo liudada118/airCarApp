@@ -14,10 +14,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import {LinearGradient} from 'expo-linear-gradient';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
-import {TopBar, SeatDiagram, ConnectionErrorModal, Toast} from '../components';
+import {TopBar, SeatCushion, VoiceBar, ConnectionErrorModal, Toast} from '../components';
 import IconFont from '../components/IconFont';
 import CarAirRN from '../components/CarAirRN';
+import SeatMatrix46, {PressureLegend} from '../components/SeatMatrix46';
 import AirbagFullFrameModal from '../components/AirbagFullFrameModal';
 import {parseAirbagFullFrame, AirbagFullFrame} from '../utils/airbagFullFrame';
 
@@ -28,6 +30,20 @@ const iconSetting = require('../assets/icons/icon-setting.png');
 const iconOnSeat = require('../assets/icons/icon-onSeat.png');
 const iconOutSeat = require('../assets/icons/icon-outSeat.png');
 const iconCustomAirbag = require('../assets/icons/icon-customAirbag.png');
+// 新 UI 图标(座椅状态 / 乘员识别)
+const iconSeated = require('../assets/images/icon/seated.png');
+const iconAway = require('../assets/images/icon/away.png');
+const iconOccupantPerson = require('../assets/images/icon/occupantPerson.png');
+const iconOccupantObject = require('../assets/images/icon/occupantObject.png');
+// 全屏背景图(空间感)
+const bgImage = require('../assets/seat/bg.png');
+// ── 线性渐变配色 ──
+const GRAD_BTN = ['#559BEA', '#2978CE'] as const;    // 开启 / 自定义气囊调节 选中
+const GRAD_TRACK = ['#29313D', '#313A47'] as const;  // 未选中开关 / 压力云图底色
+const GRAD_STATUS = ['#1B3450', '#1D63B0'] as const; // 座椅状态 / 乘员识别 选中
+const STATUS_BORDER = '#3897FF';                     // 座椅状态 / 乘员识别 选中外边框
+// 右栏内容组宽度:在座+离座 两个方块的总宽,乘员识别卡片也用它 → 左右对齐。改这个数=整组变宽/窄。
+const GROUP_W = 272;
 import type {
   SeatStatus,
   ConnectionStatus,
@@ -53,7 +69,7 @@ let hasTriedAutoConnect = false;
 // 注意：新帧目前只用于「板子数据帧」弹窗展示，暂未驱动主界面座椅/3D，
 // 因此主界面的在座/离座、气囊状态在接入新帧前会保持静止，属正常现象。
 // const USE_MOCK = Platform.OS !== 'android';
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 interface HomeScreenProps {
   onNavigateToCustomize: () => void;
@@ -412,31 +428,64 @@ function safeFixed(val: any, digits: number = 0): string {
   return val.toFixed(digits);
 }
 
-function matrixCellColor(val: number): string {
-  if (val <= 0) return '#1a1a2e';
-  const t = Math.min(val / 255, 1);
-  // 蓝 -> 青 -> 绿 -> 黄 -> 红
-  const stops = [
-    {p: 0.0, r: 0, g: 0, b: 80},
-    {p: 0.25, r: 0, g: 100, b: 200},
-    {p: 0.5, r: 0, g: 200, b: 100},
-    {p: 0.75, r: 220, g: 200, b: 0},
-    {p: 1.0, r: 255, g: 50, b: 20},
-  ];
-  let i = 0;
-  for (i = 0; i < stops.length - 1; i++) {
-    if (t <= stops[i + 1].p) break;
-  }
-  const s0 = stops[i];
-  const s1 = stops[Math.min(i + 1, stops.length - 1)];
-  const f = s1.p === s0.p ? 0 : (t - s0.p) / (s1.p - s0.p);
-  const r = Math.round(s0.r + (s1.r - s0.r) * f);
-  const g = Math.round(s0.g + (s1.g - s0.g) * f);
-  const b = Math.round(s0.b + (s1.b - s0.b) * f);
-  return `rgb(${r},${g},${b})`;
-}
-
 // ─── 组件 ────────────────────────────────────────────────────────────
+
+// ─── 右栏:座椅状态方块(自动识别，不可点) ─────────────────────────
+const StatusSquare: React.FC<{active: boolean; icon: any; label: string}> = ({active, icon, label}) => {
+  const inner = (
+    <>
+      <Image
+        source={icon}
+        style={[styles.statusIcon, {tintColor: active ? Colors.textWhite : Colors.textGray}]}
+        resizeMode="contain"
+      />
+      <Text style={[styles.statusLabel, active && styles.statusLabelActive]}>{label}</Text>
+    </>
+  );
+  return active ? (
+    <LinearGradient colors={GRAD_STATUS} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.statusSquare, styles.statusSquareActive]}>
+      {inner}
+    </LinearGradient>
+  ) : (
+    <View style={[styles.statusSquare, styles.statusSquareInactive]}>{inner}</View>
+  );
+};
+
+// ─── 右栏:乘员识别卡片(仅视觉选中，暂无功能) ─────────────────────
+const OccupantCard: React.FC<{
+  active: boolean;
+  icon: any;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+}> = ({active, icon, title, subtitle, onPress}) => {
+  const inner = (
+    <>
+      <View style={[styles.occupantRing, active && styles.occupantRingActive]}>
+        <Image
+          source={icon}
+          style={[styles.occupantIcon, {tintColor: active ? Colors.textWhite : Colors.textGray}]}
+          resizeMode="contain"
+        />
+      </View>
+      <View style={styles.occupantTextWrap}>
+        <Text style={[styles.occupantTitle, active && styles.occupantTitleActive]}>{title}</Text>
+        <Text style={[styles.occupantSubtitle, active && styles.occupantSubtitleActive]}>{subtitle}</Text>
+      </View>
+    </>
+  );
+  return (
+    <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.occupantTouch}>
+      {active ? (
+        <LinearGradient colors={GRAD_STATUS} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.occupantCard, styles.occupantCardActive]}>
+          {inner}
+        </LinearGradient>
+      ) : (
+        <View style={[styles.occupantCard, styles.occupantCardInactive]}>{inner}</View>
+      )}
+    </TouchableOpacity>
+  );
+};
 
 const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange, onBodyShapeChange, onRegisterResetSeatedInflate}) => {
   // 合并所有算法结果为单个状态对象，减少 setState 调用（8→1），大幅降低重渲染次数
@@ -497,6 +546,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showNonStdFrames, setShowNonStdFrames] = useState(false);
   const [showCommandModal, setShowCommandModal] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  // 乘员识别:仅页面选中态(暂无功能，后续接数据)
+  const [occupantType, setOccupantType] = useState<'person' | 'object' | null>(null);
+  // 右下角语音提示条(彩球+文字)。目前纯 UI:visible 控制显隐,text 写死。
+  // 【数据口子】以后有数据时:setVoiceBar({visible: true, text: 按数据生成的提示}) 即可弹出。
+  const [voiceBar, setVoiceBar] = useState<{visible: boolean; text: string}>({
+    visible: false,
+    text: '识别到当前路况颠簸，已启动两侧气囊支撑',
+  });
+  // 中间座椅 8 部位「点」的全局开/关(测试用;以后接数据)
+  const [dotsOn, setDotsOn] = useState(false);
+  // 发光底(蓝色渐变圈)的全局开/关,淡入淡出(测试用;以后接数据)
+  const [glowOn, setGlowOn] = useState(false);
 
   // ─── 新板子 1372 字节 float32 数据帧 ──────────────────────────
   // 每来一帧就存到 ref（不触发重渲染），弹窗打开时用定时器限流刷新显示
@@ -1041,6 +1102,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
   return (
     <View style={styles.container}>
+      {/* 全屏背景图(铺底，内容在其上层)。resizeMethod=resize 让 Android 解码时降采样，避免超大图 OOM */}
+      <Image
+        source={bgImage}
+        style={styles.bgImage}
+        resizeMode="cover"
+        resizeMethod="resize"
+      />
       <TopBar
         connectionStatus={connectionStatus}
         onLogoPress={() => setShowDebugPanel(prev => !prev)}
@@ -1056,169 +1124,111 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       />
 
       {/* ─── 3D 座椅模型（全屏背景） ─── */}
-      <View style={styles.fullscreen3DBackground}>
-        <CarAirRN
-          ref={carAirRef}
-          data={sensorData as unknown as never[]}
-          style={styles.carAir3D}
-          showDebugPanel={showDebugPanel}
-        />
-      </View>
-
       <View style={styles.content} pointerEvents="box-none">
         {/* ─── 左侧面板 ─── */}
-        <View style={styles.leftPanel}>
-          {/* 座椅状态 */}
+        <View style={styles.leftPanel} pointerEvents="box-none">
+          {/* 气囊自适应调节 */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Image source={iconSetting} style={styles.sectionIcon} resizeMode="contain" />
+              <Text style={styles.sectionTitle}>气囊自适应调节</Text>
+            </View>
+            {/* 外面大盒子 + 里面两个小盒子(开启/关闭) */}
+            <View style={styles.adaptiveToggle}>
+              <TouchableOpacity
+                style={styles.adaptiveToggleItem}
+                activeOpacity={0.8}
+                onPress={() => {
+                  onAdaptiveChange(true);
+                  SerialModule?.setAlgoMode?.(true);
+                }}>
+                <LinearGradient colors={adaptiveEnabled ? GRAD_BTN : GRAD_TRACK} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.toggleFill}>
+                  <Text style={adaptiveEnabled ? styles.toggleTextActive : styles.toggleTextIdle}>开启</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.adaptiveToggleItem}
+                activeOpacity={0.8}
+                onPress={() => {
+                  onAdaptiveChange(false);
+                  SerialModule?.setAlgoMode?.(false);
+                  SerialModule?.sendStopAllFrame?.().catch(() => {});
+                }}>
+                <LinearGradient colors={!adaptiveEnabled ? GRAD_BTN : GRAD_TRACK} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.toggleFill}>
+                  <Text style={!adaptiveEnabled ? styles.toggleTextActive : styles.toggleTextIdle}>关闭</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+            {/* 自定义气囊调节(逻辑不变，仅换样式) */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.customizeTouch}
+              onPress={() => {
+                SerialModule?.setAlgoMode?.(false);
+                SerialModule?.sendStopAllFrame?.().catch(() => {});
+                onNavigateToCustomize();
+              }}>
+              <LinearGradient colors={GRAD_BTN} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.customizeBtnNew}>
+                <Image source={iconCustomAirbag} style={styles.customizeIconNew} resizeMode="contain" />
+                <Text style={styles.customizeTextNew}>自定义气囊调节</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
+          {/* 实时压力云图(可旋转 3D，后续在此叠加压力点) */}
+          <View style={[styles.section, styles.pressureSection]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>实时压力云图</Text>
+            </View>
+            <LinearGradient colors={GRAD_TRACK} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.pressureBox}>
+              <CarAirRN
+                ref={carAirRef}
+                data={sensorData as unknown as never[]}
+                style={styles.carAir3D}
+                showDebugPanel={showDebugPanel}
+              />
+            </LinearGradient>
+          </View>
+        </View>
+
+        {/* 中间:固定座椅气垫图(不可交互) */}
+        <View style={styles.centerPanel} pointerEvents="none">
+          <SeatCushion style={styles.seatCushion} dotsOn={dotsOn} glowOn={glowOn} />
+        </View>
+
+        {/* ─── 右侧面板 ─── */}
+        <View style={styles.rightPanel} pointerEvents="box-none">
+          {/* 座椅状态(算法自动识别，不可点选) */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Image source={iconSitStatus} style={styles.sectionIcon} resizeMode="contain" />
               <Text style={styles.sectionTitle}>座椅状态</Text>
             </View>
-            <View style={styles.seatStatusRow}>
-              <View
-                style={[
-                  styles.seatStatusCard,
-                  seatStatus === 'seated' && styles.seatStatusCardActive,
-                ]}>
-                <Image
-                  source={iconOnSeat}
-                  style={[styles.seatIcon, {tintColor: seatStatus === 'seated' ? Colors.primary : Colors.textGray}]}
-                  resizeMode="contain"
-                />
-                <Text
-                  style={[
-                    styles.seatStatusText,
-                    seatStatus === 'seated' && styles.seatStatusTextActive,
-                  ]}>
-                  在座
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.seatStatusCard,
-                  seatStatus === 'away' && styles.seatStatusCardActive,
-                ]}>
-                <Image
-                  source={iconOutSeat}
-                  style={[styles.seatIcon, {tintColor: seatStatus === 'away' ? Colors.primary : Colors.textGray}]}
-                  resizeMode="contain"
-                />
-                <Text
-                  style={[
-                    styles.seatStatusText,
-                    seatStatus === 'away' && styles.seatStatusTextActive,
-                  ]}>
-                  离座
-                </Text>
-              </View>
+            <View style={styles.statusRow}>
+              <StatusSquare active={seatStatus === 'seated'} icon={iconSeated} label="在座" />
+              <StatusSquare active={seatStatus === 'away'} icon={iconAway} label="离座" />
             </View>
           </View>
 
-          {/* 气囊状态 */}
-          <View style={[styles.section, {flex: 1, marginBottom: 0}]}>
+          {/* 乘员识别(仅页面，暂无功能) */}
+          <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Image source={iconAirStatus} style={styles.sectionIcon} resizeMode="contain" />
-              <Text style={styles.sectionTitle}>气囊状态</Text>
+              <Text style={styles.sectionTitle}>乘员识别</Text>
             </View>
-            <View style={[styles.airbagStatusCard, {flex: 1}]}>
-              <Text style={styles.airbagStatusText}>
-                {adaptiveEnabled
-                  ? (bodyShapeInfo.body_shape
-                      ? `当前为\u201C${getBodyShapeLabel(bodyShapeInfo.body_shape)}\u201D体型自适应调节`
-                      : '当前为自适应调节状态')
-                  : '自适应调节已关闭'}
-              </Text>
-              <View style={styles.seatDiagramContainer}>
-                <SeatDiagram
-                  activeZone={null}
-                  scale={1.0}
-                  commandStates={commandStates}
-                />
-              </View>
-              <View style={styles.customizeBtnWrapper}>
-                <View style={styles.customizeDivider} />
-                <TouchableOpacity
-                  onPress={() => {
-                    // 进入自定义气囊调节前，关闭算法模式（停止透传算法指令）
-                    SerialModule?.setAlgoMode?.(false);
-                    // 发送全停保压帧，让所有气囊进入保压状态
-                    SerialModule?.sendStopAllFrame?.().then(() => {
-                      // console.log('[AlgoMode] 进入自定义气囊调节，已发送全停保压帧');
-                    }).catch((e: any) => {
-                      // console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
-                    });
-                    // console.log('[AlgoMode] 进入自定义气囊调节，算法模式已关闭');
-                    onNavigateToCustomize();
-                  }}
-                  activeOpacity={0.7}
-                  style={styles.customizeBtn}>
-                  <Image
-                    source={iconCustomAirbag}
-                    style={[styles.customizeLinkIcon, {tintColor: Colors.primary}]}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.customizeLink}>自定义气囊调节</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* ─── 右侧面板 ─── */}
-        <View style={styles.rightPanel} pointerEvents="box-none">
-          {/* 自适应调节开关 */}
-          <View style={styles.adaptiveSection}>
-            <View style={styles.sectionHeader}>
-              <Image source={iconSetting} style={styles.sectionIcon} resizeMode="contain" />
-              <Text style={styles.sectionTitle}>自适应调节</Text>
-            </View>
-            <View style={styles.toggleContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton,
-                  adaptiveEnabled && styles.toggleButtonActive,
-                ]}
-                onPress={() => {
-                  onAdaptiveChange(true);
-                  SerialModule?.setAlgoMode?.(true);
-                  // console.log('[AlgoMode] 自适应调节已开启');
-                }}
-                activeOpacity={0.7}>
-                <Text
-                  style={[
-                    styles.toggleText,
-                    adaptiveEnabled && styles.toggleTextActive,
-                  ]}>
-                  开启
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton,
-                  !adaptiveEnabled && styles.toggleButtonInactive,
-                ]}
-                onPress={() => {
-                  onAdaptiveChange(false);
-                  SerialModule?.setAlgoMode?.(false);
-                  // 发送全停保压帧
-                  SerialModule?.sendStopAllFrame?.().then(() => {
-                    // console.log('[AlgoMode] 自适应调节关闭，已发送全停保压帧');
-                  }).catch((e: any) => {
-                    // console.warn('[AlgoMode] 发送全停保压帧失败:', e?.message || e);
-                  });
-                  // console.log('[AlgoMode] 自适应调节已关闭');
-                }}
-                activeOpacity={0.7}>
-                <Text
-                  style={[
-                    styles.toggleText,
-                    !adaptiveEnabled && styles.toggleTextInactive,
-                  ]}>
-                  关闭
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <OccupantCard
+              active={occupantType === 'person'}
+              icon={iconOccupantPerson}
+              title="有人落座"
+              subtitle="有儿童或宠物入座"
+              onPress={() => setOccupantType(prev => (prev === 'person' ? null : 'person'))}
+            />
+            <OccupantCard
+              active={occupantType === 'object'}
+              icon={iconOccupantObject}
+              title="静物占位"
+              subtitle="座椅上有物品占用"
+              onPress={() => setOccupantType(prev => (prev === 'object' ? null : 'object'))}
+            />
           </View>
 
           {/* 悬浮按钮组 - 右上角（点击Logo切换显示） */}
@@ -1278,136 +1288,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 <Text style={styles.matrixModalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.matrixRow}>
-              {/* 靠背区域 */}
-              <View style={styles.matrixBlock}>
-                <Text style={styles.matrixLabel}>靠背 (10×6)</Text>
-                <View style={styles.matrixGrid}>
-                  {Array.from({length: 10}, (_, row) => (
-                    <View key={`back-r${row}`} style={styles.matrixGridRow}>
-                      {Array.from({length: 6}, (_, col) => {
-                        const idx = 12 + row * 6 + col;
-                        const val = sensorData[idx] || 0;
-                        return (
-                          <View
-                            key={`back-${row}-${col}`}
-                            style={[
-                              styles.matrixCell,
-                              {backgroundColor: matrixCellColor(val)},
-                            ]}>
-                            <Text style={styles.matrixCellText}>{val}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ))}
-                </View>
-              </View>
-              {/* 侧翼 */}
-              <View style={styles.matrixBlock}>
-                <Text style={styles.matrixLabel}>左/右翼 (3×2)</Text>
-                <View style={styles.matrixGrid}>
-                  {Array.from({length: 3}, (_, row) => (
-                    <View key={`wing-r${row}`} style={styles.matrixGridRow}>
-                      {Array.from({length: 2}, (_, col) => {
-                        const idx = 0 + row * 2 + col;
-                        const val = sensorData[idx] || 0;
-                        return (
-                          <View
-                            key={`lw-${row}-${col}`}
-                            style={[
-                              styles.matrixCell,
-                              {backgroundColor: matrixCellColor(val)},
-                            ]}>
-                            <Text style={styles.matrixCellText}>{val}</Text>
-                          </View>
-                        );
-                      })}
-                      <View style={styles.matrixCellSpacer} />
-                      {Array.from({length: 2}, (_, col) => {
-                        const idx = 6 + row * 2 + col;
-                        const val = sensorData[idx] || 0;
-                        return (
-                          <View
-                            key={`rw-${row}-${col}`}
-                            style={[
-                              styles.matrixCell,
-                              {backgroundColor: matrixCellColor(val)},
-                            ]}>
-                            <Text style={styles.matrixCellText}>{val}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ))}
-                </View>
-              </View>
+            {/* 46 点布局：主传感 6×6 + 左右翼各竖 5。
+                点位对应（哪个物理点落在哪格）待确认，这里 data 暂按顺序切片，仅用于验证布局。 */}
+            <View style={{flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap'}}>
+              <SeatMatrix46 title="坐垫" data={sensorData.slice(0, 46)} />
+              <SeatMatrix46 title="靠背" data={sensorData.slice(46, 92)} />
             </View>
-            <View style={[styles.matrixRow, {marginTop: 8}]}>
-              {/* 坐垫区域 */}
-              <View style={styles.matrixBlock}>
-                <Text style={styles.matrixLabel}>坐垫 (10×6)</Text>
-                <View style={styles.matrixGrid}>
-                  {Array.from({length: 10}, (_, row) => (
-                    <View key={`sit-r${row}`} style={styles.matrixGridRow}>
-                      {Array.from({length: 6}, (_, col) => {
-                        const idx = 84 + row * 6 + col;
-                        const val = sensorData[idx] || 0;
-                        return (
-                          <View
-                            key={`sit-${row}-${col}`}
-                            style={[
-                              styles.matrixCell,
-                              {backgroundColor: matrixCellColor(val)},
-                            ]}>
-                            <Text style={styles.matrixCellText}>{val}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ))}
-                </View>
-              </View>
-              {/* 坐垫侧翼 */}
-              <View style={styles.matrixBlock}>
-                <Text style={styles.matrixLabel}>左/右垫翼 (3×2)</Text>
-                <View style={styles.matrixGrid}>
-                  {Array.from({length: 3}, (_, row) => (
-                    <View key={`swing-r${row}`} style={styles.matrixGridRow}>
-                      {Array.from({length: 2}, (_, col) => {
-                        const idx = 72 + row * 2 + col;
-                        const val = sensorData[idx] || 0;
-                        return (
-                          <View
-                            key={`lsw-${row}-${col}`}
-                            style={[
-                              styles.matrixCell,
-                              {backgroundColor: matrixCellColor(val)},
-                            ]}>
-                            <Text style={styles.matrixCellText}>{val}</Text>
-                          </View>
-                        );
-                      })}
-                      <View style={styles.matrixCellSpacer} />
-                      {Array.from({length: 2}, (_, col) => {
-                        const idx = 78 + row * 2 + col;
-                        const val = sensorData[idx] || 0;
-                        return (
-                          <View
-                            key={`rsw-${row}-${col}`}
-                            style={[
-                              styles.matrixCell,
-                              {backgroundColor: matrixCellColor(val)},
-                            ]}>
-                            <Text style={styles.matrixCellText}>{val}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </View>
+            <PressureLegend />
           </View>
         </View>
       </Modal>
@@ -1975,12 +1862,39 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         onHide={() => setSeatedInflateToast(false)}
       />
 
+      {/* ─── 右下角:语音提示条(彩球+文字),纯 UI ─── */}
+      <VoiceBar visible={voiceBar.visible} text={voiceBar.text} style={styles.voiceBarWrap} />
+
       {/* ─── 右下角：板子数据帧按钮 ─── */}
       <TouchableOpacity
         style={styles.airbagDataFab}
         onPress={() => setShowAirbagData(true)}
         activeOpacity={0.8}>
         <Text style={styles.airbagDataFabText}>板子数据</Text>
+      </TouchableOpacity>
+
+      {/* 测试按钮:点一下弹出/收起语音条(以后换成按数据触发) */}
+      <TouchableOpacity
+        style={styles.voiceTestFab}
+        onPress={() => setVoiceBar(prev => ({...prev, visible: !prev.visible}))}
+        activeOpacity={0.8}>
+        <Text style={styles.airbagDataFabText}>{voiceBar.visible ? '收起球' : '弹球测试'}</Text>
+      </TouchableOpacity>
+
+      {/* 测试按钮:座椅点 开启(蓝)/关闭(白) 切换(以后换成按数据) */}
+      <TouchableOpacity
+        style={styles.dotsTestFab}
+        onPress={() => setDotsOn(prev => !prev)}
+        activeOpacity={0.8}>
+        <Text style={styles.airbagDataFabText}>{dotsOn ? '点关闭' : '点开启'}</Text>
+      </TouchableOpacity>
+
+      {/* 测试按钮:发光底 淡入/淡出(以后换成按数据) */}
+      <TouchableOpacity
+        style={styles.glowTestFab}
+        onPress={() => setGlowOn(prev => !prev)}
+        activeOpacity={0.8}>
+        <Text style={styles.airbagDataFabText}>{glowOn ? '光关闭' : '光开启'}</Text>
       </TouchableOpacity>
 
       {/* 板子数据帧弹窗（1376B / 343×float32） */}
@@ -2008,6 +1922,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 0,
   },
+  bgImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+  },
   content: {
     flex: 1,
     flexDirection: 'row',
@@ -2017,12 +1941,182 @@ const styles = StyleSheet.create({
   },
   // ─── 左侧面板 ───
   leftPanel: {
-    width: SCREEN_WIDTH * 0.30,
-    maxWidth: SCREEN_WIDTH * 0.30,
+    width: SCREEN_WIDTH * 0.27,
+    maxWidth: SCREEN_WIDTH * 0.27,
     flexShrink: 0,
     flexGrow: 0,
     paddingRight: Spacing.sm,
     paddingBottom: SCREEN_HEIGHT * 0.04,
+  },
+  // ─── 中间:固定座椅气垫图 ───
+  centerPanel: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seatCushion: {
+    height: '100%',
+  },
+  // ─── 气囊自适应调节:外面大盒子 + 里面两个小盒子 ───
+  adaptiveToggle: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    padding: 5,                         // 大盒子内边距
+    borderRadius: BorderRadius.lg,
+    backgroundColor: 'rgba(255,255,255,0.05)', // 大盒子底色
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    width: '74%',                       // 按图里长度,比压力云图窄
+    marginBottom: Spacing.md,
+  },
+  adaptiveToggleItem: {
+    flex: 1,
+  },
+  toggleFill: {
+    height: 40,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleFillInactive: {
+    backgroundColor: 'rgba(60, 60, 67, 0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  toggleTextIdle: {
+    fontSize: FontSize.md,
+    color: Colors.textGray,
+    fontWeight: '600',
+  },
+  // ─── 自定义气囊调节按钮(渐变) ───
+  customizeTouch: {
+    width: '74%',   // 和开启/关闭同宽
+  },
+  customizeBtnNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    height: 46,
+    borderRadius: BorderRadius.md,
+  },
+  customizeIconNew: {
+    width: 16,
+    height: 16,
+    tintColor: Colors.textWhite,
+  },
+  customizeTextNew: {
+    fontSize: FontSize.md,
+    color: Colors.textWhite,
+    fontWeight: '600',
+  },
+  // ─── 实时压力云图(3D) ───
+  pressureSection: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  pressureBox: {
+    flex: 1,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
+  },
+  // ─── 右栏:座椅状态方块 ───
+  statusRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    width: GROUP_W,          // 整组固定宽(= 在座+离座 总宽)
+    alignSelf: 'flex-start', // 左对齐(不居中)
+  },
+  statusSquare: {
+    flex: 1,                 // 两个平分 statusRow 宽度 → 各 (GROUP_W - gap)/2
+    aspectRatio: 1,          // 正方形(高=宽)
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  statusSquareActive: {
+    borderWidth: 1.5,
+    borderColor: STATUS_BORDER,
+  },
+  statusSquareInactive: {
+    backgroundColor: 'rgba(60, 60, 67, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  statusIcon: {
+    width: 40,
+    height: 40,
+  },
+  statusLabel: {
+    fontSize: FontSize.md,
+    color: Colors.textGray,
+    fontWeight: '600',
+  },
+  statusLabelActive: {
+    color: Colors.textWhite,
+  },
+  // ─── 右栏:乘员识别卡片 ───
+  occupantTouch: {
+    width: GROUP_W,          // 和 在座+离座 总宽一致 → 左右对齐
+    alignSelf: 'flex-start', // 左对齐
+    marginBottom: Spacing.md,
+  },
+  occupantCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.lg,   // 再厚一点(宽一点)
+    borderRadius: BorderRadius.lg,
+  },
+  occupantCardActive: {
+    borderWidth: 1.5,
+    borderColor: STATUS_BORDER,
+  },
+  occupantCardInactive: {
+    backgroundColor: 'rgba(60, 60, 67, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  occupantRing: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  occupantRingActive: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  occupantIcon: {
+    width: 24,
+    height: 24,
+  },
+  occupantTextWrap: {
+    flex: 1,
+  },
+  occupantTitle: {
+    fontSize: FontSize.md,
+    color: Colors.textLightGray,
+    fontWeight: '600',
+  },
+  occupantTitleActive: {
+    color: Colors.textWhite,
+  },
+  occupantSubtitle: {
+    fontSize: FontSize.xs,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  occupantSubtitleActive: {
+    color: 'rgba(255,255,255,0.85)',
   },
   leftPanelContent: {
     paddingBottom: Spacing.xxl,
@@ -2038,7 +2132,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: FontSize.md,
-    color: 'rgba(142, 142, 160, 0.9)',
+    color: '#B4C0CA',
     fontWeight: '500',
   },
   sectionIcon: {
@@ -2271,9 +2365,14 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '500',
   },
-  // ─── 右侧面板 ───
+  // ─── 右侧面板(稍窄) ───
   rightPanel: {
-    flex: 1,
+    width: SCREEN_WIDTH * 0.24,
+    maxWidth: SCREEN_WIDTH * 0.24,
+    flexShrink: 0,
+    flexGrow: 0,
+    paddingLeft: Spacing.sm,
+    paddingBottom: SCREEN_HEIGHT * 0.04,
   },
   adaptiveSection: {
     flexDirection: 'row',
@@ -2506,6 +2605,43 @@ const styles = StyleSheet.create({
     color: Colors.textWhite,
     fontSize: FontSize.sm,
     fontWeight: '600',
+  },
+  // ─── 语音提示条 + 测试按钮 ───
+  voiceBarWrap: {
+    position: 'absolute',
+    right: Spacing.xl,
+    bottom: 80,          // 在"板子数据"按钮上方
+    zIndex: 25,
+  },
+  voiceTestFab: {
+    position: 'absolute',
+    right: 130,          // "板子数据"左边
+    bottom: Spacing.xl,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    zIndex: 20,
+  },
+  dotsTestFab: {
+    position: 'absolute',
+    right: 224,          // 弹球测试再往左
+    bottom: Spacing.xl,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    zIndex: 20,
+  },
+  glowTestFab: {
+    position: 'absolute',
+    right: 318,          // "点开启"再往左
+    bottom: Spacing.xl,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    zIndex: 20,
   },
   // ─── 错误提示 ───
   errorHint: {

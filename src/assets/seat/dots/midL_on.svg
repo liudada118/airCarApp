@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 455.71 1060.83">
+  <defs><radialGradient id="dg" cx="0.5" cy="0.5" r="0.5" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#81e2af"/>
+      <stop offset=".13" stop-color="#81dbb7"/>
+      <stop offset=".34" stop-color="#81cace"/>
+      <stop offset=".6" stop-color="#81aef3"/>
+      <stop offset=".64" stop-color="#82aaf9"/>
+      <stop offset=".67" stop-color="#83aaf6" stop-opacity=".96"/>
+      <stop offset=".72" stop-color="#86aaee" stop-opacity=".86"/>
+      <stop offset=".79" stop-color="#8caae3" stop-opacity=".69"/>
+      <stop offset=".87" stop-color="#95aad2" stop-opacity=".46"/>
+      <stop offset=".95" stop-color="#9faabd" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#a5abb2" stop-opacity="0"/></radialGradient>
+    <style>
+      .cls-1 {
+        isolation: isolate;
+      }
+
+      .cls-2 {
+        fill: url(#dg);
+      }
+
+      .cls-2, .cls-3, .cls-4, .cls-5, .cls-6, .cls-7, .cls-8, .cls-9, .cls-10, .cls-11, .cls-12, .cls-13, .cls-14, .cls-15, .cls-16, .cls-17, .cls-18, .cls-19, .cls-20, .cls-21, .cls-22, .cls-23, .cls-24, .cls-25, .cls-26, .cls-27, .cls-28, .cls-29, .cls-30, .cls-31, .cls-32, .cls-33 {
+        mix-blend-mode: hard-light;
+      }
+
+      .cls-3 {
+        fill: url(#dg);
+      }
+
+      .cls-4 {
+        fill: url(#dg);
+      }
+
+      .cls-5 {
+        fill: url(#dg);
+      }
+
+      .cls-6 {
+        fill: url(#dg);
+      }
+
+      .cls-7 {
+        fill: url(#dg);
+      }
+
+      .cls-8 {
+        fill: url(#dg);
+      }
+
+      .cls-9 {
+        fill: url(#dg);
+      }
+
+      .cls-10 {
+        fill: url(#dg);
+      }
+
+      .cls-11 {
+        fill: url(#dg);
+      }
+
+      .cls-12 {
+        fill: url(#dg);
+      }
+
+      .cls-13 {
+        fill: url(#dg);
+      }
+
+      .cls-14 {
+        fill: url(#dg);
+      }
+
+      .cls-15 {
+        fill: url(#dg);
+      }
+
+      .cls-16 {
+        fill: url(#dg);
+      }
+
+      .cls-17 {
+        fill: url(#dg);
+      }
+
+      .cls-18 {
+        fill: url(#dg);
+      }
+
+      .cls-19 {
+        fill: url(#dg);
+      }
+
+      .cls-20 {
+        fill: url(#dg);
+      }
+
+      .cls-21 {
+        fill: url(#dg);
+      }
+
+      .cls-22 {
+        fill: url(#dg);
+      }
+
+      .cls-23 {
+        fill: url(#dg);
+      }
+
+      .cls-24 {
+        fill: url(#dg);
+      }
+
+      .cls-25 {
+        fill: url(#dg);
+      }
+
+      .cls-26 {
+        fill: url(#dg);
+      }
+
+      .cls-27 {
+        fill: url(#dg);
+      }
+
+      .cls-28 {
+        fill: url(#dg);
+      }
+
+      .cls-29 {
+        fill: url(#dg);
+      }
+
+      .cls-30 {
+        fill: url(#dg);
+      }
+
+      .cls-31 {
+        fill: url(#dg);
+      }
+
+      .cls-32 {
+        fill: url(#dg);
+      }
+
+      .cls-33 {
+        fill: url(#dg);
+      }
+    </style>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+  </defs>
+  <g class="cls-1">
+    <g id="_layer_2" data-name="layer_2">
+      <g id="_layer_1-2" data-name="layer_1">
+        <g>
+          <circle class="cls-10" cx="41.3" cy="300.29" r="26.42"/>
+          <circle class="cls-7" cx="56.18" cy="424.73" r="26.42"/>
+          <circle class="cls-5" cx="71.06" cy="549.17" r="26.42"/>
+          <circle class="cls-4" cx="85.94" cy="673.6" r="26.42"/>
+          <circle class="cls-2" cx="100.82" cy="798.04" r="26.42"/>
+          <circle class="cls-6" cx="115.69" cy="922.48" r="26.42"/>
+          <circle class="cls-8" cx="26.42" cy="175.85" r="26.42"/>
+          <circle class="cls-3" cx="145.83" cy="287.79" r="26.42"/>
+          <circle class="cls-9" cx="160.71" cy="412.23" r="26.42"/>
+          <circle class="cls-18" cx="175.59" cy="536.67" r="26.42"/>
+          <circle class="cls-23" cx="190.47" cy="661.1" r="26.42"/>
+          <circle class="cls-21" cx="205.35" cy="785.54" r="26.42"/>
+          <circle class="cls-20" cx="220.23" cy="909.98" r="26.42"/>
+          <circle class="cls-22" cx="235.1" cy="1034.42" r="26.42"/>
+          <circle class="cls-19" cx="116.07" cy="38.92" r="26.42"/>
+          <circle class="cls-16" cx="130.95" cy="163.36" r="26.42"/>
+          <circle class="cls-15" cx="250.36" cy="275.29" r="26.42"/>
+          <circle class="cls-17" cx="265.24" cy="399.73" r="26.42"/>
+          <circle class="cls-14" cx="280.12" cy="524.17" r="26.42"/>
+          <circle class="cls-29" cx="295" cy="648.6" r="26.42"/>
+          <circle class="cls-24" cx="309.88" cy="773.04" r="26.42"/>
+          <circle class="cls-30" cx="324.76" cy="897.48" r="26.42"/>
+          <circle class="cls-32" cx="339.64" cy="1021.92" r="26.42"/>
+          <circle class="cls-33" cx="220.6" cy="26.42" r="26.42"/>
+          <circle class="cls-27" cx="235.48" cy="150.86" r="26.42"/>
+          <circle class="cls-26" cx="354.89" cy="262.79" r="26.42"/>
+          <circle class="cls-31" cx="369.77" cy="387.23" r="26.42"/>
+          <circle class="cls-28" cx="384.65" cy="511.67" r="26.42"/>
+          <circle class="cls-25" cx="399.53" cy="636.11" r="26.42"/>
+          <circle class="cls-11" cx="414.41" cy="760.54" r="26.42"/>
+          <circle class="cls-13" cx="429.29" cy="884.98" r="26.42"/>
+          <circle class="cls-12" cx="340.01" cy="138.36" r="26.42"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

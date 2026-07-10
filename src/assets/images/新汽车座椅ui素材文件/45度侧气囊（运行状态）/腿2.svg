@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1121.57 626.18">
+  <defs>
+    <style>
+      .cls-1 {
+        isolation: isolate;
+      }
+
+      .cls-2 {
+        fill: url(#_未命名的渐变_69);
+        mix-blend-mode: hard-light;
+        opacity: .5;
+      }
+    </style>
+    <radialGradient id="_未命名的渐变_69" data-name="未命名的渐变 69" cx="1263.67" cy="1555.41" fx="1300.1" fy="1575.29" r="505.66" gradientTransform="translate(-782.13 -438.11) scale(1.06 .48)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#73e889"/>
+      <stop offset=".07" stop-color="#73df96"/>
+      <stop offset=".45" stop-color="#78aee1"/>
+      <stop offset=".63" stop-color="#7a9bff"/>
+      <stop offset=".66" stop-color="#7a9afa" stop-opacity=".95"/>
+      <stop offset=".72" stop-color="#7c98ec" stop-opacity=".83"/>
+      <stop offset=".8" stop-color="#7f96d7" stop-opacity=".63"/>
+      <stop offset=".89" stop-color="#8493b9" stop-opacity=".36"/>
+      <stop offset="1" stop-color="#898f94" stop-opacity=".01"/>
+      <stop offset="1" stop-color="#8a8f93" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g class="cls-1">
+    <g id="_图层_2" data-name="图层_2">
+      <g id="_图层_1-2" data-name="图层_1">
+        <rect class="cls-2" x="31.59" y="106.11" width="1058.4" height="413.97" transform="translate(-53.08 124.21) rotate(-12.07)"/>
+      </g>
+    </g>
+  </g>
+</svg>

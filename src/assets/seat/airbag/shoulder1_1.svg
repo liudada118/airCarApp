@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 773.05 488.42">
+  <defs>
+    <style>
+      .cls-1 {
+        isolation: isolate;
+      }
+
+      .cls-2 {
+        fill:#d5ecff;
+      }
+
+      .cls-2, .cls-3, .cls-4, .cls-5, .cls-6, .cls-7, .cls-8, .cls-9, .cls-10, .cls-11, .cls-12, .cls-13, .cls-14, .cls-15, .cls-16, .cls-17, .cls-18, .cls-19, .cls-20, .cls-21, .cls-22, .cls-23, .cls-24, .cls-25, .cls-26, .cls-27, .cls-28, .cls-29, .cls-30, .cls-31, .cls-32 {
+        mix-blend-mode: hard-light;
+      }
+
+      .cls-3 {
+        fill:#d5ecff;
+      }
+
+      .cls-4 {
+        fill:#d5ecff;
+      }
+
+      .cls-5 {
+        fill:#d5ecff;
+      }
+
+      .cls-6 {
+        fill:#d5ecff;
+      }
+
+      .cls-7 {
+        fill:#d5ecff;
+      }
+
+      .cls-8 {
+        fill:#d5ecff;
+      }
+
+      .cls-9 {
+        fill:#d5ecff;
+      }
+
+      .cls-10 {
+        fill:#d5ecff;
+      }
+
+      .cls-11 {
+        fill:#d5ecff;
+      }
+
+      .cls-12 {
+        fill:#d5ecff;
+      }
+
+      .cls-13 {
+        fill:#d5ecff;
+      }
+
+      .cls-14 {
+        fill:#d5ecff;
+      }
+
+      .cls-15 {
+        fill:#d5ecff;
+      }
+
+      .cls-16 {
+        fill:#d5ecff;
+      }
+
+      .cls-17 {
+        fill:#d5ecff;
+      }
+
+      .cls-18 {
+        fill:#d5ecff;
+      }
+
+      .cls-19 {
+        fill:#d5ecff;
+      }
+
+      .cls-20 {
+        fill:#d5ecff;
+      }
+
+      .cls-21 {
+        fill:#d5ecff;
+      }
+
+      .cls-22 {
+        fill:#d5ecff;
+      }
+
+      .cls-23 {
+        fill:#d5ecff;
+      }
+
+      .cls-24 {
+        fill:#d5ecff;
+      }
+
+      .cls-25 {
+        fill:#d5ecff;
+      }
+
+      .cls-26 {
+        fill:#d5ecff;
+      }
+
+      .cls-27 {
+        fill:#d5ecff;
+      }
+
+      .cls-28 {
+        fill:#d5ecff;
+      }
+
+      .cls-29 {
+        fill:#d5ecff;
+      }
+
+      .cls-30 {
+        fill:#d5ecff;
+      }
+
+      .cls-31 {
+        fill:#d5ecff;
+      }
+
+      .cls-32 {
+        fill:#d5ecff;
+      }
+    </style>
+    <radialGradient id="_grad_48" data-name="grad 48" cx="-4708.95" cy="5525.24" fx="-4708.95" fy="5525.24" r="25.61" gradientTransform="translate(6222.27 4639.39) rotate(89.02)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#81e2af"/>
+      <stop offset=".13" stop-color="#81dbb7"/>
+      <stop offset=".34" stop-color="#81cace"/>
+      <stop offset=".6" stop-color="#81aef3"/>
+      <stop offset=".64" stop-color="#82aaf9"/>
+      <stop offset=".67" stop-color="#83aaf6" stop-opacity=".96"/>
+      <stop offset=".72" stop-color="#86aaee" stop-opacity=".86"/>
+      <stop offset=".79" stop-color="#8caae3" stop-opacity=".69"/>
+      <stop offset=".87" stop-color="#95aad2" stop-opacity=".46"/>
+      <stop offset=".95" stop-color="#9faabd" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#a5abb2" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="_grad_48-2" data-name="grad 48" cx="-4705.66" cy="5646.7" fx="-4705.66" fy="5646.7" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-3" data-name="grad 48" cx="-4702.38" cy="5768.16" fx="-4702.38" fy="5768.16" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-4" data-name="grad 48" cx="-4699.09" cy="5889.62" fx="-4699.09" fy="5889.62" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-5" data-name="grad 48" cx="-4695.81" cy="6011.08" fx="-4695.81" fy="6011.08" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-6" data-name="grad 48" cx="-4607.07" cy="5522.04" fx="-4607.07" fy="5522.04" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-7" data-name="grad 48" cx="-4603.78" cy="5643.5" fx="-4603.78" fy="5643.5" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-8" data-name="grad 48" cx="-4600.5" cy="5764.96" fx="-4600.5" fy="5764.96" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-9" data-name="grad 48" cx="-4597.21" cy="5886.42" fx="-4597.21" fy="5886.42" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-10" data-name="grad 48" cx="-4593.93" cy="6007.87" fx="-4593.93" fy="6007.87" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-11" data-name="grad 48" cx="-4504.92" cy="5518.83" fx="-4504.92" fy="5518.83" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-12" data-name="grad 48" cx="-4501.63" cy="5640.29" fx="-4501.63" fy="5640.29" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-13" data-name="grad 48" cx="-4498.35" cy="5761.74" fx="-4498.35" fy="5761.74" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-14" data-name="grad 48" cx="-4495.06" cy="5883.2" fx="-4495.06" fy="5883.2" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-15" data-name="grad 48" cx="-4491.78" cy="6004.66" fx="-4491.78" fy="6004.66" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-16" data-name="grad 48" cx="-4399.46" cy="5515.97" fx="-4399.46" fy="5515.97" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-17" data-name="grad 48" cx="-4610.18" cy="5406.87" fx="-4610.18" fy="5406.87" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-18" data-name="grad 48" cx="-4508.03" cy="5403.66" fx="-4508.03" fy="5403.66" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-19" data-name="grad 48" cx="-4402.58" cy="5400.32" fx="-4402.58" fy="5400.32" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-20" data-name="grad 48" cx="-4396.18" cy="5637.43" fx="-4396.18" fy="5637.43" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-21" data-name="grad 48" cx="-4392.89" cy="5758.89" fx="-4392.89" fy="5758.89" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-22" data-name="grad 48" cx="-4389.61" cy="5880.35" fx="-4389.61" fy="5880.35" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-23" data-name="grad 48" cx="-4386.32" cy="6001.81" fx="-4386.32" fy="6001.81" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-24" data-name="grad 48" cx="-4293.04" cy="5519" fx="-4293.04" fy="5519" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-25" data-name="grad 48" cx="-4289.75" cy="5640.46" fx="-4289.75" fy="5640.46" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-26" data-name="grad 48" cx="-4286.47" cy="5761.92" fx="-4286.47" fy="5761.92" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-27" data-name="grad 48" cx="-4283.18" cy="5883.38" fx="-4283.18" fy="5883.38" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-28" data-name="grad 48" cx="-4279.9" cy="6004.83" fx="-4279.9" fy="6004.83" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-29" data-name="grad 48" cx="-4590.92" cy="6119.04" fx="-4590.92" fy="6119.04" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-30" data-name="grad 48" cx="-4488.77" cy="6115.83" fx="-4488.77" fy="6115.83" r="25.61" xlink:href="#_grad_48"/>
+    <radialGradient id="_grad_48-31" data-name="grad 48" cx="-4384.77" cy="6118.78" fx="-4384.77" fy="6118.78" r="25.61" xlink:href="#_grad_48"/>
+  </defs>
+  <g class="cls-1">
+    <g id="_layer_2" data-name="layer_2">
+      <g id="_layer_1-2" data-name="layer_1">
+        <g>
+          <circle class="cls-10" cx="617.3" cy="25.61" r="25.61"/>
+          <circle class="cls-7" cx="495.92" cy="30.97" r="25.61"/>
+          <circle class="cls-5" cx="374.53" cy="36.34" r="25.61"/>
+          <circle class="cls-4" cx="253.15" cy="41.7" r="25.61"/>
+          <circle class="cls-2" cx="131.76" cy="47.06" r="25.61"/>
+          <circle class="cls-6" cx="622.25" cy="127.43" r="25.61"/>
+          <circle class="cls-8" cx="500.86" cy="132.79" r="25.61"/>
+          <circle class="cls-3" cx="379.48" cy="138.15" r="25.61"/>
+          <circle class="cls-9" cx="258.09" cy="143.51" r="25.61"/>
+          <circle class="cls-17" cx="136.71" cy="148.87" r="25.61"/>
+          <circle class="cls-22" cx="627.21" cy="229.51" r="25.61"/>
+          <circle class="cls-20" cx="505.82" cy="234.87" r="25.61"/>
+          <circle class="cls-19" cx="384.44" cy="240.23" r="25.61"/>
+          <circle class="cls-21" cx="263.05" cy="245.59" r="25.61"/>
+          <circle class="cls-18" cx="141.67" cy="250.95" r="25.61"/>
+          <circle class="cls-15" cx="631.86" cy="334.89" r="25.61"/>
+          <circle class="cls-14" cx="737.35" cy="122.34" r="25.61"/>
+          <circle class="cls-16" cx="742.31" cy="224.42" r="25.61"/>
+          <circle class="cls-13" cx="747.44" cy="329.8" r="25.61"/>
+          <circle class="cls-28" cx="510.48" cy="340.25" r="25.61"/>
+          <circle class="cls-23" cx="389.09" cy="345.62" r="25.61"/>
+          <circle class="cls-29" cx="267.71" cy="350.98" r="25.61"/>
+          <circle class="cls-31" cx="146.32" cy="356.34" r="25.61"/>
+          <circle class="cls-32" cx="630.66" cy="441.36" r="25.61"/>
+          <circle class="cls-26" cx="509.27" cy="446.72" r="25.61"/>
+          <circle class="cls-25" cx="387.89" cy="452.08" r="25.61"/>
+          <circle class="cls-30" cx="266.5" cy="457.44" r="25.61"/>
+          <circle class="cls-27" cx="145.12" cy="462.8" r="25.61"/>
+          <circle class="cls-24" cx="25.61" cy="153.78" r="25.61"/>
+          <circle class="cls-11" cx="30.57" cy="255.86" r="25.61"/>
+          <circle class="cls-12" cx="29.39" cy="359.89" r="25.61"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

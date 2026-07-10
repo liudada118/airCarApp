@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1494.32 1758.12">
+  <defs>
+    <style>
+      .cls-1 {
+        isolation: isolate;
+      }
+
+      .cls-2 {
+        fill: url(#_未命名的渐变_77);
+        mix-blend-mode: hard-light;
+        opacity: .65;
+      }
+    </style>
+    <radialGradient id="_未命名的渐变_77" data-name="未命名的渐变 77" cx="747.16" cy="-552.83" fx="961.13" fy="-594.24" r="737.5" gradientTransform="translate(-7.71 1414.91) rotate(.5) scale(1 .98) skewX(-.31)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#81e2af"/>
+      <stop offset=".51" stop-color="#81b9e4"/>
+      <stop offset=".69" stop-color="#82aaf9"/>
+      <stop offset=".72" stop-color="#83aaf6" stop-opacity=".97"/>
+      <stop offset=".76" stop-color="#85aaf1" stop-opacity=".89"/>
+      <stop offset=".81" stop-color="#8aaae7" stop-opacity=".75"/>
+      <stop offset=".86" stop-color="#91aada" stop-opacity=".57"/>
+      <stop offset=".93" stop-color="#99aac9" stop-opacity=".33"/>
+      <stop offset=".99" stop-color="#a3aab5" stop-opacity=".04"/>
+      <stop offset="1" stop-color="#a5abb2" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g class="cls-1">
+    <g id="_图层_2" data-name="图层_2">
+      <g id="_图层_1-2" data-name="图层_1">
+        <path class="cls-2" d="M217.67,1758.12l1233.04-206.61s40.52-26.15,43.42-125.54c4.73-162.44-82.02-911.14-85.39-1103.68-3.2-183.06,12.44-322.28,12.44-322.28,0,0-651.25,240.37-1421.18,136.04,0,0,83.94,180.66,144.72,680.2,18.13,149.03,72.95,620.19,72.95,764.03v177.84Z"/>
+      </g>
+    </g>
+  </g>
+</svg>

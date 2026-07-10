@@ -8,8 +8,17 @@ const defaultConfig = getDefaultConfig(__dirname);
  * @type {import('@react-native/metro-config').MetroConfig}
  */
 const config = {
+  transformer: {
+    // 让 .svg 文件经 react-native-svg-transformer 变成可 import 的 React 组件
+    babelTransformerPath: require.resolve('react-native-svg-transformer'),
+  },
   resolver: {
-    assetExts: [...defaultConfig.resolver.assetExts, 'glb'],
+    // glb 仍作为二进制资源；svg 从 assetExts 移到 sourceExts(改由 transformer 处理)
+    assetExts: [
+      ...defaultConfig.resolver.assetExts.filter(ext => ext !== 'svg'),
+      'glb',
+    ],
+    sourceExts: [...defaultConfig.resolver.sourceExts, 'svg'],
   },
 };
 
