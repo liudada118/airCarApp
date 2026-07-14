@@ -57,6 +57,19 @@ const AIRBAG_ZONES: CustomAirbagZoneConfig[] = [
   {key: 'hipFirm', label: '臀部软硬度气囊', side: 'right'},
 ];
 
+/**
+ * 每个标签的竖直微调(单位 px):正数=往下移,负数=往上移,0=不动。
+ * 想把哪个标签往下调,就把对应这行的数字改成正数(比如 legRest: 24)。
+ * 只移动这一个标签,不影响其它。
+ */
+const LABEL_OFFSET_Y: Record<string, number> = {
+  shoulder: 0,   // 肩部气囊
+  lumbar: 100,     // 腰托气囊
+  legRest: 110,    // 腿托气囊
+  sideWing: 80,   // 侧翼气囊
+  hipFirm: 80,    // 臀部软硬度气囊
+};
+
 /** 气囊区域中文名 */
 const ZONE_LABELS: Record<string, string> = {
   shoulder: '肩部气囊',
@@ -729,15 +742,16 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             {/* 左侧标签（肩部、腰托、腿托） */}
             <View style={styles.leftLabels}>
               {leftZones.map(zone => (
-                <CustomAirbagLabel
-                  key={zone.key}
-                  zone={zone.key}
-                  label={zone.label}
-                  isActive={selectedZone === zone.key}
-                  onPress={handleSelectZone}
-                  lineDirection="left"
-                  cmdCount={cmdCounts[zone.key]}
-                />
+                <View key={zone.key} style={{transform: [{translateY: LABEL_OFFSET_Y[zone.key] || 0}]}}>
+                  <CustomAirbagLabel
+                    zone={zone.key}
+                    label={zone.label}
+                    isActive={selectedZone === zone.key}
+                    onPress={handleSelectZone}
+                    lineDirection="left"
+                    cmdCount={cmdCounts[zone.key]}
+                  />
+                </View>
               ))}
             </View>
 
@@ -749,15 +763,16 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             {/* 右侧标签（侧翼、臀部软硬度） */}
             <View style={styles.rightLabels}>
               {rightZones.map(zone => (
-                <CustomAirbagLabel
-                  key={zone.key}
-                  zone={zone.key}
-                  label={zone.label}
-                  isActive={selectedZone === zone.key}
-                  onPress={handleSelectZone}
-                  lineDirection="right"
-                  cmdCount={cmdCounts[zone.key]}
-                />
+                <View key={zone.key} style={{transform: [{translateY: LABEL_OFFSET_Y[zone.key] || 0}]}}>
+                  <CustomAirbagLabel
+                    zone={zone.key}
+                    label={zone.label}
+                    isActive={selectedZone === zone.key}
+                    onPress={handleSelectZone}
+                    lineDirection="right"
+                    cmdCount={cmdCounts[zone.key]}
+                  />
+                </View>
               ))}
             </View>
           </View>
