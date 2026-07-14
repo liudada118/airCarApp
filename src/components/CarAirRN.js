@@ -1260,7 +1260,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     };
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b0f16);
+    scene.background = new THREE.Color(0x2b333e); // 压力云图背景:纯色
 
     // ─── 网格背景（设计图还原） ───
     const gridHelper = new THREE.GridHelper(600, 30, 0x1a2030, 0x1a2030);

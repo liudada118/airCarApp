@@ -188,8 +188,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingLeft: 18,
     paddingRight: ORB * 0.5 + 12, // 右侧留出球的位置
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
   },
   barText: {
     color: '#FFFFFF',

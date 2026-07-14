@@ -558,6 +558,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [dotsOn, setDotsOn] = useState(false);
   // 发光底(蓝色渐变圈)的全局开/关,淡入淡出(测试用;以后接数据)
   const [glowOn, setGlowOn] = useState(false);
+  // 新功能:14 个「大涟漪点」的全局开/关(测试用;以后接数据)
+  const [bigDotsOn, setBigDotsOn] = useState(false);
 
   // ─── 新板子 1372 字节 float32 数据帧 ──────────────────────────
   // 每来一帧就存到 ref（不触发重渲染），弹窗打开时用定时器限流刷新显示
@@ -1130,7 +1132,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           {/* 气囊自适应调节 */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Image source={iconSetting} style={styles.sectionIcon} resizeMode="contain" />
+              {/* <Image source={iconSetting} style={styles.sectionIcon} resizeMode="contain" /> */}
               <Text style={styles.sectionTitle}>气囊自适应调节</Text>
             </View>
             {/* 外面大盒子 + 里面两个小盒子(开启/关闭) */}
@@ -1193,7 +1195,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
         {/* 中间:固定座椅气垫图(不可交互) */}
         <View style={styles.centerPanel} pointerEvents="none">
-          <SeatCushion style={styles.seatCushion} dotsOn={dotsOn} glowOn={glowOn} />
+          <SeatCushion style={styles.seatCushion} dotsOn={dotsOn} glowOn={glowOn} bigDotsOn={bigDotsOn} />
         </View>
 
         {/* ─── 右侧面板 ─── */}
@@ -1201,7 +1203,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           {/* 座椅状态(算法自动识别，不可点选) */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Image source={iconSitStatus} style={styles.sectionIcon} resizeMode="contain" />
+              {/* <Image source={iconSitStatus} style={styles.sectionIcon} resizeMode="contain" /> */}
               <Text style={styles.sectionTitle}>座椅状态</Text>
             </View>
             <View style={styles.statusRow}>
@@ -1897,6 +1899,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         <Text style={styles.airbagDataFabText}>{glowOn ? '光关闭' : '光开启'}</Text>
       </TouchableOpacity>
 
+      {/* 新功能测试按钮:14 个大涟漪点 开/关(以后换成按数据) */}
+      <TouchableOpacity
+        style={styles.bigDotsTestFab}
+        onPress={() => setBigDotsOn(prev => !prev)}
+        activeOpacity={0.8}>
+        <Text style={styles.airbagDataFabText}>{bigDotsOn ? '大点关闭' : '大点开启'}</Text>
+      </TouchableOpacity>
+
       {/* 板子数据帧弹窗（1376B / 343×float32） */}
       <AirbagFullFrameModal
         visible={showAirbagData}
@@ -1962,11 +1972,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.sm,
     padding: 5,                         // 大盒子内边距
-    borderRadius: BorderRadius.lg,
+    borderRadius: 13,                   // 圆角
     backgroundColor: 'rgba(255,255,255,0.05)', // 大盒子底色
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
-    width: '74%',                       // 按图里长度,比压力云图窄
+    width: '90%',                       // 加宽(和下面自定义按钮同宽)
     marginBottom: Spacing.md,
   },
   adaptiveToggleItem: {
@@ -1974,7 +1984,7 @@ const styles = StyleSheet.create({
   },
   toggleFill: {
     height: 40,
-    borderRadius: BorderRadius.md,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1990,7 +2000,7 @@ const styles = StyleSheet.create({
   },
   // ─── 自定义气囊调节按钮(渐变) ───
   customizeTouch: {
-    width: '74%',   // 和开启/关闭同宽
+    width: '90%',   // 和开启/关闭同宽
   },
   customizeBtnNew: {
     flexDirection: 'row',
@@ -2069,7 +2079,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.lg,   // 再厚一点(宽一点)
+    paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.lg,
   },
   occupantCardActive: {
@@ -2636,6 +2646,16 @@ const styles = StyleSheet.create({
   glowTestFab: {
     position: 'absolute',
     right: 318,          // "点开启"再往左
+    bottom: Spacing.xl,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: BorderRadius.round,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    zIndex: 20,
+  },
+  bigDotsTestFab: {
+    position: 'absolute',
+    right: 412,          // "光开启"再往左
     bottom: Spacing.xl,
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: BorderRadius.round,

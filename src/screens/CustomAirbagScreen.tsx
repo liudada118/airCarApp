@@ -12,6 +12,7 @@ import {
   Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {LinearGradient} from 'expo-linear-gradient';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
 import {
   TopBar,
@@ -21,6 +22,7 @@ import {
   ConfirmModal,
   SavingModal,
   Toast,
+  SeatFront,
 } from '../components';
 import IconFont from '../components/IconFont';
 
@@ -196,6 +198,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   });
   const [cmdLogs, setCmdLogs] = useState<CmdLog[]>([]);
   const [showLog, setShowLog] = useState(false);
+  // 正视座椅:点 开/关、发光 开/关(测试用;以后接数据)
+  const [dotsOn, setDotsOn] = useState(false);
+  const [glowOn, setGlowOn] = useState(false);
   const logIdRef = useRef(0);
   const logScrollRef = useRef<ScrollView>(null);
 
@@ -630,7 +635,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <TopBar connectionStatus={connectionStatus} />
+      <View style={styles.card}>
 
       <View style={styles.mainContent}>
         {/* 标题栏 */}
@@ -651,6 +656,23 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             )}
           </View>
           <View style={styles.titleRight}>
+            {/* 点/光 开关(测试用;以后接数据) */}
+            <TouchableOpacity
+              style={[styles.logToggle, dotsOn && styles.logToggleActive]}
+              onPress={() => setDotsOn(v => !v)}
+              activeOpacity={0.7}>
+              <Text style={[styles.logToggleText, dotsOn && styles.logToggleTextActive]}>
+                {dotsOn ? '点关闭' : '点开启'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.logToggle, glowOn && styles.logToggleActive]}
+              onPress={() => setGlowOn(v => !v)}
+              activeOpacity={0.7}>
+              <Text style={[styles.logToggleText, glowOn && styles.logToggleTextActive]}>
+                {glowOn ? '光关闭' : '光开启'}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.logToggle, showLog && styles.logToggleActive]}
               onPress={() => setShowLog(!showLog)}
@@ -719,14 +741,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
               ))}
             </View>
 
-            {/* 中间座椅图 */}
+            {/* 中间座椅图:正视座椅 + 点(开/关)+ 发光(淡入淡出) */}
             <View style={styles.seatContainer}>
-              <CustomSeatDiagram
-                activeZone={selectedZone}
-                scale={seatScale}
-                values={airbagValues}
-                commandStates={commandStates}
-              />
+              <SeatFront dotsOn={dotsOn} glowOn={glowOn} />
             </View>
 
             {/* 右侧标签（侧翼、臀部软硬度） */}
@@ -889,13 +906,17 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             activeOpacity={0.7}>
             <Text style={styles.restoreButtonText}>恢复默认</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSavePress}
-            activeOpacity={0.7}>
-            <Text style={styles.saveButtonText}>保存</Text>
+          <TouchableOpacity onPress={handleSavePress} activeOpacity={0.8}>
+            <LinearGradient
+              colors={['#559BEA', '#2978CE']}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 1}}
+              style={styles.saveButton}>
+              <Text style={styles.saveButtonText}>保存</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
+      </View>
       </View>
 
       {/* Toast */}
@@ -950,15 +971,22 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
 const styles = StyleSheet.create({
   container: {
+    // 透明背景 → 弹窗周围完全露出后面的首页;内容居中,四边留距
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  card: {
+    // 居中浮层卡片:四边都留出距离(改这两个数=弹窗大小)
+    width: '97%',
+    height: '82%',
+    backgroundColor: 'rgba(40, 44, 52, 0.98)',
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
   },
   mainContent: {
     flex: 1,
-    backgroundColor: 'rgba(60, 60, 67, 0.85)',
-    marginHorizontal: Spacing.xxl,
-    marginBottom: Spacing.lg,
-    borderRadius: BorderRadius.xl,
     padding: Spacing.xxl,
   },
   titleBar: {
@@ -1025,7 +1053,7 @@ const styles = StyleSheet.create({
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    borderRadius: BorderRadius.lg,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1091,8 +1119,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   adjustButtonsContainer: {
-    paddingRight: Spacing.xl,
+    marginRight: Spacing.xl,
     position: 'relative',
+    alignSelf: 'center',
   },
   leftLabels: {
     justifyContent: 'space-around',
@@ -1318,12 +1347,12 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: Colors.borderGray,
-    backgroundColor: Colors.transparent,
+    borderColor: '#606a76',
+    backgroundColor: '#4b5867',
   },
   restoreButtonText: {
     fontSize: FontSize.md,
-    color: Colors.textWhite,
+    color: '#b4c0ca',
     fontWeight: '500',
   },
   resetButton: {
@@ -1343,7 +1372,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xxxl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.buttonBlue,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveButtonText: {
     fontSize: FontSize.md,

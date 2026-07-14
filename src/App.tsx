@@ -170,9 +170,10 @@ const App: React.FC = () => {
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* HomeScreen 始终挂载，通过 opacity+zIndex 控制显隐，避免 GL 上下文被销毁 */}
+        {/* HomeScreen 始终挂载且始终可见:自定义弹窗打开时,首页作为背景从弹窗周围透出来。
+            非首页时不可交互(pointerEvents none),在弹窗下层(zIndex 0)。 */}
         <View
-          style={[styles.screenLayer, { opacity: isHome ? 1 : 0, zIndex: isHome ? 1 : 0 }]}
+          style={[styles.screenLayer, { opacity: 1, zIndex: isHome ? 1 : 0 }]}
           pointerEvents={isHome ? 'auto' : 'none'}
         >
           <HomeScreen

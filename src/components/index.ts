@@ -10,4 +10,5 @@ export { default as CustomAirbagLabel } from './CustomAirbagLabel';
 export { default as CustomSeatDiagram } from './CustomSeatDiagram';
 export { default as SeatCushion } from './SeatCushion';
 export { default as VoiceBar } from './VoiceBar';
+export { default as SeatFront } from './SeatFront';
 export { default as IconFont } from './IconFont';
