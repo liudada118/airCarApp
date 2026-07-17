@@ -1,7 +1,9 @@
 import React, {useCallback, useEffect, useMemo, useState, useRef} from 'react';
 import {
   Alert,
+  Animated,
   Dimensions,
+  Easing,
   Image,
   Modal,
   NativeEventEmitter,
@@ -484,6 +486,45 @@ const OccupantCard: React.FC<{
         <View style={[styles.occupantCard, styles.occupantCardInactive]}>{inner}</View>
       )}
     </TouchableOpacity>
+  );
+};
+
+// ─── 通用滑块式开关(点开启/关闭,蓝色滑块滑动过去)。宽度自适应父容器。─────────
+const SLIDE_PAD = 4; // 滑块与轨道边距
+const SlideToggle: React.FC<{
+  on: boolean;
+  onChange: (v: boolean) => void;
+  style?: any; // 轨道额外样式(主要用来指定宽度)
+}> = ({on, onChange, style}) => {
+  // 0 = 开启(滑块在左) / 1 = 关闭(滑块在右)
+  const slide = useRef(new Animated.Value(on ? 0 : 1)).current;
+  const [trackW, setTrackW] = useState(0);
+  useEffect(() => {
+    Animated.timing(slide, {
+      toValue: on ? 0 : 1,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [on, slide]);
+  const thumbW = trackW > 0 ? (trackW - SLIDE_PAD * 2) / 2 : 0; // 滑块宽=轨道一半
+  const translateX = slide.interpolate({inputRange: [0, 1], outputRange: [0, thumbW]});
+  return (
+    <View
+      style={[styles.slideTrack, style]}
+      onLayout={e => setTrackW(e.nativeEvent.layout.width)}>
+      {/* 蓝色滑块(滑动) */}
+      <Animated.View style={[styles.slideThumb, {width: thumbW, transform: [{translateX}]}]}>
+        <LinearGradient colors={GRAD_BTN} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.slideThumbFill} />
+      </Animated.View>
+      {/* 两个可点区域(文字固定,滑块从下面滑过) */}
+      <TouchableOpacity style={styles.slideHalf} activeOpacity={0.9} onPress={() => onChange(true)}>
+        <Text style={[styles.slideText, on && styles.slideTextActive]}>开启</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.slideHalf} activeOpacity={0.9} onPress={() => onChange(false)}>
+        <Text style={[styles.slideText, !on && styles.slideTextActive]}>关闭</Text>
+      </TouchableOpacity>
+    </View>
   );
 };
 
@@ -1135,32 +1176,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               {/* <Image source={iconSetting} style={styles.sectionIcon} resizeMode="contain" /> */}
               <Text style={styles.sectionTitle}>气囊自适应调节</Text>
             </View>
-            {/* 外面大盒子 + 里面两个小盒子(开启/关闭) */}
-            <View style={styles.adaptiveToggle}>
-              <TouchableOpacity
-                style={styles.adaptiveToggleItem}
-                activeOpacity={0.8}
-                onPress={() => {
-                  onAdaptiveChange(true);
-                  SerialModule?.setAlgoMode?.(true);
-                }}>
-                <LinearGradient colors={adaptiveEnabled ? GRAD_BTN : GRAD_TRACK} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.toggleFill}>
-                  <Text style={adaptiveEnabled ? styles.toggleTextActive : styles.toggleTextIdle}>开启</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.adaptiveToggleItem}
-                activeOpacity={0.8}
-                onPress={() => {
-                  onAdaptiveChange(false);
-                  SerialModule?.setAlgoMode?.(false);
+            {/* 滑块式开关(逻辑不变:开=启用算法, 关=停用并停帧) */}
+            <SlideToggle
+              on={adaptiveEnabled}
+              onChange={v => {
+                onAdaptiveChange(v);
+                SerialModule?.setAlgoMode?.(v);
+                if (!v) {
                   SerialModule?.sendStopAllFrame?.().catch(() => {});
-                }}>
-                <LinearGradient colors={!adaptiveEnabled ? GRAD_BTN : GRAD_TRACK} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.toggleFill}>
-                  <Text style={!adaptiveEnabled ? styles.toggleTextActive : styles.toggleTextIdle}>关闭</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+                }
+              }}
+              style={styles.adaptiveSlide}
+            />
             {/* 自定义气囊调节(逻辑不变，仅换样式) */}
             <TouchableOpacity
               activeOpacity={0.85}
@@ -1231,6 +1258,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               subtitle="座椅上有物品占用"
               onPress={() => setOccupantType(prev => (prev === 'object' ? null : 'object'))}
             />
+          </View>
+
+          {/* 座椅按摩调节(滑块式开关) */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>座椅按摩调节</Text>
+            </View>
+            {/* 座椅按摩调节:开启=大涟漪点扩散动画, 关闭=静止(即原「大点开启/关闭」) */}
+            <SlideToggle on={bigDotsOn} onChange={setBigDotsOn} />
           </View>
 
           {/* 悬浮按钮组 - 右上角（点击Logo切换显示） */}
@@ -1899,13 +1935,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         <Text style={styles.airbagDataFabText}>{glowOn ? '光关闭' : '光开启'}</Text>
       </TouchableOpacity>
 
-      {/* 新功能测试按钮:14 个大涟漪点 开/关(以后换成按数据) */}
-      <TouchableOpacity
-        style={styles.bigDotsTestFab}
-        onPress={() => setBigDotsOn(prev => !prev)}
-        activeOpacity={0.8}>
-        <Text style={styles.airbagDataFabText}>{bigDotsOn ? '大点关闭' : '大点开启'}</Text>
-      </TouchableOpacity>
 
       {/* 板子数据帧弹窗（1376B / 343×float32） */}
       <AirbagFullFrameModal
@@ -2127,6 +2156,50 @@ const styles = StyleSheet.create({
   },
   occupantSubtitleActive: {
     color: 'rgba(255,255,255,0.85)',
+  },
+  // ─── 座椅按摩调节:滑块式开关 ───
+  slideTrack: {
+    width: GROUP_W,               // 和座椅状态/乘员识别同宽
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    flexDirection: 'row',
+    alignSelf: 'flex-start',      // 左对齐
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  // 左栏「气囊自适应调节」滑块:和下面自定义按钮同宽,并与它拉开间距
+  adaptiveSlide: {
+    width: '90%',
+    marginBottom: Spacing.md,
+  },
+  slideThumb: {
+    position: 'absolute',
+    top: SLIDE_PAD,
+    left: SLIDE_PAD,
+    bottom: SLIDE_PAD,
+    // width 由组件动态设置(轨道一半)
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  slideThumbFill: {
+    flex: 1,
+    borderRadius: 10,
+  },
+  slideHalf: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slideText: {
+    fontSize: FontSize.md,
+    fontWeight: '600',
+    color: Colors.textGray,
+  },
+  slideTextActive: {
+    color: Colors.textWhite,
   },
   leftPanelContent: {
     paddingBottom: Spacing.xxl,
@@ -2646,16 +2719,6 @@ const styles = StyleSheet.create({
   glowTestFab: {
     position: 'absolute',
     right: 318,          // "点开启"再往左
-    bottom: Spacing.xl,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: BorderRadius.round,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    zIndex: 20,
-  },
-  bigDotsTestFab: {
-    position: 'absolute',
-    right: 412,          // "光开启"再往左
     bottom: Spacing.xl,
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: BorderRadius.round,
