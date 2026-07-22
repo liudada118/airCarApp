@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from './theme';
 import { HomeScreen, CustomAirbagScreen } from './screens';
 import { Toast } from './components';
-import type { ConnectionStatus, CustomAirbagValues, BodyShape } from './types';
+import type { ConnectionStatus, CustomAirbagValues, BodyShape, SeatStatus } from './types';
 import { DEFAULT_CUSTOM_AIRBAG_VALUES } from './types';
 
 /** AsyncStorage 缓存 key 前缀，按体型分类存储 */
@@ -49,6 +49,9 @@ const App: React.FC = () => {
   // 当前体型（由 HomeScreen 算法回传更新）
   const [currentBodyShape, setCurrentBodyShape] = useState<BodyShape>('');
   const currentBodyShapeRef = useRef<BodyShape>('');
+
+  // 在座状态（由 HomeScreen 上报）→ 传给自定义弹窗联动「点」显示
+  const [seatStatus, setSeatStatus] = useState<SeatStatus>('away');
 
   // 持久化的气囊设置值（按体型分类）
   const [savedAirbagValues, setSavedAirbagValues] = useState<CustomAirbagValues | null>(null);
@@ -147,6 +150,8 @@ const App: React.FC = () => {
     setSavedAirbagValues(values);
     savedAirbagValuesRef.current = values;
 
+    // 保存后气囊自适应默认「关闭」(算法处于自定义保持态)；需用户手动开启才发 [3,0,0]
+    setAdaptiveEnabled(false);
     setCurrentScreen('home');
     const shapeLabel = currentBodyShapeRef.current
       ? ({'瘦小': '轻盈型', '中等': '均衡型', '高大': '稳健型'}[currentBodyShapeRef.current] || currentBodyShapeRef.current)
@@ -184,6 +189,7 @@ const App: React.FC = () => {
             onConnectionStatusChange={setConnectionStatus}
             onBodyShapeChange={handleBodyShapeChange}
             onRegisterResetSeatedInflate={handleRegisterResetSeatedInflate}
+            onSeatStatusChange={setSeatStatus}
           />
           {/* 首页级别的 Toast（保存成功后显示） */}
           <Toast
@@ -204,6 +210,7 @@ const App: React.FC = () => {
             adaptiveEnabled={adaptiveEnabled}
             bodyShape={currentBodyShape}
             onManualAdjust={() => resetSeatedInflateRef.current?.()}
+            seatStatus={seatStatus}
           />
           </View>
         )}

@@ -11,6 +11,7 @@ import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.awesomeprojectgpt.chaquopy.PyHelloPackage
 import com.awesomeprojectgpt.serial.SerialEnumPackage
+import com.awesomeprojectgpt.airbag.AirbagPackage
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import expo.modules.ApplicationLifecycleDispatcher
@@ -27,6 +28,7 @@ class MainApplication : Application(), ReactApplication {
             // Packages that cannot be autolinked yet can be added manually here, for example:
             add(SerialEnumPackage())
             add(PyHelloPackage())
+            add(AirbagPackage())
           }
 
         override fun getJSMainModuleName(): String = "index"

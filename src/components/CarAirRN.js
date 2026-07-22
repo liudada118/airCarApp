@@ -2,6 +2,7 @@ import React, {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, 
 import {
   ActivityIndicator,
   Animated,
+  Modal,
   NativeModules,
   PanResponder,
   ScrollView,
@@ -22,15 +23,18 @@ import {addSide, lineInterpnew, jetWhite3} from '../../util/util';
 const SEPARATION = 100;
 const POINT_SCALE = 0.005;
 const HIDE_THRESHOLD_RATIO = 0.3;
-const ENABLE_POINT_HIDE = true;
+const ENABLE_POINT_HIDE = false; // 暂时关闭点隐藏(旧阈值对新数据量级太高会全隐藏),先让点云可见
+// 点抽稀:每隔 POINT_STRIDE 个点显示一个(矩形布局)。越大点越少。
+// 1=全部显示;2=每隔一个(约 1/4 点);3=更稀。不改变点阵范围/贴合位置。
+const POINT_STRIDE = 2;
 const MODEL_ASSET = require('../assets/3D/carSeatModel.glb');
 const DEFAULT_SETTINGS = {
-  gauss: 1.5,
-  color: 325, // 色阶映射范围
+  gauss: 1.0,        // 用户实机调定
+  color: 450,        // 色阶映射范围(用户实机调定)
   height: 0.3,
-  coherent: 1.3, // 第二层平滑（插值后）：轻度平滑，新值占 77%
-  rawSmooth: 1.5, // 第一层平滑（插值前）：轻度平滑，新值占 77%
-  deadZone: 0, // 死区阈值：0=不启用死区
+  coherent: 2.0,     // 第二层平滑(插值后):越小越跟手(9→2 加快响应)
+  rawSmooth: 1.5,    // 第一层平滑(插值前):越小越跟手(3→1.5 加快响应)
+  deadZone: 9,       // 死区阈值,用户实机调定
   zeroFrameThreshold: 10, // 全 0 帧检测：帧总和低于此值视为气囊动作干扰帧，直接跳过
 };
 // 数据更新频率：15Hz（匹配串口数据源）
@@ -43,58 +47,52 @@ const CAMERA_MAX_DISTANCE = 600;
 const IDLE_RENDER_FRAMES = 3;
 
 // ─── 点图贴合参数（根据 chair3.glb 几何分析精确计算） ─────────────────────
+// 注意：新网格(坐垫6×8/靠背7×8)长宽比与旧版(10×6)不同，这些贴合值是起点，
+// 需在 3D 视图右侧调节面板里拖滑块微调，然后「打印参数」把结果填回这里。
 const DEFAULT_POINT_FIT_LAYOUT = {
-  center: {position: [20, -58, 45], rotation: [2.96, 0, 0], sx: 5.5, sy: 5.2, sz: 5.2},
-  centersit: {position: [69, 38, -43], rotation: [1.32, 0, 0], sx: 5.1, sy: 1.9, sz: 3.3},
+  // 用户实机调定并固化(坐垫/靠背贴合座椅)
+  center: {position: [13, -61, -29], rotation: [3.28, 0, 0], sx: 5.7, sy: 4.6, sz: 3},
+  centersit: {position: [15, 2, 24], rotation: [2.07, 0, 0], sx: 5.7, sy: 0.7, sz: 4.9},
   leftsit: {position: [-28, -9, -30], rotation: [1.35, 0, -0.50], sx: 3.3, sy: 3.3, sz: 3.3},
   rightsit: {position: [64, -7, -10], rotation: [1.35, 0, 0.50], sx: 3.3, sy: 3.3, sz: 3.3},
 };
-const DEFAULT_POINT_SIZE = 2;  // 默认点大小
+const DEFAULT_POINT_SIZE = 3;  // 默认点大小
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
 const POINT_MAP_SCALE_DEFAULT = 1.8;
 
 // ─── 调节面板配置 ────────────────────────────────────────────────────────────
 const PANEL_WIDTH = 300;
-const ZONE_NAMES = ['center', 'centersit', 'leftsit', 'rightsit'];
+const ZONE_NAMES = ['center', 'centersit'];
 const ZONE_LABELS = {
   center: '坐垫',
   centersit: '靠背',
-  leftsit: '右侧翼',
-  rightsit: '左侧翼',
 };
 
-// ─── 插值配置（保持原有点数不变） ────────────────────────────────────────────
-const sitleftConfig = {sitnum1: 3, sitnum2: 2, sitInterp: 5, sitInterp1: 1, sitOrder: 3};
-const sitConfig = {sitnum1: 10, sitnum2: 6, sitInterp: 4, sitInterp1: 5, sitOrder: 3};
-const backConfig = {sitnum1: 3, sitnum2: 2, sitInterp: 16, sitInterp1: 12, sitOrder: 2};
-const sitConfigBack = {sitnum1: 10, sitnum2: 6, sitInterp: 9, sitInterp1: 6, sitOrder: 3};
+// ─── 新传感器数据规格 ──────────────────────────────────────────────────────
+// airbag_13Hz 算法输出：坐垫 6行×8列(48点) + 靠背 7行×8列(56点) = 104
+// 数据为「列优先」一维数组，喂给渲染器前转成「行优先」。
+const CUSHION_ROWS = 6, CUSHION_COLS = 8, CUSHION_LEN = 48;
+const BACKREST_ROWS = 7, BACKREST_COLS = 8, BACKREST_LEN = 56;
+const SENSOR_TOTAL = CUSHION_LEN + BACKREST_LEN; // 104
+
+// ─── 插值配置（按新几何：坐垫 6×8 / 靠背 7×8） ───────────────────────────────
+// lineInterpnew(ndata1, width=sitnum2=列数, height=sitnum1=行数)
+// interp 取值让插值后点数与旧版相近（约 40×35），保持点云密度观感一致。
+const cushionConfig = {sitnum1: CUSHION_ROWS, sitnum2: CUSHION_COLS, sitInterp: 7, sitInterp1: 4, sitOrder: 3};
+const backrestConfig = {sitnum1: BACKREST_ROWS, sitnum2: BACKREST_COLS, sitInterp: 6, sitInterp1: 4, sitOrder: 3};
 
 const allConfig = {
-  sit: {
-    dataConfig: sitConfig,
-    name: 'center',
+  cushion: {
+    dataConfig: cushionConfig,
+    name: 'center',   // 复用 DEFAULT_POINT_FIT_LAYOUT 的 center 贴合位置(坐垫)
     pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
-    flipRow: true,     // 座椅前后矩阵顺序翻转
+    flipRow: true,     // 座椅前后方向（发现前后反了改这里）
     flipHeight: false,
   },
-  necksit: {
-    dataConfig: backConfig,
-    name: 'leftsit',
-    pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
-    flipRow: false,
-    flipHeight: true,
-  },
-  backsit: {
-    dataConfig: backConfig,
-    name: 'rightsit',
-    pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
-    flipRow: false,
-    flipHeight: true,
-  },
-  sitsit: {
-    dataConfig: sitConfigBack,
-    name: 'centersit',
+  backrest: {
+    dataConfig: backrestConfig,
+    name: 'centersit', // 复用 centersit 贴合位置(靠背)
     pointConfig: {position: [0, 0, 0], rotation: [0, 0, 0]},
     flipRow: false,
     flipHeight: true,  // 靠背高度方向翻转
@@ -116,17 +114,15 @@ function addTotal(configs) {
   });
 }
 
-addTotal([sitleftConfig, backConfig, sitConfig, sitConfigBack]);
+addTotal([cushionConfig, backrestConfig]);
 
 function createSmoothBig() {
-  return {
-    left: new Array(sitleftConfig.total).fill(1),
-    right: new Array(sitleftConfig.total).fill(1),
-    center: new Array(sitConfig.total).fill(1),
-    leftsit: new Array(backConfig.total).fill(1),
-    rightsit: new Array(backConfig.total).fill(1),
-    centersit: new Array(sitConfigBack.total).fill(1),
-  };
+  const obj = {};
+  Object.keys(allConfig).forEach(key => {
+    const {name, dataConfig} = allConfig[key];
+    obj[name] = new Array(dataConfig.total).fill(1);
+  });
+  return obj;
 }
 
 function clamp(value, min, max) {
@@ -322,11 +318,11 @@ function getSharedCircleTexture(size = 32) {
 // ─── 点图数据处理 ────────────────────────────────────────────────────────────
 
 function normalizeSeatData(values) {
-  const normalized = new Array(144).fill(0);
+  const normalized = new Array(SENSOR_TOTAL).fill(0);
   if (!Array.isArray(values)) {
     return normalized;
   }
-  const limit = Math.min(values.length, 144);
+  const limit = Math.min(values.length, SENSOR_TOTAL);
   for (let i = 0; i < limit; i += 1) {
     const value = Number(values[i]);
     normalized[i] = Number.isFinite(value) ? value : 0;
@@ -334,49 +330,25 @@ function normalizeSeatData(values) {
   return normalized;
 }
 
+/** 列优先一维 → 行优先一维（渲染器/插值按行优先访问 ndata1[row*cols+col]） */
+function colMajorToRowMajor(arr, rows, cols) {
+  const out = new Array(rows * cols).fill(0);
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      const v = arr[r + c * rows]; // 列优先下标
+      out[r * cols + c] = Number.isFinite(v) ? v : 0;
+    }
+  }
+  return out;
+}
+
+/** 输入 ndata1 = [坐垫48(列优先6×8), 靠背56(列优先7×8)]，拆成两个区域的行优先网格 */
 function splitSeatData(ndata1) {
-  const left = ndata1.slice(0, 6);
-  const right = ndata1.slice(6, 12);
-  const center = ndata1.slice(12, 12 + 60);
-
-  const leftsit = ndata1.slice(72, 72 + 6);
-  const rightsit = ndata1.slice(72 + 6, 72 + 12);
-  const centersit = ndata1.slice(72 + 12, 72 + 12 + 60);
-
-  for (let i = 0; i < 1; i += 1) {
-    for (let j = 0; j < 2; j += 1) {
-      [leftsit[i * 2 + j], leftsit[(2 - i) * 2 + j]] = [
-        leftsit[(2 - i) * 2 + j],
-        leftsit[i * 2 + j],
-      ];
-    }
-  }
-
-  for (let i = 0; i < 1; i += 1) {
-    for (let j = 0; j < 2; j += 1) {
-      [rightsit[i * 2 + j], rightsit[(2 - i) * 2 + j]] = [
-        rightsit[(2 - i) * 2 + j],
-        rightsit[i * 2 + j],
-      ];
-    }
-  }
-
-  for (let i = 0; i < 5; i += 1) {
-    for (let j = 0; j < 6; j += 1) {
-      [centersit[i * 6 + j], centersit[(9 - i) * 6 + j]] = [
-        centersit[(9 - i) * 6 + j],
-        centersit[i * 6 + j],
-      ];
-    }
-  }
-
+  const cushionCol = ndata1.slice(0, CUSHION_LEN);
+  const backrestCol = ndata1.slice(CUSHION_LEN, CUSHION_LEN + BACKREST_LEN);
   return {
-    left: leftsit,
-    right: rightsit,
-    center: centersit,
-    leftsit: right,
-    rightsit: left,
-    centersit: center,
+    center: colMajorToRowMajor(cushionCol, CUSHION_ROWS, CUSHION_COLS),
+    centersit: colMajorToRowMajor(backrestCol, BACKREST_ROWS, BACKREST_COLS),
   };
 }
 
@@ -586,7 +558,9 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
       if (scales) {
         // 用平滑后的值判断隐藏，避免阈值附近反复闪烁
         const isHidden = ENABLE_POINT_HIDE && smoothBig[l] <= hideThreshold;
-        scales[j] = isHidden ? 0 : 1;
+        // 抽稀:每隔 POINT_STRIDE 显示一个点(矩形布局,减少点数,不改变贴合)
+        const thinned = POINT_STRIDE > 1 && (ix % POINT_STRIDE !== 0 || iy % POINT_STRIDE !== 0);
+        scales[j] = isHidden || thinned ? 0 : 1;
       }
 
       const rgb = jetWhite3(0, color, smoothBig[l]);
@@ -794,9 +768,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     zeroBaseline() {
       const fs = stateRef.current;
       const currentData = dataRef.current;
-      if (Array.isArray(currentData) && currentData.length >= 144) {
+      if (Array.isArray(currentData) && currentData.length >= SENSOR_TOTAL) {
         const normalized = normalizeSeatData(currentData);
-        fs.baseline = normalized.slice(0, 144);
+        fs.baseline = normalized.slice(0, SENSOR_TOTAL);
         // 重置平滑缓冲区，避免旧数据残留
         fs.rawSmoothInited = false;
         fs.dirty = true;
@@ -906,8 +880,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
   // 整体视角参数
   const [viewParams, setViewParams] = useState({
     camDist: 300,   // 相机距离
-    rootRx: 0.21,   // rootGroup X 旋转
-    rootRy: -0.54,  // rootGroup Y 旋转
+    rootRx: 0.323,  // rootGroup X 旋转(用户实机调定的默认加载朝向)
+    rootRy: -2.728, // rootGroup Y 旋转
     rootPx: 0,      // rootGroup X 位移(0=水平居中；旧值 71 会把座椅推偏)
     rootPy: 13,     // rootGroup Y 位移
     rootPz: -100,   // rootGroup Z 位移
@@ -916,7 +890,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     grpRy: DEFAULT_POINT_MAP_ROTATE.y,
     grpRz: DEFAULT_POINT_MAP_ROTATE.z,
     // 座椅模型自身参数
-    modelPx: 0,     // 模型 X 位移(新模型起点，运行后用滑块微调)
+    modelPx: 3,     // 模型 X 位移(用户实机调定)
     modelPy: 0,     // 模型 Y 位移
     modelPz: 0,     // 模型 Z 位移
     modelRx: 0,     // 模型 X 旋转
@@ -1121,7 +1095,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       rotation: [viewParams.modelRx, viewParams.modelRy, viewParams.modelRz],
       scale: viewParams.modelScale,
     };
-    // console.log('[CarAirRN] 当前参数:', JSON.stringify(output, null, 2));
+    console.log('[CarAirRN] 当前参数:', JSON.stringify(output, null, 2));
   }, [layout, viewParams]);
 
   // 手势响应器：单指旋转 + 双指缩放
@@ -1299,8 +1273,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     const workBuffers = createWorkBuffers();
 
     const controls = {
-      rotationX: 0.21,
-      rotationY: -0.54,
+      rotationX: 0.323,   // 用户实机调定的默认加载朝向
+      rotationY: -2.728,
       distance: camera.position.z,
       lastX: 0,
       lastY: 0,
@@ -1331,7 +1305,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           // 应用初始座椅模型参数
           // 新模型(carSeatModel.glb)已在 loadSeatModel 里自动居中到原点，
           // 偏移先设 0，运行后用调试面板滑块(modelPx/Py/Pz)微调再填回这里。
-          model.position.x = model._basePosition.x + 0;
+          model.position.x = model._basePosition.x + 3;
           model.position.y = model._basePosition.y + 0;
           model.position.z = model._basePosition.z + 0;
           model.rotation.set(0, 1.57, 0);
@@ -1351,7 +1325,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       });
 
     // 第一层平滑缓冲区：原始 144 字节数据的帧间混合
-    const rawSmoothBuf = new Float32Array(144);
+    const rawSmoothBuf = new Float32Array(SENSOR_TOTAL);
     let rawSmoothInited = false;
 
     stateRef.current = {
@@ -1415,7 +1389,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
 
           // 清零：减去基线预压力
           if (frameState.baseline) {
-            for (let bi = 0; bi < 144; bi++) {
+            for (let bi = 0; bi < SENSOR_TOTAL; bi++) {
               seatData[bi] = Math.max(0, seatData[bi] - frameState.baseline[bi]);
             }
           }
@@ -1424,7 +1398,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           const _dynSettings = pointSettingsRef.current;
           const zeroThreshold = _dynSettings.zeroFrameThreshold || 10;
           let frameSum = 0;
-          for (let zi = 0; zi < 144; zi++) {
+          for (let zi = 0; zi < SENSOR_TOTAL; zi++) {
             frameSum += seatData[zi];
           }
           const isZeroFrame = frameSum < zeroThreshold;
@@ -1457,12 +1431,12 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           const rawAlpha = _dynSettings.rawSmooth || 1;
           if (!frameState.rawSmoothInited) {
             // 第一帧直接拷贝
-            for (let ri = 0; ri < 144; ri++) {
+            for (let ri = 0; ri < SENSOR_TOTAL; ri++) {
               rawBuf[ri] = seatData[ri];
             }
             frameState.rawSmoothInited = true;
           } else {
-            for (let ri = 0; ri < 144; ri++) {
+            for (let ri = 0; ri < SENSOR_TOTAL; ri++) {
               rawBuf[ri] = rawBuf[ri] + (seatData[ri] - rawBuf[ri]) / rawAlpha;
             }
           }
@@ -1537,14 +1511,16 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       </TouchableOpacity>
       )}
 
-      {/* 右侧调节面板 */}
-      {showDebugPanel && (
-      <Animated.View
-        style={[
-          styles.panel,
-          {transform: [{translateX: panelAnim}]},
-        ]}
-        pointerEvents={panelVisible ? 'auto' : 'none'}>
+      {/* 调节面板：用 Modal 渲染到屏幕根层，贴「屏幕」最右边（不再被压力云图框裁剪） */}
+      <Modal
+        visible={showDebugPanel && panelVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={togglePanel}>
+        <View style={styles.panelModalRoot}>
+          {/* 左侧透明遮罩：点一下关闭面板 */}
+          <TouchableOpacity style={styles.panelBackdrop} activeOpacity={1} onPress={togglePanel} />
+          <View style={styles.panelScreenRight}>
         <ScrollView
           style={styles.panelScroll}
           showsVerticalScrollIndicator={false}
@@ -1566,9 +1542,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
                 } else {
                   const fs = stateRef.current;
                   const currentData = dataRef.current;
-                  if (Array.isArray(currentData) && currentData.length >= 144) {
+                  if (Array.isArray(currentData) && currentData.length >= SENSOR_TOTAL) {
                     const normalized = normalizeSeatData(currentData);
-                    fs.baseline = normalized.slice(0, 144);
+                    fs.baseline = normalized.slice(0, SENSOR_TOTAL);
                     fs.rawSmoothInited = false;
                     fs.dirty = true;
                     setBaselineActive(true);
@@ -1901,8 +1877,9 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           </View>
 
         </ScrollView>
-      </Animated.View>
-      )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Loading */}
       {loading ? (
@@ -1952,17 +1929,19 @@ const styles = StyleSheet.create({
   },
 
   // ─── 调节面板 ──────────────────────────────────────────────────────
-  panel: {
-    position: 'absolute',
-    right: 0,
-    top: 80,
-    bottom: 0,
+  // Modal 里的布局：左侧透明遮罩(点击关闭) + 右侧面板贴屏幕最右
+  panelModalRoot: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  panelBackdrop: {
+    flex: 1,
+  },
+  panelScreenRight: {
     width: PANEL_WIDTH,
-    backgroundColor: 'rgba(10, 16, 28, 0.95)',
+    backgroundColor: 'rgba(10, 16, 28, 0.98)',
     borderLeftWidth: 1,
     borderLeftColor: '#1a3050',
-    borderTopLeftRadius: 12,
-    zIndex: 10,
   },
   panelScroll: {
     flex: 1,

@@ -35,6 +35,7 @@ import type {
   ModalType,
   ConnectionStatus,
   BodyShape,
+  SeatStatus,
   AirbagCommandStates,
 } from '../types';
 import {DEFAULT_CUSTOM_AIRBAG_VALUES, ALL_CUSTOM_AIRBAG_ZONES, parseAirbagCommand, DEFAULT_AIRBAG_COMMAND_STATES} from '../types';
@@ -92,6 +93,15 @@ const MAX_VALUE = 3;
 const MIN_VALUE = -3;
 const MAX_LOG_LINES = 50;
 
+/** 气囊区域 → 算法 frontCmd 的 partCmd 编号（1肩/2侧翼/3腰托/4臀/5腿托） */
+const ZONE_TO_PART: Record<string, number> = {
+  shoulder: 1,
+  sideWing: 2,
+  lumbar: 3,
+  hipFirm: 4,
+  legRest: 5,
+};
+
 /** 根据气囊区域获取锁定持续时间（毫秒）：腰部和臀部 3秒，其他 2秒 */
 function getLockDuration(zone: string): number {
   if (zone === 'lumbar' || zone === 'hipFirm') {
@@ -117,6 +127,8 @@ interface CustomAirbagScreenProps {
   bodyShape?: BodyShape;
   /** 手动调节气囊时的回调，用于重置入座定时充气 */
   onManualAdjust?: () => void;
+  /** 在座/离座状态（由 HomeScreen 算法上报，App 转发）→ 联动「点」显示 */
+  seatStatus?: SeatStatus;
 }
 
 const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
@@ -126,6 +138,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   adaptiveEnabled = true,
   bodyShape = '',
   onManualAdjust,
+  seatStatus = 'away',
 }) => {
   /** 根据体型获取存储 key */
   const storageKey = bodyShape ? `${ASYNC_STORAGE_KEY_PREFIX}${bodyShape}` : LEGACY_ASYNC_STORAGE_KEY;
@@ -211,9 +224,13 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   });
   const [cmdLogs, setCmdLogs] = useState<CmdLog[]>([]);
   const [showLog, setShowLog] = useState(false);
-  // 正视座椅:点 开/关、发光 开/关(测试用;以后接数据)
+  // 正视座椅:点 开/关、发光 开/关(接在座状态:在座亮/离座灭;测试按钮仍可手动覆盖)
   const [dotsOn, setDotsOn] = useState(false);
   const [glowOn, setGlowOn] = useState(false);
+  // 在座 → 点亮「点」，离座 → 关闭（与首页联动，仅点、不联动光）
+  useEffect(() => {
+    setDotsOn(seatStatus === 'seated');
+  }, [seatStatus]);
   const logIdRef = useRef(0);
   const logScrollRef = useRef<ScrollView>(null);
 
@@ -423,18 +440,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         useNativeDriver: false,
       }).start();
 
-      // duration 后发送保压（stop）指令并解锁
+      // duration 后仅解锁（frontCmd 模式下动作时长由算法管理，不需手动发保压）
       lockTimerRef.current = setTimeout(() => {
-        const targetZone = lastCmdZoneRef.current;
-        if (targetZone) {
-          sendAirbagCmd(targetZone, 'stop');
-        }
         setIsLocked(false);
         lockTimerRef.current = null;
         lastCmdZoneRef.current = null;
       }, duration);
     },
-    [sendAirbagCmd, lockProgressAnim],
+    [lockProgressAnim],
   );
 
   // 选择气囊区域
@@ -463,13 +476,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       return {...prev, [selectedZone]: newVal};
     });
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] + 1}));
-    // 发送充气指令
-    sendAirbagCmd(selectedZone, 'inflate');
-    // 启动锁定
+    // 发送 frontCmd 充气脉冲 [0, 部位, +1]（算法折进 frame[55] 下发；Kotlin 一帧后自动回零）
+    sm?.pulseFrontCmd?.(0, ZONE_TO_PART[selectedZone] ?? 0, 1).catch(() => {});
+    addLog(selectedZone, 'inflate', `frontCmd[0,${ZONE_TO_PART[selectedZone]},1]`, 0);
+    // 启动锁定（视觉进度，动作时长由算法管理）
     startLockAndHoldPressure(selectedZone);
     // 重置入座定时充气
     onManualAdjust?.();
-  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure, onManualAdjust]);
+  }, [selectedZone, isLocked, cmdCounts, addLog, startLockAndHoldPressure, onManualAdjust]);
 
   // 减少气囊值（放气）
   const handleDecrease = useCallback(() => {
@@ -486,13 +500,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       return {...prev, [selectedZone]: newVal};
     });
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] - 1}));
-    // 发送放气指令
-    sendAirbagCmd(selectedZone, 'deflate');
-    // 启动锁定
+    // 发送 frontCmd 放气脉冲 [0, 部位, -1]
+    sm?.pulseFrontCmd?.(0, ZONE_TO_PART[selectedZone] ?? 0, -1).catch(() => {});
+    addLog(selectedZone, 'deflate', `frontCmd[0,${ZONE_TO_PART[selectedZone]},-1]`, 0);
+    // 启动锁定（视觉进度，动作时长由算法管理）
     startLockAndHoldPressure(selectedZone);
     // 重置入座定时充气
     onManualAdjust?.();
-  }, [selectedZone, isLocked, cmdCounts, sendAirbagCmd, startLockAndHoldPressure, onManualAdjust]);
+  }, [selectedZone, isLocked, cmdCounts, addLog, startLockAndHoldPressure, onManualAdjust]);
 
   // 点击保存按钮
   const handleSavePress = useCallback(() => {
@@ -517,7 +532,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       hip: buildOps(cmdCounts.hipFirm),
     });
 
-    // 调用 Python 的 trigger_preference_recording，传入体型和充放气操作次数
+    // 新算法:保存品味 frontCmd [2,0,0]（保存当前五组调节量及阈值）
+    sm?.pulseFrontCmd?.(2, 0, 0)?.catch?.(() => {});
+    // 兼容旧 Python 品味记录（新算法不走此路，保留不影响）
     sm?.triggerPreferenceRecording?.(bodyShape || null, airbagOps)?.catch?.(() => {});
 
     savingTimerRef.current = setTimeout(() => {
@@ -553,7 +570,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       hipFirm: 0,
       legRest: 0,
     });
-    AIRBAG_ZONES.forEach(z => sendAirbagCmd(z.key, 'stop'));
+    // 新算法:清除品味记忆 frontCmd [4,0,0]（清记忆并排空 1~10 号支撑气囊）
+    sm?.pulseFrontCmd?.(4, 0, 0)?.catch?.(() => {});
     // 恢复默认时清除当前体型的本地缓存
     AsyncStorage.removeItem(storageKey).catch(() => {});
     if (sm?.saveAirbagSettingsForShape && bodyShape) {

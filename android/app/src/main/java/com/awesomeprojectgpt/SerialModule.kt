@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.awesomeprojectgpt.airbag.AirbagNative
 import com.chaquo.python.Python
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -25,6 +26,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 class SerialModule(
     private val reactContext: ReactApplicationContext
@@ -795,6 +797,14 @@ class SerialModule(
             return
         }
 
+        // 新板子：96 字节帧（92 原始压力点 + 4 帧尾），去掉帧尾后 length=92。
+        // → 喂给 App 内的 airbag_13Hz C 算法，输出在座状态 + 热力图矩阵 + 气囊指令帧。
+        if (frameLen == 92) {
+            val values = parseCsvToIntList(data) ?: return
+            handleAirbag13Frame(values)
+            return
+        }
+
         // 非 144 字节的帧都打印到回传面板（包括 51 字节模式帧、气囊回传等）
         if (frameLen != 144) {
             Log.w(logTag, "[NonStdFrame] length=$frameLen data=$data")
@@ -848,6 +858,117 @@ class SerialModule(
                 emitAlgoError(e.message ?: "PY_ERROR")
             }
         }
+    }
+
+    // ─── 新算法 airbag_13Hz（C，在 App 内跑）───────────────────────
+    @Volatile
+    private var airbag13Inited = false
+
+    /** 待发的 frontCmd 脉冲 [mode, part, dir]；每帧取出并清零 → 天然实现"发一帧脉冲后回零" */
+    private val pendingFrontCmd = AtomicReference(floatArrayOf(0f, 0f, 0f))
+    /** 久坐按摩开关：0=允许自动按摩，1=停止。默认允许 */
+    @Volatile private var longSitMassageStop = 0f
+
+    /** JS：发一次 frontCmd 脉冲（自定义气囊/品味命令）。Kotlin 会在下一帧应用后自动回零。 */
+    @ReactMethod
+    fun pulseFrontCmd(mode: Double, part: Double, dir: Double, promise: Promise) {
+        pendingFrontCmd.set(floatArrayOf(mode.toFloat(), part.toFloat(), dir.toFloat()))
+        Log.i(logTag, "[frontCmd] pulse [$mode,$part,$dir]")
+        promise.resolve(true)
+    }
+
+    /** JS：久坐按摩开关。enabled=true→允许自动按摩(0)，false→停止(1)。 */
+    @ReactMethod
+    fun setLongSitMassageEnabled(enabled: Boolean, promise: Promise) {
+        longSitMassageStop = if (enabled) 0f else 1f
+        Log.i(logTag, "[massage] setEnabled=$enabled (stop=$longSitMassageStop)")
+        promise.resolve(true)
+    }
+
+    /** 92 字节原始压力 → C 算法 step → 发结果给 JS（在座状态 + 热力图矩阵）。
+     *  在串口读线程上串行调用；airbag_13Hz 是全局单实例，务必单线程访问。 */
+    private fun handleAirbag13Frame(values: List<Int>) {
+        val payload = ByteArray(92)
+        val n = minOf(values.size, 92)
+        for (i in 0 until n) payload[i] = (values[i] and 0xFF).toByte()
+        try {
+            if (!airbag13Inited) {
+                AirbagNative.nativeInitialize()
+                airbag13Inited = true
+            }
+            // 取出本帧 frontCmd 脉冲并清零（下一帧自动发 [0,0,0]）
+            val fc = pendingFrontCmd.getAndSet(floatArrayOf(0f, 0f, 0f))
+            val out = AirbagNative.nativeStep(payload, fc[0], fc[1], fc[2], longSitMassageStop)
+            emitAirbag13Result(out)
+            // 把算法输出的 frame[55] 转 55 字节下发硬件（复用 autoWrite 通道，串口连着就一直发）
+            downlinkAirbagFrame(out)
+        } catch (e: Throwable) {
+            Log.e(logTag, "airbag13 step failed", e)
+        }
+    }
+
+    /** 从算法输出取 frame[55]，逐元素校验为 0..255 整数、并核对帧头帧尾，转 uint8[55] 更新 autoWriteBytes。 */
+    private fun downlinkAirbagFrame(out: FloatArray) {
+        val base = AirbagNative.IDX_FRAME_BASE
+        if (out.size < base + 55) return
+        val frame = ByteArray(55)
+        for (i in 0 until 55) {
+            val v = Math.round(out[base + i])
+            if (v < 0 || v > 255) return // 非法值，整帧丢弃不发
+            frame[i] = (v and 0xFF).toByte()
+        }
+        // 帧头帧尾自检：frame[0]=0x1F，frame[51..54]=AA 55 03 99，防止把脏帧发给气囊
+        if ((frame[0].toInt() and 0xFF) != 0x1F) return
+        if ((frame[51].toInt() and 0xFF) != 0xAA || (frame[52].toInt() and 0xFF) != 0x55 ||
+            (frame[53].toInt() and 0xFF) != 0x03 || (frame[54].toInt() and 0xFF) != 0x99) return
+        autoWriteBytes = frame
+        autoWriteText = null
+        // 仅当有气囊在动(档位非0)时发事件给 JS 监控面板，避免全0帧刷屏
+        emitAirbagFrameForMonitor(frame)
+    }
+
+    /** 把下发的 frame[55] 解析成 24 个气囊档位，发给 JS 监控面板（仅有非0档位时发）。 */
+    private fun emitAirbagFrameForMonitor(frame: ByteArray) {
+        val gears = Arguments.createArray()
+        var anyActive = false
+        // frame[1..48]：24 组 [编号, 档位]，档位在偶数偏移 2,4,...,48
+        for (id in 1..24) {
+            val gear = frame[id * 2].toInt() and 0xFF
+            gears.pushInt(gear)
+            if (gear != 0) anyActive = true
+        }
+        if (!anyActive) return
+        val hex = frame.joinToString("") { "%02X".format(it) }
+        val map = Arguments.createMap()
+        map.putString("hex", hex)
+        map.putArray("gears", gears)
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onAirbagDownlink", map)
+    }
+
+    private fun emitAirbag13Result(out: FloatArray) {
+        if (out.size < AirbagNative.OUT_LEN) return
+        val map = Arguments.createMap()
+        map.putDouble("reasonCode", out[AirbagNative.IDX_REASON_CODE].toDouble())
+        map.putDouble("isFullSeat", out[AirbagNative.IDX_IS_FULL_SEAT].toDouble())
+        map.putDouble("cushionSum", out[AirbagNative.IDX_CUSHION_SUM].toDouble())
+        map.putDouble("backrestSum", out[AirbagNative.IDX_BACKREST_SUM].toDouble())
+        map.putDouble("isLivingRaw", out[AirbagNative.IDX_IS_LIVING_RAW].toDouble())
+        map.putDouble("detectionTriggered", out[AirbagNative.IDX_DET_TRIGGERED].toDouble())
+        map.putDouble("longSitMinutes", out[AirbagNative.IDX_LONGSIT_MIN].toDouble())
+        map.putDouble("longSitCycleRemain", out[AirbagNative.IDX_LONGSIT_REMAIN].toDouble())
+        map.putDouble("longSitPrompt", out[AirbagNative.IDX_LONGSIT_PROMPT].toDouble())
+        map.putDouble("longSitMassageActive", out[AirbagNative.IDX_LONGSIT_ACTIVE].toDouble())
+        val cushion = Arguments.createArray()
+        for (i in 0 until 48) cushion.pushDouble(out[AirbagNative.IDX_CUSHION_DATA + i].toDouble())
+        val backrest = Arguments.createArray()
+        for (i in 0 until 56) backrest.pushDouble(out[AirbagNative.IDX_BACKREST_DATA + i].toDouble())
+        map.putArray("cushion", cushion)
+        map.putArray("backrest", backrest)
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onAirbag13Result", map)
     }
 
     private fun emitSerialData(data: String) {

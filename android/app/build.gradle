@@ -86,6 +86,10 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // 只为平板的 arm64 架构编译原生库（含 airbag_13Hz C 算法），加快构建
+        ndk {
+            abiFilters "arm64-v8a"
+        }
         python {
             pip {
                 // options "--proxy", "http://127.0.0.1:7890"
@@ -121,6 +125,13 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+
+    // 注意：airbag_13Hz 的 C 算法不在这里用 externalNativeBuild 编译。
+    // 因为本项目开启了 RN 新架构（newArchEnabled=true），RN 自己用 externalNativeBuild
+    // 编译 libappmodules.so（含 PlatformConstants 等核心模块）；这里再定义 externalNativeBuild
+    // 会覆盖掉 RN 的那份，导致核心模块缺失、App 起不来。
+    // 因此改为「预编译」方式：用 NDK 把 libairbag.so 编好放到 src/main/jniLibs/arm64-v8a/，
+    // 由 Gradle 当预编译库直接打包。重编脚本见 cpp/build_so.sh。
 }
 
 dependencies {

@@ -23,6 +23,7 @@ import IconFont from '../components/IconFont';
 import CarAirRN from '../components/CarAirRN';
 import SeatMatrix46, {PressureLegend} from '../components/SeatMatrix46';
 import AirbagFullFrameModal from '../components/AirbagFullFrameModal';
+import AirbagHeatmap from '../components/AirbagHeatmap';
 import {parseAirbagFullFrame, AirbagFullFrame} from '../utils/airbagFullFrame';
 
 // icon 图片资源
@@ -82,6 +83,8 @@ interface HomeScreenProps {
   onBodyShapeChange?: (shape: BodyShape) => void;
   /** 注册重置入座定时充气的回调，供外部调用 */
   onRegisterResetSeatedInflate?: (resetFn: () => void) => void;
+  /** 在座/离座状态变化时上报，供自定义弹窗联动「点」显示 */
+  onSeatStatusChange?: (status: SeatStatus) => void;
 }
 
 interface SerialDevice {
@@ -107,6 +110,10 @@ interface SerialModuleType {
   setAirbagOverride?: (zone: string, action: string, durationMs: number) => Promise<string>;
   /** 清除气囊覆盖层 */
   clearAirbagOverride?: () => Promise<string>;
+  /** 发一次 frontCmd 脉冲(自定义气囊/品味命令)：[modeCmd, partCmd, direction] */
+  pulseFrontCmd?: (mode: number, part: number, dir: number) => Promise<boolean>;
+  /** 久坐按摩开关：true=允许自动按摩(0)，false=停止(1) */
+  setLongSitMassageEnabled?: (enabled: boolean) => Promise<boolean>;
 }
 
 interface SerialResultEvent {
@@ -392,6 +399,30 @@ function getBodyShapeColor(shape: BodyShape): string {
   }
 }
 
+/**
+ * C 算法(airbag_13Hz, 92帧链路) 的 reasonCode → 在座/离座。
+ * 依据算法文档 5.3：
+ *   1,2,3,5,7,8 → 在座；6 → 离座；0,4 → 保持上一个状态（返回 prev）。
+ */
+function seatStatusFromReasonCode(
+  reasonCode: number,
+  prev: SeatStatus,
+): SeatStatus {
+  switch (Math.round(reasonCode)) {
+    case 1:
+    case 2:
+    case 3:
+    case 5:
+    case 7:
+    case 8:
+      return 'seated';
+    case 6:
+      return 'away';
+    default: // 0、4 以及任何未知值：保持上一个状态
+      return prev;
+  }
+}
+
 function getSeatStateLabel(state: AlgoSeatStatus): string {
   if (state.is_off_seat) {
     return '离座';
@@ -453,13 +484,13 @@ const StatusSquare: React.FC<{active: boolean; icon: any; label: string}> = ({ac
   );
 };
 
-// ─── 右栏:乘员识别卡片(仅视觉选中，暂无功能) ─────────────────────
+// ─── 右栏:乘员识别卡片(数据驱动，自动亮，不可点) ─────────────────────
 const OccupantCard: React.FC<{
   active: boolean;
   icon: any;
   title: string;
   subtitle: string;
-  onPress: () => void;
+  onPress?: () => void;
 }> = ({active, icon, title, subtitle, onPress}) => {
   const inner = (
     <>
@@ -476,16 +507,20 @@ const OccupantCard: React.FC<{
       </View>
     </>
   );
-  return (
+  const body = active ? (
+    <LinearGradient colors={GRAD_STATUS} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.occupantCard, styles.occupantCardActive]}>
+      {inner}
+    </LinearGradient>
+  ) : (
+    <View style={[styles.occupantCard, styles.occupantCardInactive]}>{inner}</View>
+  );
+  // 有 onPress 才可点；数据驱动展示时用 View 包裹（不可点）
+  return onPress ? (
     <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.occupantTouch}>
-      {active ? (
-        <LinearGradient colors={GRAD_STATUS} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.occupantCard, styles.occupantCardActive]}>
-          {inner}
-        </LinearGradient>
-      ) : (
-        <View style={[styles.occupantCard, styles.occupantCardInactive]}>{inner}</View>
-      )}
+      {body}
     </TouchableOpacity>
+  ) : (
+    <View style={styles.occupantTouch}>{body}</View>
   );
 };
 
@@ -528,7 +563,7 @@ const SlideToggle: React.FC<{
   );
 };
 
-const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange, onBodyShapeChange, onRegisterResetSeatedInflate}) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveEnabled, onAdaptiveChange, connectionStatus, onConnectionStatusChange, onBodyShapeChange, onRegisterResetSeatedInflate, onSeatStatusChange}) => {
   // 合并所有算法结果为单个状态对象，减少 setState 调用（8→1），大幅降低重渲染次数
   const [algoState, setAlgoState] = useState({
     seatStatus: 'away' as SeatStatus,
@@ -573,6 +608,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
   // 用 ref 追踪离座状态，供 onSerialData 回调中判断（避免闭包陷阱）
   const seatStatusRef = useRef<SeatStatus>('away');
+  // C 算法(92帧)链路：用 reasonCode 驱动在座/离座时，记住上一次状态
+  // （reasonCode=0/4 表示「保持上一个状态」，需要沿用）
+  const airbag13SeatRef = useRef<SeatStatus>('away');
+  // 乘员识别（活体/静物）状态机（算法方规范）：仅 detectionTriggered=1 时记录一次
+  // isLivingRaw，最近连续 3 次均为 1 → 判「活人」并锁存到离座；在座且完成≥3 次检测
+  // 仍未连续 3 次为 1 → 「静物占位」；离座时清空识别记录。
+  const livingWindowRef = useRef<number[]>([]);
+  const livingLatchedRef = useRef<boolean>(false);
   // sensorData 用 useRef 存储，3D 组件通过 data prop 读取，避免每帧 setState 触发重渲染
   const carAirRef = useRef<any>(null);
   // 清零防抖：记录最后一次清零的时间戳，防止离座/在座状态快速切换导致闪烁
@@ -609,6 +652,41 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showAirbagData, setShowAirbagData] = useState(false);
   const [airbagDataVersion, setAirbagDataVersion] = useState(0);
   const [airbagFps, setAirbagFps] = useState(0); // 实测帧率（约每秒更新一次）
+
+  // ─── 新算法 airbag_13Hz 热力图（数据来自原生 onAirbag13Result 事件）───
+  // 每帧存 ref（不触发重渲染），弹窗打开时限流刷新显示
+  const airbag13Ref = useRef<{
+    cushion: number[];
+    backrest: number[];
+    reasonCode: number;
+    isFullSeat: number;
+  } | null>(null);
+  const [showAirbagHeatmap, setShowAirbagHeatmap] = useState(false);
+  const [airbag13View, setAirbag13View] = useState<{
+    cushion: number[];
+    backrest: number[];
+    reasonCode: number;
+    isFullSeat: number;
+  } | null>(null);
+  // 触发重渲染,把最新压力(104点)作为新引用喂给 3D 压力云图
+  const [, setSeat3dTick] = useState(0);
+  // 假压力调试:打开后喂一份"满压力"假数据(方便对齐 3D 点云位置),关掉回真数据
+  const [fakePressure, setFakePressure] = useState(false);
+  const fakePressureRef = useRef(false);
+
+  // ─── 久坐按摩(座椅按摩调节)───
+  // 开关状态:true=允许自动按摩(longSitMassageStop=0),false=停止(1)。默认允许。
+  const [massageAllowed, setMassageAllowed] = useState(true);
+  // 久坐状态每帧存 ref,限流刷新显示(时间是分钟级,1s 刷新足够)
+  const massageRef = useRef({minutes: 0, remainSec: 0, active: 0});
+  const [massageView, setMassageView] = useState({minutes: 0, remainSec: 0, active: false});
+  const lastMassagePromptRef = useRef(0); // longSitPrompt 上升沿检测
+  const [massageToast, setMassageToast] = useState(false); // "久坐按摩已启动"提示
+
+  // ─── 下发命令监控(临时测试面板)───
+  const downlinkRef = useRef<{hex: string; gears: number[]} | null>(null);
+  const [showDownlink, setShowDownlink] = useState(false);
+  const [downlinkView, setDownlinkView] = useState<{hex: string; gears: number[]} | null>(null);
 
   // 入座定时充气提示弹窗
   const [seatedInflateToast, setSeatedInflateToast] = useState(false);
@@ -967,6 +1045,103 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       }
     });
 
+    // 新算法 airbag_13Hz 结果（每帧一次）→ 存 ref，弹窗打开时限流刷新
+    const airbag13Sub = emitter.addListener(
+      'onAirbag13Result',
+      (event: {
+        cushion?: number[];
+        backrest?: number[];
+        reasonCode?: number;
+        isFullSeat?: number;
+        isLivingRaw?: number;
+        detectionTriggered?: number;
+        longSitMinutes?: number;
+        longSitCycleRemain?: number;
+        longSitPrompt?: number;
+        longSitMassageActive?: number;
+      }) => {
+        const cushion = event.cushion ?? [];
+        const backrest = event.backrest ?? [];
+        airbag13Ref.current = {
+          cushion,
+          backrest,
+          reasonCode: event.reasonCode ?? 0,
+          isFullSeat: event.isFullSeat ?? 0,
+        };
+        // 久坐按摩状态存 ref(限流刷新显示)
+        massageRef.current = {
+          minutes: event.longSitMinutes ?? 0,
+          remainSec: (event.longSitCycleRemain ?? 0) / 13,
+          active: event.longSitMassageActive ?? 0,
+        };
+        // longSitPrompt 上升沿 → 弹"久坐按摩已启动"
+        const prompt = event.longSitPrompt ?? 0;
+        if (prompt >= 0.5 && lastMassagePromptRef.current < 0.5) {
+          setMassageToast(true);
+        }
+        lastMassagePromptRef.current = prompt;
+        // 喂 3D 压力云图:[坐垫48, 靠背56]=104,新数组(新引用)触发 CarAirRN 更新
+        // 假压力开启时不覆盖(用假数据对齐位置)
+        if (!fakePressureRef.current) {
+          sensorDataRef.current = cushion.concat(backrest);
+          setSeat3dTick(t => (t + 1) & 0xffff);
+        }
+        // ── 用 reasonCode 驱动首页「在座/离座」方块（92帧 C 算法链路）──
+        const reason = event.reasonCode ?? 0;
+        const nextSeat = seatStatusFromReasonCode(reason, airbag13SeatRef.current);
+        if (nextSeat !== airbag13SeatRef.current) {
+          airbag13SeatRef.current = nextSeat;
+          seatStatusRef.current = nextSeat;
+          setAlgoState(prev =>
+            prev.seatStatus === nextSeat ? prev : {...prev, seatStatus: nextSeat},
+          );
+          // 在座 → 点亮座椅「点」，离座 → 关闭（首页中间座椅图，仅点、不联动光）
+          setDotsOn(nextSeat === 'seated');
+          // 上报给 App，供自定义气囊弹窗同步联动
+          onSeatStatusChange?.(nextSeat);
+        }
+
+        // ── 乘员识别：活体/静物 状态机（算法方规范）──
+        // 离座：清空识别记录，两张卡都不亮
+        if (nextSeat !== 'seated') {
+          if (livingWindowRef.current.length || livingLatchedRef.current) {
+            livingWindowRef.current = [];
+            livingLatchedRef.current = false;
+          }
+          setOccupantType(prev => (prev === null ? prev : null));
+        } else {
+          // 在座：仅 detectionTriggered=1 时记录一次 isLivingRaw，只留最近 3 次
+          if ((event.detectionTriggered ?? 0) >= 0.5) {
+            const w = livingWindowRef.current;
+            w.push((event.isLivingRaw ?? 0) >= 0.5 ? 1 : 0);
+            if (w.length > 3) w.splice(0, w.length - 3);
+            // 最近连续 3 次均为 1 → 判「活人」，锁存到离座
+            if (w.length === 3 && w.every(v => v === 1)) {
+              livingLatchedRef.current = true;
+            }
+          }
+          // 锁存活人 → 有人落座；已完成≥3 次检测仍未连续 3 次为 1 → 静物占位；否则识别中(不亮)
+          let next: 'person' | 'object' | null;
+          if (livingLatchedRef.current) {
+            next = 'person';
+          } else if (livingWindowRef.current.length >= 3) {
+            next = 'object';
+          } else {
+            next = null; // 乘员识别中
+          }
+          setOccupantType(prev => (prev === next ? prev : next));
+        }
+      },
+    );
+
+    // 下发命令监控(临时测试面板):有气囊在动时收到
+    const downlinkSub = emitter.addListener(
+      'onAirbagDownlink',
+      (event: {hex?: string; gears?: number[]}) => {
+        downlinkRef.current = {hex: event.hex ?? '', gears: event.gears ?? []};
+      },
+    );
+
     return () => {
       dataSub.remove();
       resultSub.remove();
@@ -975,8 +1150,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       modeSub.remove();
       nonStdSub.remove();
       airbagSub.remove();
+      airbag13Sub.remove();
+      downlinkSub.remove();
     };
-  }, [handleAlgoResult, onAdaptiveChange]);
+  }, [handleAlgoResult, onAdaptiveChange, onSeatStatusChange]);
 
   // 弹窗打开时按 250ms（约 4Hz）限流刷新显示，避免每帧重渲染卡顿。
   // 同时每约 1 秒用帧计数实测一次真实帧率（收帧不受限流影响，全部照收）。
@@ -997,6 +1174,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     }, 250);
     return () => clearInterval(timer);
   }, [showAirbagData]);
+
+  // 热力图弹窗打开时，每 200ms 从 ref 刷新一次显示（避免 13Hz 直接 setState 卡顿）
+  useEffect(() => {
+    if (!showAirbagHeatmap) return;
+    const timer = setInterval(() => {
+      setAirbag13View(airbag13Ref.current);
+    }, 200);
+    return () => clearInterval(timer);
+  }, [showAirbagHeatmap]);
+
+  // 久坐按摩状态每 1s 刷新一次显示（时间是分钟级，无需高频）
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const m = massageRef.current;
+      setMassageView({minutes: m.minutes, remainSec: m.remainSec, active: m.active >= 0.5});
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 下发监控面板打开时,每 200ms 刷新一次
+  useEffect(() => {
+    if (!showDownlink) return;
+    const timer = setInterval(() => setDownlinkView(downlinkRef.current), 200);
+    return () => clearInterval(timer);
+  }, [showDownlink]);
+
 
   // ─── 解构 algoState，避免大量代码修改 ────────────────────────
   const {seatStatus, algoSeatStatus, bodyShapeInfo, commandStates, rawCommand, livingStatus, bodyType, realtimeData} = algoState;
@@ -1176,25 +1379,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               {/* <Image source={iconSetting} style={styles.sectionIcon} resizeMode="contain" /> */}
               <Text style={styles.sectionTitle}>气囊自适应调节</Text>
             </View>
-            {/* 滑块式开关(逻辑不变:开=启用算法, 关=停用并停帧) */}
+            {/* 滑块式开关:开=切回自适应跟随[3,0,0];关=关闭自适应[5,0,0](基于已保存的自定义基线) */}
             <SlideToggle
               on={adaptiveEnabled}
               onChange={v => {
                 onAdaptiveChange(v);
-                SerialModule?.setAlgoMode?.(v);
-                if (!v) {
-                  SerialModule?.sendStopAllFrame?.().catch(() => {});
-                }
+                SerialModule?.pulseFrontCmd?.(v ? 3 : 5, 0, 0).catch(() => {});
               }}
               style={styles.adaptiveSlide}
             />
-            {/* 自定义气囊调节(逻辑不变，仅换样式) */}
+            {/* 自定义气囊调节:进入品味模式[1,0,0] 并跳转 */}
             <TouchableOpacity
               activeOpacity={0.85}
               style={styles.customizeTouch}
               onPress={() => {
-                SerialModule?.setAlgoMode?.(false);
-                SerialModule?.sendStopAllFrame?.().catch(() => {});
+                SerialModule?.pulseFrontCmd?.(1, 0, 0).catch(() => {});
                 onNavigateToCustomize();
               }}>
               <LinearGradient colors={GRAD_BTN} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.customizeBtnNew}>
@@ -1249,24 +1448,44 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               icon={iconOccupantPerson}
               title="有人落座"
               subtitle="有儿童或宠物入座"
-              onPress={() => setOccupantType(prev => (prev === 'person' ? null : 'person'))}
             />
             <OccupantCard
               active={occupantType === 'object'}
               icon={iconOccupantObject}
               title="静物占位"
               subtitle="座椅上有物品占用"
-              onPress={() => setOccupantType(prev => (prev === 'object' ? null : 'object'))}
             />
           </View>
 
-          {/* 座椅按摩调节(滑块式开关) */}
+          {/* 座椅按摩调节(久坐自动按摩:开启=允许自动,关闭=停止) */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>座椅按摩调节</Text>
             </View>
-            {/* 座椅按摩调节:开启=大涟漪点扩散动画, 关闭=静止(即原「大点开启/关闭」) */}
-            <SlideToggle on={bigDotsOn} onChange={setBigDotsOn} />
+            {/* 开启=允许久坐自动按摩(入座满60分钟自动触发); 关闭=停止。无手动立即启动。 */}
+            <SlideToggle
+              on={massageAllowed}
+              onChange={v => {
+                setMassageAllowed(v);
+                SerialModule?.setLongSitMassageEnabled?.(v).catch(() => {});
+              }}
+            />
+            {/* 久坐状态 */}
+            <View style={styles.massageStatusRow}>
+              <View style={[styles.massageDot, massageView.active && styles.massageDotOn]} />
+              <Text style={styles.massageStatusText}>
+                {massageView.active
+                  ? '按摩运行中'
+                  : massageAllowed
+                    ? `已连续入座 ${Math.floor(massageView.minutes)} 分钟`
+                    : '已停止'}
+              </Text>
+            </View>
+            {massageAllowed && !massageView.active && massageView.remainSec > 0 ? (
+              <Text style={styles.massageSubText}>
+                距下次自动约 {(massageView.remainSec / 60).toFixed(1)} 分钟
+              </Text>
+            ) : null}
           </View>
 
           {/* 悬浮按钮组 - 右上角（点击Logo切换显示） */}
@@ -1302,6 +1521,46 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 onPress={() => setShowCommandModal(true)}
                 activeOpacity={0.7}>
                 <Text style={styles.matrixToggleBtnText}>指令</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.matrixToggleBtn, {marginLeft: 6}]}
+                onPress={() => setShowAirbagHeatmap(true)}
+                activeOpacity={0.7}>
+                <Text style={styles.matrixToggleBtnText}>热力图</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.matrixToggleBtn, {marginLeft: 6}]}
+                onPress={() => setShowDownlink(true)}
+                activeOpacity={0.7}>
+                <Text style={styles.matrixToggleBtnText}>下发监控</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.matrixToggleBtn, {marginLeft: 6, backgroundColor: fakePressure ? 'rgba(52,152,219,0.85)' : 'rgba(0,0,0,0.55)'}]}
+                onPress={() => {
+                  const next = !fakePressure;
+                  setFakePressure(next);
+                  fakePressureRef.current = next;
+                  if (next) {
+                    // 造一份"满压力"假数据(中心高、边缘低),列优先: 坐垫6×8 + 靠背7×8
+                    const mk = (rows: number, cols: number) => {
+                      const a = new Array(rows * cols).fill(0);
+                      const cr = (rows - 1) / 2;
+                      const cc = (cols - 1) / 2;
+                      const maxd = Math.hypot(cr, cc) || 1;
+                      for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                          const d = Math.hypot(r - cr, c - cc) / maxd;
+                          a[r + c * rows] = Math.round(90 * (1 - d) + 15); // 列优先下标
+                        }
+                      }
+                      return a;
+                    };
+                    sensorDataRef.current = [...mk(6, 8), ...mk(7, 8)];
+                    setSeat3dTick(t => (t + 1) & 0xffff);
+                  }
+                }}
+                activeOpacity={0.7}>
+                <Text style={styles.matrixToggleBtnText}>{fakePressure ? '真数据' : '假压力'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1900,6 +2159,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         onHide={() => setSeatedInflateToast(false)}
       />
 
+      {/* 久坐按摩已启动提示 */}
+      <Toast
+        visible={massageToast}
+        message="久坐按摩已启动"
+        type="info"
+        duration={5000}
+        onHide={() => setMassageToast(false)}
+      />
+
       {/* ─── 右下角:语音提示条(彩球+文字),纯 UI ─── */}
       <VoiceBar visible={voiceBar.visible} text={voiceBar.text} style={styles.voiceBarWrap} />
 
@@ -1944,6 +2212,89 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         frameCount={airbagFrameCountRef.current}
         fps={airbagFps}
       />
+
+      {/* 新算法 airbag_13Hz 压力热力图弹窗（靠背 7×8 + 坐垫 6×8） */}
+      {showAirbagHeatmap && (
+      <Modal
+        visible={showAirbagHeatmap}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAirbagHeatmap(false)}>
+        <View style={styles.matrixModalOverlay}>
+          <View style={[styles.matrixModalContent, {maxWidth: 720}]}>
+            <View style={styles.matrixModalHeader}>
+              <Text style={styles.matrixModalTitle}>
+                压力热力图（airbag_13Hz）
+                {airbag13View
+                  ? `　${airbag13View.isFullSeat >= 1 ? '全座' : '未全座'}　reason=${Math.round(airbag13View.reasonCode)}`
+                  : ''}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowAirbagHeatmap(false)}
+                activeOpacity={0.7}
+                style={styles.matrixModalClose}>
+                <Text style={styles.matrixModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {airbag13View ? (
+              <AirbagHeatmap cushion={airbag13View.cushion} backrest={airbag13View.backrest} />
+            ) : (
+              <View style={{padding: 40, alignItems: 'center'}}>
+                <Text style={{color: Colors.textGray}}>等待板子数据…（确认板子已插平板并连接串口）</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+      )}
+
+      {/* 下发命令监控(临时测试面板) */}
+      {showDownlink && (
+      <Modal
+        visible={showDownlink}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDownlink(false)}>
+        <View style={styles.matrixModalOverlay}>
+          <View style={[styles.matrixModalContent, {maxWidth: 520}]}>
+            <View style={styles.matrixModalHeader}>
+              <Text style={styles.matrixModalTitle}>下发命令监控(气囊动作时刷新)</Text>
+              <TouchableOpacity onPress={() => setShowDownlink(false)} activeOpacity={0.7} style={styles.matrixModalClose}>
+                <Text style={styles.matrixModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {downlinkView ? (
+              <View style={{padding: 8}}>
+                <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 6}}>
+                  {downlinkView.gears.map((g, i) => (
+                    <View
+                      key={i}
+                      style={{
+                        paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4,
+                        backgroundColor: g === 3 ? '#2e7d32' : g === 4 ? '#e07a1f' : 'rgba(255,255,255,0.08)',
+                      }}>
+                      <Text style={{color: '#fff', fontSize: 11}}>
+                        {i + 1}:{g === 3 ? '充' : g === 4 ? '放' : g}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={{color: Colors.textGray, fontSize: 10, marginTop: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace'}} selectable>
+                  {downlinkView.hex}
+                </Text>
+                <Text style={{color: Colors.textGray, fontSize: 11, marginTop: 8}}>
+                  绿=充气(3) 橙=放气(4);1-10 支撑气囊,11-24 按摩气囊。全 0 时不刷新(说明当前无动作)。
+                </Text>
+              </View>
+            ) : (
+              <View style={{padding: 40, alignItems: 'center'}}>
+                <Text style={{color: Colors.textGray}}>等待气囊动作…(坐上去调节 / 开自适应 / 自定义 +/- 时这里会亮)</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+      )}
     </View>
   );
 };
@@ -2156,6 +2507,31 @@ const styles = StyleSheet.create({
   },
   occupantSubtitleActive: {
     color: 'rgba(255,255,255,0.85)',
+  },
+  // ─── 久坐按摩状态 ───
+  massageStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  massageDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  massageDotOn: {
+    backgroundColor: '#4CAF50',
+  },
+  massageStatusText: {
+    fontSize: FontSize.sm,
+    color: Colors.textGray,
+  },
+  massageSubText: {
+    fontSize: FontSize.xs,
+    color: Colors.textGray,
+    marginTop: 2,
   },
   // ─── 座椅按摩调节:滑块式开关 ───
   slideTrack: {
