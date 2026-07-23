@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.208
+ * Model version                  : 1.210
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Fri Jul 17 15:44:34 2026
+ * C/C++ source code generated on : Wed Jul 22 16:13:02 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -44,7 +44,7 @@ typedef struct {
   real_T frameCount;                   /* '<Root>/活体检测' */
   real_T livingQueueLen;               /* '<Root>/活体检测' */
   real32_T UnitDelay1_DSTATE[4];       /* '<Root>/Unit Delay1' */
-  real32_T UnitDelay_DSTATE[14];       /* '<Root>/Unit Delay' */
+  real32_T UnitDelay_DSTATE[15];       /* '<Root>/Unit Delay' */
   real32_T prevCushion[48];            /* '<Root>/活体检测' */
   real32_T prevBackrest[56];           /* '<Root>/活体检测' */
   real32_T sadHistCushion[13];         /* '<Root>/活体检测' */
@@ -68,6 +68,7 @@ typedef struct {
   real32_T pBaseElapsed;               /* '<Root>/品味系数' */
   real32_T pBaseReady;                 /* '<Root>/品味系数' */
   real32_T pRequestElapsed;            /* '<Root>/品味系数' */
+  real32_T pAdaptiveOff;               /* '<Root>/品味系数' */
   real32_T pCopBufX[125];              /* '<Root>/健康检测' */
   real32_T pCopBufY[125];              /* '<Root>/健康检测' */
   real32_T pPeakPressure;              /* '<Root>/健康检测' */
@@ -137,6 +138,9 @@ typedef struct {
   real32_T ratioDeflate;               /* '<Root>/ratioDeflate' */
   real32_T longSitMassageStop;         /* '<Root>/longSitMassageStop' */
   real32_T frontCmd[3];                /* '<Root>/frontCmd' */
+  real32_T sadThreshold;               /* '<Root>/sadThreshold' */
+  real32_T sadNormalizeScale;          /* '<Root>/sadNormalizeScale' */
+  real32_T livingConfirmCount;         /* '<Root>/livingConfirmCount' */
 } ExtU_airbag_13Hz_T;
 
 /* External outputs (root outports fed by signals with default storage) */

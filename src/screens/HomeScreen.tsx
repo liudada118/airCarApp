@@ -25,6 +25,7 @@ import SeatMatrix46, {PressureLegend} from '../components/SeatMatrix46';
 import AirbagFullFrameModal from '../components/AirbagFullFrameModal';
 import AirbagHeatmap from '../components/AirbagHeatmap';
 import {parseAirbagFullFrame, AirbagFullFrame} from '../utils/airbagFullFrame';
+import {playVoice, VOICE_TEXT, type VoiceKey} from '../utils/voicePlayer';
 
 // icon 图片资源
 const iconSitStatus = require('../assets/icons/icon-sitStatus.png');
@@ -73,6 +74,9 @@ let hasTriedAutoConnect = false;
 // 因此主界面的在座/离座、气囊状态在接入新帧前会保持静止，属正常现象。
 // const USE_MOCK = Platform.OS !== 'android';
 const USE_MOCK = false;
+
+// 语音播报总开关：true=播 MP3 + 弹语音条；false=只弹语音条、不出声。
+const VOICE_AUDIO_ENABLED = true;
 
 interface HomeScreenProps {
   onNavigateToCustomize: () => void;
@@ -688,6 +692,58 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showDownlink, setShowDownlink] = useState(false);
   const [downlinkView, setDownlinkView] = useState<{hex: string; gears: number[]} | null>(null);
 
+  // ─── 首页座椅图「逐部位闪烁」口子 ───
+  // 【口子】以后气囊「非手动」变动(算法自适应/久坐按摩等)时,调 flashSeatParts(['back',...]) 触发闪烁。
+  const [seatFlash, setSeatFlash] = useState<{zones: string[]; seq: number} | null>(null);
+  const seatFlashSeqRef = useRef(0);
+  const flashSeatParts = useCallback((zones: string[]) => {
+    if (!zones?.length) return;
+    seatFlashSeqRef.current += 1;
+    setSeatFlash({zones, seq: seatFlashSeqRef.current});
+  }, []);
+
+  // ─── 语音播报 + 语音条：按数据触发 ───────────────────────────
+  // triggerVoice(key)：播对应 MP3 + 弹语音条(显示该条文字)，播完约 1s 收起(15s 兜底)。
+  const voiceHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerVoice = useCallback((key: VoiceKey) => {
+    if (voiceHideTimerRef.current) {
+      clearTimeout(voiceHideTimerRef.current);
+      voiceHideTimerRef.current = null;
+    }
+    setVoiceBar({visible: true, text: VOICE_TEXT[key]});
+    const hide = () => {
+      if (voiceHideTimerRef.current) {
+        clearTimeout(voiceHideTimerRef.current);
+        voiceHideTimerRef.current = null;
+      }
+      setVoiceBar(prev => (prev.visible ? {...prev, visible: false} : prev));
+    };
+    if (VOICE_AUDIO_ENABLED) {
+      // 播完 1s 收起；didJustFinish 没来时 15s 兜底收起
+      playVoice(key, () => {
+        if (voiceHideTimerRef.current) clearTimeout(voiceHideTimerRef.current);
+        voiceHideTimerRef.current = setTimeout(hide, 1000);
+      });
+      voiceHideTimerRef.current = setTimeout(hide, 15000);
+    } else {
+      // 当前只显示语音条、不出声：停留 8 秒后收起
+      voiceHideTimerRef.current = setTimeout(hide, 8000);
+    }
+  }, []);
+  // 上升沿(0→1)检测用的上一帧值：健康三项 + 久坐按摩运行
+  const prevSpineRef = useRef(0);
+  const prevBumpRef = useRef(0);
+  const prevMotionRef = useRef(0);
+  const prevMassageActiveRef = useRef(0);
+  // 「试听语音」按钮的循环下标(依次播 5 条)
+  const voiceTestIdxRef = useRef(0);
+  useEffect(
+    () => () => {
+      if (voiceHideTimerRef.current) clearTimeout(voiceHideTimerRef.current);
+    },
+    [],
+  );
+
   // 入座定时充气提示弹窗
   const [seatedInflateToast, setSeatedInflateToast] = useState(false);
   const nonStdFramesRef = useRef<{hex: string; length: number; timestamp: number; csv: string}[]>([]);
@@ -1059,6 +1115,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         longSitCycleRemain?: number;
         longSitPrompt?: number;
         longSitMassageActive?: number;
+        spineProtectActive?: number;
+        spineProtectSide?: number;
+        bumpReliefActive?: number;
+        motionSicknessActive?: number;
+        healthReasonCode?: number;
       }) => {
         const cushion = event.cushion ?? [];
         const backrest = event.backrest ?? [];
@@ -1080,6 +1141,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           setMassageToast(true);
         }
         lastMassagePromptRef.current = prompt;
+
+        // ── 健康提示 & 久坐按摩：上升沿(0→1)触发语音播报 + 语音条 ──
+        const spine = event.spineProtectActive ?? 0;
+        const bump = event.bumpReliefActive ?? 0;
+        const motion = event.motionSicknessActive ?? 0;
+        const massageActive = event.longSitMassageActive ?? 0;
+        if (spine >= 0.5 && prevSpineRef.current < 0.5) triggerVoice('spine_protect');
+        prevSpineRef.current = spine;
+        if (bump >= 0.5 && prevBumpRef.current < 0.5) triggerVoice('bump_relief');
+        prevBumpRef.current = bump;
+        if (motion >= 0.5 && prevMotionRef.current < 0.5) triggerVoice('motion_sickness');
+        prevMotionRef.current = motion;
+        // 按摩真正开始运行(0→1)时播报（与「久坐按摩已启动」提示同一时机）
+        if (massageActive >= 0.5 && prevMassageActiveRef.current < 0.5) triggerVoice('massage_on');
+        prevMassageActiveRef.current = massageActive;
+
         // 喂 3D 压力云图:[坐垫48, 靠背56]=104,新数组(新引用)触发 CarAirRN 更新
         // 假压力开启时不覆盖(用假数据对齐位置)
         if (!fakePressureRef.current) {
@@ -1097,6 +1174,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           );
           // 在座 → 点亮座椅「点」，离座 → 关闭（首页中间座椅图，仅点、不联动光）
           setDotsOn(nextSeat === 'seated');
+          // 乘员入座（离座→在座）→ 欢迎语播报 + 语音条
+          if (nextSeat === 'seated') triggerVoice('seat_welcome');
           // 上报给 App，供自定义气囊弹窗同步联动
           onSeatStatusChange?.(nextSeat);
         }
@@ -1138,7 +1217,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     const downlinkSub = emitter.addListener(
       'onAirbagDownlink',
       (event: {hex?: string; gears?: number[]}) => {
-        downlinkRef.current = {hex: event.hex ?? '', gears: event.gears ?? []};
+        const gears = event.gears ?? [];
+        downlinkRef.current = {hex: event.hex ?? '', gears};
+        // 气囊编号(1-based)→ 首页座椅图部位。有动作(档位≠0)就闪对应部位(含非手动的算法变动)。
+        const zones = new Set<string>();
+        gears.forEach((g, idx) => {
+          if (g === 0) return;
+          const id = idx + 1; // 气囊编号 1..24
+          if (id === 1 || id === 2) zones.add(id === 1 ? 'topL' : 'topR');
+          else if (id === 3 || id === 4) zones.add(id === 3 ? 'midR' : 'midL');
+          else if (id === 5 || id === 6) zones.add('back');
+          else if (id === 7 || id === 8) zones.add('cushion');
+          else if (id === 9 || id === 10) zones.add(id === 9 ? 'legR' : 'legL');
+        });
+        if (zones.size) flashSeatParts(Array.from(zones));
       },
     );
 
@@ -1153,7 +1245,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       airbag13Sub.remove();
       downlinkSub.remove();
     };
-  }, [handleAlgoResult, onAdaptiveChange, onSeatStatusChange]);
+  }, [handleAlgoResult, onAdaptiveChange, onSeatStatusChange, flashSeatParts, triggerVoice]);
 
   // 弹窗打开时按 250ms（约 4Hz）限流刷新显示，避免每帧重渲染卡顿。
   // 同时每约 1 秒用帧计数实测一次真实帧率（收帧不受限流影响，全部照收）。
@@ -1421,7 +1513,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
         {/* 中间:固定座椅气垫图(不可交互) */}
         <View style={styles.centerPanel} pointerEvents="none">
-          <SeatCushion style={styles.seatCushion} dotsOn={dotsOn} glowOn={glowOn} bigDotsOn={bigDotsOn} />
+          <SeatCushion style={styles.seatCushion} dotsOn={dotsOn} glowOn={glowOn} bigDotsOn={bigDotsOn} flash={seatFlash} />
         </View>
 
         {/* ─── 右侧面板 ─── */}
@@ -2179,12 +2271,23 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         <Text style={styles.airbagDataFabText}>板子数据</Text>
       </TouchableOpacity>
 
-      {/* 测试按钮:点一下弹出/收起语音条(以后换成按数据触发) */}
+      {/* 测试按钮:依次试听 5 条语音(走真实播放路径:播 MP3 + 弹语音条,播完自动收起) */}
       <TouchableOpacity
         style={styles.voiceTestFab}
-        onPress={() => setVoiceBar(prev => ({...prev, visible: !prev.visible}))}
+        onPress={() => {
+          const keys: VoiceKey[] = [
+            'seat_welcome',
+            'massage_on',
+            'spine_protect',
+            'bump_relief',
+            'motion_sickness',
+          ];
+          const k = keys[voiceTestIdxRef.current % keys.length];
+          voiceTestIdxRef.current += 1;
+          triggerVoice(k);
+        }}
         activeOpacity={0.8}>
-        <Text style={styles.airbagDataFabText}>{voiceBar.visible ? '收起球' : '弹球测试'}</Text>
+        <Text style={styles.airbagDataFabText}>试听语音</Text>
       </TouchableOpacity>
 
       {/* 测试按钮:座椅点 开启(蓝)/关闭(白) 切换(以后换成按数据) */}

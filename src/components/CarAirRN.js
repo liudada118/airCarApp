@@ -29,9 +29,9 @@ const ENABLE_POINT_HIDE = false; // 暂时关闭点隐藏(旧阈值对新数据�
 const POINT_STRIDE = 2;
 const MODEL_ASSET = require('../assets/3D/carSeatModel.glb');
 const DEFAULT_SETTINGS = {
-  gauss: 1.0,        // 用户实机调定
+  gauss: 3.0,        // 用户实机调定
   color: 450,        // 色阶映射范围(用户实机调定)
-  height: 0.3,
+  height: 0.6,
   coherent: 2.0,     // 第二层平滑(插值后):越小越跟手(9→2 加快响应)
   rawSmooth: 1.5,    // 第一层平滑(插值前):越小越跟手(3→1.5 加快响应)
   deadZone: 9,       // 死区阈值,用户实机调定
@@ -56,7 +56,7 @@ const DEFAULT_POINT_FIT_LAYOUT = {
   leftsit: {position: [-28, -9, -30], rotation: [1.35, 0, -0.50], sx: 3.3, sy: 3.3, sz: 3.3},
   rightsit: {position: [64, -7, -10], rotation: [1.35, 0, 0.50], sx: 3.3, sy: 3.3, sz: 3.3},
 };
-const DEFAULT_POINT_SIZE = 3;  // 默认点大小
+const DEFAULT_POINT_SIZE = 4.0;  // 默认点大小
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
 const POINT_MAP_SCALE_DEFAULT = 1.8;

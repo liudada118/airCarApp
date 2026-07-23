@@ -24,6 +24,11 @@
 //   [166] longSitCycleRemain（距下次久坐触发剩余帧数，/13=秒）
 //   [167] longSitPrompt（进入久坐按摩的提示脉冲 0/1）
 //   [168] longSitMassageActive（久坐按摩是否运行中 0/1）
+//   [169] spineProtectActive（脊椎保护激活 0/1）
+//   [170] spineProtectSide（脊椎偏移方向 -1/0/+1）
+//   [171] bumpReliefActive（颠簸缓解激活 0/1）
+//   [172] motionSicknessActive（晕车提醒激活 0/1）
+//   [173] healthReasonCode（健康位掩码 0~7：1脊椎 2颠簸 4晕车）
 #define OUT_FRAME_BASE      4
 #define OUT_CUSHION_BASE    59
 #define OUT_BACKREST_BASE   107
@@ -33,7 +38,12 @@
 #define OUT_LONGSIT_REMAIN  166
 #define OUT_LONGSIT_PROMPT  167
 #define OUT_LONGSIT_ACTIVE  168
-#define OUT_LEN             169
+#define OUT_SPINE_ACTIVE    169
+#define OUT_SPINE_SIDE      170
+#define OUT_BUMP_ACTIVE     171
+#define OUT_MOTION_ACTIVE   172
+#define OUT_HEALTH_CODE     173
+#define OUT_LEN             174
 
 // 把算法输入结构体设为文档默认值（阈值/时序等）。
 // initialize() 不会给输入设默认值，若不填全局输入会是 0，
@@ -125,6 +135,11 @@ Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeStep(JNIEnv *env, jobject t
     out[OUT_LONGSIT_REMAIN] = airbag_13Hz_Y.longSitCycleRemain;
     out[OUT_LONGSIT_PROMPT] = airbag_13Hz_Y.longSitPrompt;
     out[OUT_LONGSIT_ACTIVE] = airbag_13Hz_Y.longSitMassageActive;
+    out[OUT_SPINE_ACTIVE]   = airbag_13Hz_Y.spineProtectActive;
+    out[OUT_SPINE_SIDE]     = airbag_13Hz_Y.spineProtectSide;
+    out[OUT_BUMP_ACTIVE]    = airbag_13Hz_Y.bumpReliefActive;
+    out[OUT_MOTION_ACTIVE]  = airbag_13Hz_Y.motionSicknessActive;
+    out[OUT_HEALTH_CODE]    = airbag_13Hz_Y.healthReasonCode;
 
     jfloatArray result = (*env)->NewFloatArray(env, OUT_LEN);
     (*env)->SetFloatArrayRegion(env, result, 0, OUT_LEN, out);

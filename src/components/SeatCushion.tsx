@@ -239,13 +239,28 @@ interface SeatCushionProps {
    * 传了它就按每个点单独控制;不传则用 bigDotsOn 全局控制。以后接数据用这个。
    */
   bigDotStates?: boolean[];
+  /**
+   * 逐部位闪烁口子:{zones, seq}。seq 每变一次,让 zones 里的部位发光闪一下(渐入→渐出)。
+   * zones 用 GLOW_ZONES 的 key:'topL'|'topR'|'midL'|'midR'|'back'|'cushion'|'legL'|'legR'。
+   * 【口子】以后气囊「非手动」变动时(算法自适应/久坐按摩等),用它触发对应部位闪烁。
+   */
+  flash?: {zones: string[]; seq: number} | null;
 }
+
+/** 气囊部位 → SeatCushion 的 GLOW_ZONES key(供外部构造 flash.zones) */
+export const AIRBAG_ZONE_TO_CUSHION_ZONES: Record<string, string[]> = {
+  shoulder: ['topL', 'topR'], // 肩部→最上两个
+  sideWing: ['midL', 'midR'], // 侧翼→中左中右
+  lumbar: ['back'],           // 腰托→中(靠背)
+  hipFirm: ['cushion'],       // 臀部→中下(坐垫)
+  legRest: ['legL', 'legR'],  // 腿托→最下两个
+};
 
 /**
  * 中间固定座椅:座椅底图 + 发光底 + 8 部位「点」图层 + (新)14 个大涟漪点。
  * 本组件是纯展示、不可交互(pointerEvents=none)。
  */
-const SeatCushion: React.FC<SeatCushionProps> = ({style, activeZones, dotsOn = false, glowOn = false, bigDotsOn = false, bigDotStates}) => {
+const SeatCushion: React.FC<SeatCushionProps> = ({style, activeZones, dotsOn = false, glowOn = false, bigDotsOn = false, bigDotStates, flash = null}) => {
   // 发光底整层透明度:glowOn 变化时 0↔1 淡入淡出
   const glow = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -255,6 +270,25 @@ const SeatCushion: React.FC<SeatCushionProps> = ({style, activeZones, dotsOn = f
       useNativeDriver: true,
     }).start();
   }, [glowOn, glow]);
+
+  // 逐部位闪烁:每个 GLOW_ZONES 项一个独立 opacity(按 key)
+  const flashOpacity = useRef<Record<string, Animated.Value>>(
+    Object.fromEntries(GLOW_ZONES.map(g => [g.key, new Animated.Value(0)])),
+  ).current;
+  useEffect(() => {
+    if (!flash || !flash.zones?.length) return;
+    flash.zones.forEach(key => {
+      const v = flashOpacity[key];
+      if (!v) return;
+      v.stopAnimation();
+      Animated.sequence([
+        Animated.timing(v, {toValue: 1, duration: 300, useNativeDriver: true}),   // 渐入
+        Animated.delay(900),                                                       // 停留(加长)
+        Animated.timing(v, {toValue: 0, duration: 800, useNativeDriver: true}),   // 渐出
+      ]).start();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flash?.seq]);
 
   return (
     <View style={[styles.root, style]} pointerEvents="none">
@@ -276,6 +310,23 @@ const SeatCushion: React.FC<SeatCushionProps> = ({style, activeZones, dotsOn = f
           </View>
         ))}
       </Animated.View>
+
+      {/* 逐部位闪烁层:各自独立 opacity(点某气囊 +/- 或 算法非手动变动 时闪一下) */}
+      {GLOW_ZONES.map(g => (
+        <Animated.View
+          key={`flash-${g.key}`}
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: `${g.left}%`,
+            top: `${g.top}%`,
+            width: `${g.width}%`,
+            aspectRatio: g.ar,
+            opacity: flashOpacity[g.key],
+          }}>
+          <g.Comp width="100%" height="100%" />
+        </Animated.View>
+      ))}
 
       {/* 8 部位「点」:开启=蓝点 SVG,关闭=白点 PNG,同一个框里重合 */}
       {DOT_ZONES.map(z => (

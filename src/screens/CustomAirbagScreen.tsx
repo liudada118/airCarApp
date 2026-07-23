@@ -24,6 +24,7 @@ import {
   Toast,
   SeatFront,
 } from '../components';
+import {AIRBAG_ZONE_TO_PARTS} from '../components/SeatFront';
 import IconFont from '../components/IconFont';
 
 // icon 图片资源
@@ -227,6 +228,15 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   // 正视座椅:点 开/关、发光 开/关(接在座状态:在座亮/离座灭;测试按钮仍可手动覆盖)
   const [dotsOn, setDotsOn] = useState(false);
   const [glowOn, setGlowOn] = useState(false);
+  // 逐部位闪烁信号:点某部位气囊 +/- 时,让对应部位闪一下
+  const [flash, setFlash] = useState<{parts: any[]; seq: number} | null>(null);
+  const flashSeqRef = useRef(0);
+  const triggerFlash = useCallback((zone: string) => {
+    const parts = AIRBAG_ZONE_TO_PARTS[zone];
+    if (!parts) return;
+    flashSeqRef.current += 1;
+    setFlash({parts, seq: flashSeqRef.current});
+  }, []);
   // 在座 → 点亮「点」，离座 → 关闭（与首页联动，仅点、不联动光）
   useEffect(() => {
     setDotsOn(seatStatus === 'seated');
@@ -479,11 +489,12 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     // 发送 frontCmd 充气脉冲 [0, 部位, +1]（算法折进 frame[55] 下发；Kotlin 一帧后自动回零）
     sm?.pulseFrontCmd?.(0, ZONE_TO_PART[selectedZone] ?? 0, 1).catch(() => {});
     addLog(selectedZone, 'inflate', `frontCmd[0,${ZONE_TO_PART[selectedZone]},1]`, 0);
+    triggerFlash(selectedZone); // 对应部位闪烁一下
     // 启动锁定（视觉进度，动作时长由算法管理）
     startLockAndHoldPressure(selectedZone);
     // 重置入座定时充气
     onManualAdjust?.();
-  }, [selectedZone, isLocked, cmdCounts, addLog, startLockAndHoldPressure, onManualAdjust]);
+  }, [selectedZone, isLocked, cmdCounts, addLog, startLockAndHoldPressure, onManualAdjust, triggerFlash]);
 
   // 减少气囊值（放气）
   const handleDecrease = useCallback(() => {
@@ -503,11 +514,12 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     // 发送 frontCmd 放气脉冲 [0, 部位, -1]
     sm?.pulseFrontCmd?.(0, ZONE_TO_PART[selectedZone] ?? 0, -1).catch(() => {});
     addLog(selectedZone, 'deflate', `frontCmd[0,${ZONE_TO_PART[selectedZone]},-1]`, 0);
+    triggerFlash(selectedZone); // 对应部位闪烁一下
     // 启动锁定（视觉进度，动作时长由算法管理）
     startLockAndHoldPressure(selectedZone);
     // 重置入座定时充气
     onManualAdjust?.();
-  }, [selectedZone, isLocked, cmdCounts, addLog, startLockAndHoldPressure, onManualAdjust]);
+  }, [selectedZone, isLocked, cmdCounts, addLog, startLockAndHoldPressure, onManualAdjust, triggerFlash]);
 
   // 点击保存按钮
   const handleSavePress = useCallback(() => {
@@ -775,7 +787,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
             {/* 中间座椅图:正视座椅 + 点(开/关)+ 发光(淡入淡出) */}
             <View style={styles.seatContainer}>
-              <SeatFront dotsOn={dotsOn} glowOn={glowOn} />
+              <SeatFront dotsOn={dotsOn} glowOn={glowOn} flash={flash} />
             </View>
 
             {/* 右侧标签（侧翼、臀部软硬度） */}

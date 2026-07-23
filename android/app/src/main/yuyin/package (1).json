@@ -1,0 +1,70 @@
+export interface ProgressData {
+  stage: 'ort' | 'model' | 'phonemizer' | 'ready';
+  progress: number;
+  message: string;
+}
+
+export interface TTSEngineConfig {
+  model: string;
+  ortCdnUrl: string;
+  noiseScale: number;
+  lengthScale: number;
+  noiseW: number;
+  queueGap: number;
+  maxQueueSize: number;
+  localeToLang: Record<string, string>;
+}
+
+export class TTSEngine {
+  status: string;
+  isReady: boolean;
+  isPlaying: boolean;
+  isPaused: boolean;
+  queueLength: number;
+  currentLanguage: string;
+
+  init(options?: {
+    i18n?: any;
+    model?: string;
+    locale?: string;
+    onProgress?: (data: ProgressData) => void;
+    onStatusChange?: (status: string) => void;
+    onError?: (error: Error) => void;
+    piperOptions?: any;
+  }): Promise<void>;
+
+  speak(textOrKey: string, lang?: string): string | null;
+  speakUrgent(textOrKey: string, lang?: string): string | null;
+  pause(): void;
+  resume(): void;
+  stop(): void;
+  skip(): void;
+  clearQueue(): void;
+  remove(id: string): void;
+  setI18n(i18n: any): void;
+  setLocale(locale: string): void;
+  setConfig(config: Partial<TTSEngineConfig>): void;
+  dispose(): void;
+}
+
+export const ttsEngine: TTSEngine;
+
+export const TTS_STATUS: {
+  UNINITIALIZED: 'uninitialized';
+  INITIALIZING: 'initializing';
+  READY: 'ready';
+  ERROR: 'error';
+};
+
+export function initializeTTS(options?: {
+  i18n?: any;
+  locale?: string;
+  model?: string;
+  showProgressBar?: boolean;
+  progressBarContainer?: HTMLElement;
+  onProgress?: (data: ProgressData) => void;
+  onStatusChange?: (status: string) => void;
+  onError?: (error: Error) => void;
+}): Promise<TTSEngine>;
+
+export default ttsEngine;
