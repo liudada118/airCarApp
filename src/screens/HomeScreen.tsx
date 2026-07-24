@@ -1072,7 +1072,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       if (frames.length > 50) frames.length = 50;
       setNonStdFrameVersion(v => v + 1);
 
-      // 解析回传指令（长度∙51）更新气囊状态
+      // 气囊回传帧（格式同下发 frame[55]：[0]帧头 + 24 组 [编号,档位]，档位在 bytes[id*2]，3充/4放）
+      // → 更新气囊指令状态 + 驱动「下发监控」面板 + 首页座椅充放气闪烁（这是气囊硬件回传的真实动作）
       if (entry.csv && (entry.length ?? 0) >= 21) {
         try {
           const bytes = entry.csv.split(',').map(Number);
@@ -1084,6 +1085,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               commandStates: newStates,
               rawCommand: bytes,
             }));
+
+            // 从回传帧取 24 个气囊档位：gears[id-1] = bytes[id*2]（短帧缺失的按 0 处理）
+            const gears: number[] = [];
+            let anyActive = false;
+            for (let id = 1; id <= 24; id++) {
+              const gear = bytes[id * 2] ?? 0;
+              gears.push(gear);
+              if (gear !== 0) anyActive = true;
+            }
+            downlinkRef.current = {hex: entry.hex, gears};
+            // 气囊编号(1-based)→ 首页座椅图部位。有动作(档位≠0)就闪对应部位。
+            if (anyActive) {
+              const zones = new Set<string>();
+              gears.forEach((g, idx) => {
+                if (g === 0) return;
+                const id = idx + 1; // 气囊编号 1..24
+                if (id === 1 || id === 2) zones.add(id === 1 ? 'topL' : 'topR');
+                else if (id === 3 || id === 4) zones.add(id === 3 ? 'midR' : 'midL');
+                else if (id === 5 || id === 6) zones.add('back');
+                else if (id === 7 || id === 8) zones.add('cushion');
+                else if (id === 9 || id === 10) zones.add(id === 9 ? 'legR' : 'legL');
+              });
+              if (zones.size) flashSeatParts(Array.from(zones));
+            }
           }
         } catch (e) {
           // console.warn('[NonStdFrame] 解析失败:', e);
@@ -1214,25 +1239,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     );
 
     // 下发命令监控(临时测试面板):有气囊在动时收到
-    const downlinkSub = emitter.addListener(
-      'onAirbagDownlink',
-      (event: {hex?: string; gears?: number[]}) => {
-        const gears = event.gears ?? [];
-        downlinkRef.current = {hex: event.hex ?? '', gears};
-        // 气囊编号(1-based)→ 首页座椅图部位。有动作(档位≠0)就闪对应部位(含非手动的算法变动)。
-        const zones = new Set<string>();
-        gears.forEach((g, idx) => {
-          if (g === 0) return;
-          const id = idx + 1; // 气囊编号 1..24
-          if (id === 1 || id === 2) zones.add(id === 1 ? 'topL' : 'topR');
-          else if (id === 3 || id === 4) zones.add(id === 3 ? 'midR' : 'midL');
-          else if (id === 5 || id === 6) zones.add('back');
-          else if (id === 7 || id === 8) zones.add('cushion');
-          else if (id === 9 || id === 10) zones.add(id === 9 ? 'legR' : 'legL');
-        });
-        if (zones.size) flashSeatParts(Array.from(zones));
-      },
-    );
+    // 注：气囊充放气「下发监控」面板 + 首页座椅闪烁改由气囊回传帧驱动（见上方 onNonStandardFrame），
+    // 不再用 onAirbagDownlink（那是我发给算法的 frame[55]，非硬件回传的真实动作）。
 
     return () => {
       dataSub.remove();
@@ -1243,7 +1251,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       nonStdSub.remove();
       airbagSub.remove();
       airbag13Sub.remove();
-      downlinkSub.remove();
     };
   }, [handleAlgoResult, onAdaptiveChange, onSeatStatusChange, flashSeatParts, triggerVoice]);
 
@@ -1624,7 +1631,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 style={[styles.matrixToggleBtn, {marginLeft: 6}]}
                 onPress={() => setShowDownlink(true)}
                 activeOpacity={0.7}>
-                <Text style={styles.matrixToggleBtnText}>下发监控</Text>
+                <Text style={styles.matrixToggleBtnText}>回传监控</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.matrixToggleBtn, {marginLeft: 6, backgroundColor: fakePressure ? 'rgba(52,152,219,0.85)' : 'rgba(0,0,0,0.55)'}]}
@@ -2361,7 +2368,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         <View style={styles.matrixModalOverlay}>
           <View style={[styles.matrixModalContent, {maxWidth: 520}]}>
             <View style={styles.matrixModalHeader}>
-              <Text style={styles.matrixModalTitle}>下发命令监控(气囊动作时刷新)</Text>
+              <Text style={styles.matrixModalTitle}>气囊回传动作监控(气囊动作时刷新)</Text>
               <TouchableOpacity onPress={() => setShowDownlink(false)} activeOpacity={0.7} style={styles.matrixModalClose}>
                 <Text style={styles.matrixModalCloseText}>✕</Text>
               </TouchableOpacity>
@@ -2386,7 +2393,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                   {downlinkView.hex}
                 </Text>
                 <Text style={{color: Colors.textGray, fontSize: 11, marginTop: 8}}>
-                  绿=充气(3) 橙=放气(4);1-10 支撑气囊,11-24 按摩气囊。全 0 时不刷新(说明当前无动作)。
+                  绿=充气(3) 橙=放气(4);1-10 支撑气囊,11-24 按摩气囊。数据来自气囊硬件回传帧。全 0 时不刷新(说明当前无动作)。
                 </Text>
               </View>
             ) : (

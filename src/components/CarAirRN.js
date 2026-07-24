@@ -26,7 +26,12 @@ const HIDE_THRESHOLD_RATIO = 0.3;
 const ENABLE_POINT_HIDE = false; // 暂时关闭点隐藏(旧阈值对新数据量级太高会全隐藏),先让点云可见
 // 点抽稀:每隔 POINT_STRIDE 个点显示一个(矩形布局)。越大点越少。
 // 1=全部显示;2=每隔一个(约 1/4 点);3=更稀。不改变点阵范围/贴合位置。
-const POINT_STRIDE = 2;
+// 柔化热力场需要点密集叠加,用 1(全显示)。
+const POINT_STRIDE = 1;
+// 矩形边缘淡出:从边界往里 EDGE_FADE_POINTS 个点内透明度从 0 渐入,消除硬直角边界。
+const EDGE_FADE_POINTS = 5;
+// 低压透明度地板:压力越低越透明(0=完全消失)。留一点底让静止时能看到淡淡的场。
+const LOW_ALPHA_FLOOR = 0.12;
 const MODEL_ASSET = require('../assets/3D/carSeatModel.glb');
 const DEFAULT_SETTINGS = {
   gauss: 3.0,        // 用户实机调定
@@ -276,32 +281,30 @@ async function loadSeatModel(group) {
 
 let _sharedCircleTexture = null;
 
-function getSharedCircleTexture(size = 32) {
+function getSharedCircleTexture(size = 64) {
   if (_sharedCircleTexture) {
     return _sharedCircleTexture;
   }
   const data = new Uint8Array(size * size * 4);
   const center = (size - 1) / 2;
   const radius = size / 2 - 1;
-  const feather = 2;
 
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
       const dx = x - center;
       const dy = y - center;
       const dist = Math.sqrt(dx * dx + dy * dy);
+      // 高斯柔化：中心不透明，向边缘平滑衰减到 0（发光光斑，不是硬边圆点）
+      const t = dist / radius; // 0=中心, 1=边缘
       let alpha = 0;
-      if (dist <= radius) {
-        alpha = 255;
-        if (dist > radius - feather) {
-          alpha = Math.max(0, Math.round(((radius - dist) / feather) * 255));
-        }
+      if (t < 1) {
+        alpha = Math.exp(-3.2 * t * t) * (1 - t); // 高斯衰减 + 边缘归零
       }
       const idx = (y * size + x) * 4;
       data[idx] = 255;
       data[idx + 1] = 255;
       data[idx + 2] = 255;
-      data[idx + 3] = alpha;
+      data[idx + 3] = Math.max(0, Math.min(255, Math.round(alpha * 255)));
     }
   }
 
@@ -392,10 +395,10 @@ function initPoint(config, pointConfig, name, group) {
     depthWrite: false,
     depthTest: true,
     blending: THREE.NormalBlending,
-    opacity: 0.6,
+    opacity: 0.9,
     size: DEFAULT_POINT_SIZE,
     map: circleTexture,
-    alphaTest: 0.2,
+    alphaTest: 0.0, // 不裁剪柔和边缘，让光斑平滑叠成连续热力场
   });
   material.onBeforeCompile = shader => {
     shader.vertexShader = shader.vertexShader
@@ -416,6 +419,11 @@ function initPoint(config, pointConfig, name, group) {
       .replace(
         '#include <clipping_planes_fragment>',
         '#include <clipping_planes_fragment>\n if (vScale <= 0.0) discard;',
+      )
+      // vScale 作为 0~1 连续透明度倍率：边缘淡出 + 低压淡出
+      .replace(
+        '#include <color_fragment>',
+        '#include <color_fragment>\n diffuseColor.a *= clamp(vScale, 0.0, 1.0);',
       );
   };
   material.needsUpdate = true;
@@ -560,7 +568,17 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
         const isHidden = ENABLE_POINT_HIDE && smoothBig[l] <= hideThreshold;
         // 抽稀:每隔 POINT_STRIDE 显示一个点(矩形布局,减少点数,不改变贴合)
         const thinned = POINT_STRIDE > 1 && (ix % POINT_STRIDE !== 0 || iy % POINT_STRIDE !== 0);
-        scales[j] = isHidden || thinned ? 0 : 1;
+        if (isHidden || thinned) {
+          scales[j] = 0;
+        } else {
+          // 边缘淡出:离矩形边界越近越透明(用几何行列 ix/iy,不受 flipRow 影响)
+          const distEdge = Math.min(ix, amountX - 1 - ix, iy, amountY - 1 - iy);
+          const edgeFade = Math.max(0, Math.min(1, distEdge / EDGE_FADE_POINTS));
+          // 低压淡出:压力越低越透明,留一点底(LOW_ALPHA_FLOOR)
+          const norm = color > 0 ? Math.max(0, Math.min(1, smoothBig[l] / color)) : 0;
+          const pressureAlpha = LOW_ALPHA_FLOOR + (1 - LOW_ALPHA_FLOOR) * norm;
+          scales[j] = edgeFade * pressureAlpha;
+        }
       }
 
       const rgb = jetWhite3(0, color, smoothBig[l]);
