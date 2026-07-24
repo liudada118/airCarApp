@@ -91,8 +91,20 @@ const ZONE_SHORT_LABELS: Record<string, string> = {
 };
 
 const MAX_VALUE = 3;
-const MIN_VALUE = -3;
 const MAX_LOG_LINES = 50;
+
+const clampAirbagLevel = (value: number) =>
+  Math.max(0, Math.min(MAX_VALUE, Math.round(Number.isFinite(value) ? value : 0)));
+
+const normalizeAirbagValues = (
+  values: CustomAirbagValues,
+): CustomAirbagValues => ({
+  shoulder: clampAirbagLevel(values.shoulder),
+  sideWing: clampAirbagLevel(values.sideWing),
+  lumbar: clampAirbagLevel(values.lumbar),
+  hipFirm: clampAirbagLevel(values.hipFirm),
+  legRest: clampAirbagLevel(values.legRest),
+});
 
 /** 气囊区域 → 算法 frontCmd 的 partCmd 编号（1肩/2侧翼/3腰托/4臀/5腿托） */
 const ZONE_TO_PART: Record<string, number> = {
@@ -148,7 +160,9 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   const [commandStates, setCommandStates] = useState<AirbagCommandStates>(DEFAULT_AIRBAG_COMMAND_STATES);
 
   // ━━━ 同步初始化：用 initialValues 作为初始值，确保首次渲染就有正确的值 ━━━
-  const initValues = initialValues || DEFAULT_CUSTOM_AIRBAG_VALUES;
+  const initValues = normalizeAirbagValues(
+    initialValues || DEFAULT_CUSTOM_AIRBAG_VALUES,
+  );
 
   const [airbagValues, setAirbagValues] = useState<CustomAirbagValues>(initValues);
   const [storageLoaded, setStorageLoaded] = useState(false);
@@ -166,13 +180,14 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
       // 加载成功后同时更新 airbagValues 和 cmdCounts
       const applyLoadedValues = (values: CustomAirbagValues) => {
-        setAirbagValues(values);
+        const normalizedValues = normalizeAirbagValues(values);
+        setAirbagValues(normalizedValues);
         setCmdCounts({
-          shoulder: values.shoulder,
-          sideWing: values.sideWing,
-          lumbar: values.lumbar,
-          hipFirm: values.hipFirm,
-          legRest: values.legRest,
+          shoulder: normalizedValues.shoulder,
+          sideWing: normalizedValues.sideWing,
+          lumbar: normalizedValues.lumbar,
+          hipFirm: normalizedValues.hipFirm,
+          legRest: normalizedValues.legRest,
         });
 
       };
@@ -258,7 +273,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   // 记录锁定时操作的 zone，用于1秒后发送保压指令
   const lastCmdZoneRef = useRef<CustomAirbagZone | null>(null);
 
-  // 每个气囊的累计操作次数（充气 +1，放气 -1）
+  // 每个气囊当前档位：0～3。加号升档，减号只能退回已经增加的档位。
   // ━━━ 同步初始化：用 initValues 作为初始值，确保首次渲染就显示上次保存的值 ━━━
   const [cmdCounts, setCmdCounts] = useState<Record<CustomAirbagZone, number>>({
     shoulder: initValues.shoulder,
@@ -501,8 +516,8 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     if (!selectedZone || isLocked) {
       return;
     }
-    // 最多减 MIN_VALUE 次
-    if (cmdCounts[selectedZone] <= MIN_VALUE) {
+    // 0 档时不可继续减，避免出现负档位。
+    if (cmdCounts[selectedZone] <= 0) {
       return;
     }
     setAirbagValues(prev => {
@@ -760,7 +775,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
                 onIncrease={handleIncrease}
                 onDecrease={handleDecrease}
                 canIncrease={!selectedZone ? false : cmdCounts[selectedZone] < MAX_VALUE}
-                canDecrease={!selectedZone ? false : cmdCounts[selectedZone] > MIN_VALUE}
+                canDecrease={!selectedZone ? false : cmdCounts[selectedZone] > 0}
                 disabled={!selectedZone || isLocked}
               />
               {/* 锁定遮罩层提示 */}

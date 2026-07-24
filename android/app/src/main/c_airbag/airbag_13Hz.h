@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.210
+ * Model version                  : 1.213
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Wed Jul 22 16:13:02 2026
+ * C/C++ source code generated on : Thu Jul 23 16:07:14 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -69,6 +69,7 @@ typedef struct {
   real32_T pBaseReady;                 /* '<Root>/品味系数' */
   real32_T pRequestElapsed;            /* '<Root>/品味系数' */
   real32_T pAdaptiveOff;               /* '<Root>/品味系数' */
+  real32_T pEntryDeflate;              /* '<Root>/品味系数' */
   real32_T pCopBufX[125];              /* '<Root>/健康检测' */
   real32_T pCopBufY[125];              /* '<Root>/健康检测' */
   real32_T pPeakPressure;              /* '<Root>/健康检测' */
@@ -141,6 +142,13 @@ typedef struct {
   real32_T sadThreshold;               /* '<Root>/sadThreshold' */
   real32_T sadNormalizeScale;          /* '<Root>/sadNormalizeScale' */
   real32_T livingConfirmCount;         /* '<Root>/livingConfirmCount' */
+  real32_T spineBiasDeadband;          /* '<Root>/ spineBiasDeadband' */
+  real32_T sickForwardMinMm;           /* '<Root>/ sickForwardMinMm' */
+  real32_T sickBackDropRatio;          /* '<Root>/ sickBackDropRatio' */
+  real32_T sickPairWindowSec;          /* '<Root>/ sickPairWindowSec' */
+  real32_T bumpMinVelocity;            /* '<Root>/ bumpMinVelocity' */
+  real32_T bumpMaxRms;                 /* '<Root>/ bumpMaxRms' */
+  real32_T bumpMaxRangeMm;             /* '<Root>/ bumpMaxRangeMm' */
 } ExtU_airbag_13Hz_T;
 
 /* External outputs (root outports fed by signals with default storage) */

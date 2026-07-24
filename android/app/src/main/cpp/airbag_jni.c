@@ -73,6 +73,15 @@ static void set_input_defaults(void) {
     U->frontCmd[0] = 0.0F;
     U->frontCmd[1] = 0.0F;
     U->frontCmd[2] = 0.0F;
+    // 模型 1.213 新增的健康检测标定输入。显式写入模型内置的回退值，
+    // 避免依赖全局变量恰好为 0，也方便后续算法方给出车型标定值后统一替换。
+    U->spineBiasDeadband = 0.5F;
+    U->sickForwardMinMm  = 5.0F;
+    U->sickBackDropRatio = 0.3F;
+    U->sickPairWindowSec = 0.8F;
+    U->bumpMinVelocity   = 8.0F;
+    U->bumpMaxRms        = 0.5F;
+    U->bumpMaxRangeMm    = 15.0F;
 }
 
 JNIEXPORT void JNICALL

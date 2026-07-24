@@ -2250,22 +2250,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       )}
 
       {/* 入座定时充气提示 */}
-      <Toast
+      {/* <Toast
         visible={seatedInflateToast}
         message="检测到您已进行长时间驾驶，自动为您调节坐垫软硬度，如感到不舒适请进入自定义气囊调节界面进行相应气囊自我调节"
         type="info"
         duration={6000}
         onHide={() => setSeatedInflateToast(false)}
-      />
+      /> */}
 
       {/* 久坐按摩已启动提示 */}
-      <Toast
+      {/* <Toast
         visible={massageToast}
         message="久坐按摩已启动"
         type="info"
         duration={5000}
         onHide={() => setMassageToast(false)}
-      />
+      /> */}
 
       {/* ─── 右下角:语音提示条(彩球+文字),纯 UI ─── */}
       <VoiceBar visible={voiceBar.visible} text={voiceBar.text} style={styles.voiceBarWrap} />

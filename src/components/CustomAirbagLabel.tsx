@@ -19,9 +19,8 @@ const ZONE_ICON_MAP: Record<CustomAirbagZone, ImageSourcePropType> = {
 const BLUE_GRAD = ['#559BEA', '#2978CE'] as const;
 // 段总数(与 MAX_VALUE 一致)
 const SEG_TOTAL = 3;
-// 充气段=蓝 / 放气(附属)段=橘
+// 当前档位统一使用蓝色显示，未达到的档位保持灰色。
 const SEG_BLUE = '#4E9BEE';
-const SEG_ORANGE = '#F0883E';
 const SEG_EMPTY = 'rgba(255, 255, 255, 0.18)';
 
 interface CustomAirbagLabelProps {
@@ -31,7 +30,7 @@ interface CustomAirbagLabelProps {
   onPress: (zone: CustomAirbagZone) => void;
   /** 连接线方向 */
   lineDirection: 'left' | 'right';
-  /** 累计操作次数（正数=充气次数=蓝段，负数=放气次数=橘段，0=无操作） */
+  /** 当前气囊档位，范围 0～3 */
   cmdCount?: number;
 }
 
@@ -47,9 +46,8 @@ const CustomAirbagLabel: React.FC<CustomAirbagLabelProps> = ({
   // 选中=白底 → icon/文字用深蓝;默认=蓝底 → icon/文字用白
   const fgColor = isActive ? '#2978CE' : Colors.textWhite;
 
-  // 3 小段:填充数=|cmdCount|(封顶 3);正=蓝、负=橘
-  const filled = Math.min(Math.abs(cmdCount), SEG_TOTAL);
-  const segColor = cmdCount > 0 ? SEG_BLUE : cmdCount < 0 ? SEG_ORANGE : SEG_EMPTY;
+  // 只显示 0～3 档：已增加的档位为蓝色，减号只负责退回灰色。
+  const filled = Math.max(0, Math.min(cmdCount, SEG_TOTAL));
 
   return (
     <View
@@ -91,7 +89,7 @@ const CustomAirbagLabel: React.FC<CustomAirbagLabelProps> = ({
               key={i}
               style={[
                 styles.seg,
-                {backgroundColor: i < filled ? segColor : SEG_EMPTY},
+                {backgroundColor: i < filled ? SEG_BLUE : SEG_EMPTY},
               ]}
             />
           ))}

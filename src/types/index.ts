@@ -184,7 +184,7 @@ export interface CustomAirbagZoneConfig {
 }
 
 /**
- * 自定义气囊值 (0-10)
+ * 自定义气囊档位（0-3）
  */
 export type CustomAirbagValues = Record<CustomAirbagZone, number>;
 

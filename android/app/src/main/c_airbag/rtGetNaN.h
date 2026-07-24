@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.210
+ * Model version                  : 1.213
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Wed Jul 22 16:13:02 2026
+ * C/C++ source code generated on : Thu Jul 23 16:07:14 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4

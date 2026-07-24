@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.210
+ * Model version                  : 1.213
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Wed Jul 22 16:13:02 2026
+ * C/C++ source code generated on : Thu Jul 23 16:07:14 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -402,20 +402,21 @@ void airbag_13Hz_step(void)
   real32_T addedEdgeLength;
   real32_T adoptionFrequency;
   real32_T b_pressure;
+  real32_T b_weightedY;
   real32_T baseInflationSeconds;
+  real32_T bumpRangeMax;
   real32_T deflationSeconds;
   real32_T dyNew;
   real32_T partCmd;
   real32_T pathIncrement;
-  real32_T pressure;
   real32_T rtb_avg_velocity;
-  real32_T rtb_backrestSum_j;
   real32_T rtb_backrest_cop_y;
+  real32_T rtb_cop_x;
   real32_T rtb_cushionSum_b;
   real32_T rtb_delta_x;
   real32_T rtb_delta_y;
   real32_T rtb_rms_displacement;
-  real32_T weightedY;
+  real32_T spineDeadband;
   real32_T xtmp;
   int8_T b_vlen_tmp_data[56];
   int8_T vlen_tmp_data[56];
@@ -441,7 +442,9 @@ void airbag_13Hz_step(void)
   static const real32_T e_0[8] = { 1.5F, 0.7F, 0.7F, 1.3F, 0.48F, 0.7F, 0.64F,
     0.96F };
 
-  static const int8_T g[5] = { 2, 2, 3, 3, 3 };
+  static const int8_T g[5] = { 1, 0, -1, 5, 4 };
+
+  static const int8_T h[5] = { 2, 2, 3, 3, 3 };
 
   boolean_T exitg1;
   boolean_T guard1;
@@ -1133,6 +1136,7 @@ void airbag_13Hz_step(void)
     airbag_13Hz_DW.pBaseReady = 0.0F;
     airbag_13Hz_DW.pRequestElapsed = 0.0F;
     airbag_13Hz_DW.pGapCycles = 0;
+    airbag_13Hz_DW.pEntryDeflate = 0.0F;
     if (airbag_13Hz_DW.pAdaptiveOff > 0.5F) {
       airbag_13Hz_DW.pState = 3.0F;
     } else {
@@ -1242,6 +1246,12 @@ void airbag_13Hz_step(void)
     if (xtmp == 1.0F) {
       airbag_13Hz_DW.pState = 1.0F;
       airbag_13Hz_DW.pPending[1] = 0.0F;
+      airbag_13Hz_DW.pEntryDeflate = 1.0F;
+      airbag_13Hz_DW.pReplayIndex = 0;
+      for (i = 0; i < 5; i++) {
+        airbag_13Hz_DW.pEditTimes[i] = 0.0F;
+      }
+
       if (airbag_13Hz_DW.pAdaptiveOff > 0.5F) {
         airbag_13Hz_DW.pAdaptiveOff = 0.0F;
         nvmCmd = 3;
@@ -1252,6 +1262,7 @@ void airbag_13Hz_step(void)
       }
     } else if (xtmp == 3.0F) {
       airbag_13Hz_DW.pPending[1] = 1.0F;
+      airbag_13Hz_DW.pEntryDeflate = 0.0F;
       if (airbag_13Hz_DW.pAdaptiveOff > 0.5F) {
         airbag_13Hz_DW.pAdaptiveOff = 0.0F;
         nvmCmd = 3;
@@ -1274,10 +1285,12 @@ void airbag_13Hz_step(void)
       airbag_13Hz_DW.pPending[1] = 0.0F;
       airbag_13Hz_DW.pPending[2] = 1.0F;
       airbag_13Hz_DW.pAdaptiveOff = 0.0F;
+      airbag_13Hz_DW.pEntryDeflate = 0.0F;
       nvmCmd = 2;
     } else if (xtmp == 5.0F) {
       airbag_13Hz_DW.pState = 3.0F;
       airbag_13Hz_DW.pPending[1] = 0.0F;
+      airbag_13Hz_DW.pEntryDeflate = 0.0F;
       if (airbag_13Hz_DW.pAdaptiveOff <= 0.5F) {
         airbag_13Hz_DW.pAdaptiveOff = 1.0F;
         nvmCmd = 3;
@@ -1303,11 +1316,22 @@ void airbag_13Hz_step(void)
     requestIdle = false;
   }
 
+  if ((airbag_13Hz_DW.pEntryDeflate > 0.5F) && requestIdle && living &&
+      (airbag_13Hz_DW.pPending[2] <= 0.5F)) {
+    for (nz = 0; nz < 5; nz++) {
+      airbag_13Hz_DW.pRequest[nz] = g[nz];
+    }
+
+    airbag_13Hz_DW.pRequestElapsed = 0.0F;
+    airbag_13Hz_DW.pEntryDeflate = 0.0F;
+    requestIdle = false;
+  }
+
   if ((accumulatedData != 0.0F) && ((accumulatedData !=
         airbag_13Hz_DW.pPrevFrontCmd[2]) || (partCmd !=
         airbag_13Hz_DW.pPrevFrontCmd[1])) && requestIdle &&
       (airbag_13Hz_DW.pReplayIndex == 0) && (airbag_13Hz_DW.pState == 1.0F) &&
-      living) {
+      living && (airbag_13Hz_DW.pEntryDeflate <= 0.5F)) {
     queueValues_data[0] = (airbag_13Hz_DW.pPending[0] > 0.5F);
     queueValues_data[1] = (airbag_13Hz_DW.pPending[1] > 0.5F);
     queueValues_data[2] = (airbag_13Hz_DW.pPending[2] > 0.5F);
@@ -1324,15 +1348,15 @@ void airbag_13Hz_step(void)
 
       if ((nz >= 1) && (nz <= 5)) {
         deflationSeconds = airbag_13Hz_DW.pEditTimes[nz - 1];
-        adoptionFrequency = g[nz - 1];
+        adoptionFrequency = h[nz - 1];
         baseInflationSeconds = adoptionFrequency * accumulatedData +
           deflationSeconds;
         if (rtIsInfF(baseInflationSeconds) || rtIsNaNF(baseInflationSeconds)) {
           baseInflationSeconds = 0.0F;
         } else {
-          rtb_backrestSum_j = d_0[nz - 1];
-          baseInflationSeconds = fmaxf(-rtb_backrestSum_j, fminf
-            (rtb_backrestSum_j, baseInflationSeconds));
+          rtb_backrest_cop_y = d_0[nz - 1];
+          baseInflationSeconds = fmaxf(-rtb_backrest_cop_y, fminf
+            (rtb_backrest_cop_y, baseInflationSeconds));
         }
 
         if (deflationSeconds != baseInflationSeconds) {
@@ -1350,7 +1374,8 @@ void airbag_13Hz_step(void)
   }
 
   if ((airbag_13Hz_DW.pReplayIndex > 0) && living && requestIdle &&
-      (airbag_13Hz_DW.pPending[2] <= 0.5F)) {
+      (airbag_13Hz_DW.pPending[2] <= 0.5F) && (airbag_13Hz_DW.pEntryDeflate <=
+       0.5F)) {
     nz = 0;
     exitg1 = false;
     while ((!exitg1) && (nz < 5)) {
@@ -1383,7 +1408,8 @@ void airbag_13Hz_step(void)
   }
 
   if ((airbag_13Hz_DW.pRequest[0] <= 0.5F) && ((airbag_13Hz_DW.pReplayIndex == 0)
-       && ((airbag_13Hz_DW.pPending[2] <= 0.5F) && b_requestIdle_tmp))) {
+       && ((airbag_13Hz_DW.pPending[2] <= 0.5F) &&
+           ((airbag_13Hz_DW.pEntryDeflate <= 0.5F) && b_requestIdle_tmp)))) {
     if ((airbag_13Hz_DW.pPending[0] > 0.5F) && living) {
       for (i = 0; i < 5; i++) {
         airbag_13Hz_DW.pSavedTimes[i] = airbag_13Hz_DW.pEditTimes[i];
@@ -1413,7 +1439,8 @@ void airbag_13Hz_step(void)
     queueValues_data[0] = (airbag_13Hz_DW.pPending[0] > 0.5F);
     queueValues_data[1] = (airbag_13Hz_DW.pPending[1] > 0.5F);
     queueValues_data[2] = (airbag_13Hz_DW.pPending[2] > 0.5F);
-    gapActive = (airbag_13Hz_any(queueValues_data) || gapActive);
+    gapActive = (airbag_13Hz_any(queueValues_data) ||
+                 ((airbag_13Hz_DW.pEntryDeflate > 0.5F) || gapActive));
   }
 
   b_requestIdle_tmp = (((airbag_13Hz_DW.pState == 0.0F) ||
@@ -1612,15 +1639,15 @@ void airbag_13Hz_step(void)
   /* MATLAB Function: '<Root>/Ω°øµºÏ≤‚' incorporates:
    *  Inport: '<Root>/resetFlag'
    */
+  rtb_cop_x = 0.0F;
   rtb_delta_x = 0.0F;
   rtb_delta_y = 0.0F;
   rtb_rms_displacement = 0.0F;
   rtb_avg_velocity = 0.0F;
   rtb_isStable = 0;
-  baseInflationSeconds = 0.0F;
   rtb_backrest_cop_y = 0.0F;
   rtb_cushionSum_b = 0.0F;
-  rtb_backrestSum_j = 0.0F;
+  baseInflationSeconds = 0.0F;
   guard1 = false;
   if (airbag_13Hz_U.resetFlag || newReason) {
     memset(&airbag_13Hz_DW.pCopBufX[0], 0, 125U * sizeof(real32_T));
@@ -1644,32 +1671,29 @@ void airbag_13Hz_step(void)
   }
 
   if (guard1) {
-    rtb_backrestSum_j = 0.0F;
+    baseInflationSeconds = 0.0F;
     rtb_cushionSum_b = 0.0F;
-    weightedY = 0.0F;
     for (nz = 0; nz < 8; nz++) {
       for (i = 0; i < 7; i++) {
-        pressure = airbag_13Hz_Y.backrestData[nz * 7 + i];
-        if (rtIsInfF(pressure) || rtIsNaNF(pressure)) {
-          pressure = 0.0F;
-        } else if (pressure <= 4.0F) {
-          pressure = 0.0F;
+        rtb_cop_x = airbag_13Hz_Y.backrestData[nz * 7 + i];
+        if (rtIsInfF(rtb_cop_x) || rtIsNaNF(rtb_cop_x)) {
+          rtb_cop_x = 0.0F;
+        } else if (rtb_cop_x <= 4.0F) {
+          rtb_cop_x = 0.0F;
         }
 
-        rtb_backrestSum_j += pressure;
-        rtb_cushionSum_b += (((real32_T)i + 1.0F) - 1.0F) * pressure;
-        weightedY += (((real32_T)nz + 1.0F) - 1.0F) * pressure;
+        baseInflationSeconds += rtb_cop_x;
+        rtb_cushionSum_b += (((real32_T)nz + 1.0F) - 1.0F) * rtb_cop_x;
       }
     }
 
-    if (rtb_backrestSum_j > 0.0F) {
-      baseInflationSeconds = rtb_cushionSum_b / rtb_backrestSum_j;
-      rtb_backrest_cop_y = weightedY / rtb_backrestSum_j;
+    if (baseInflationSeconds > 0.0F) {
+      rtb_backrest_cop_y = rtb_cushionSum_b / baseInflationSeconds;
     }
 
     rtb_cushionSum_b = 0.0F;
-    weightedY = 0.0F;
-    pressure = 0.0F;
+    rtb_cop_x = 0.0F;
+    b_weightedY = 0.0F;
     for (nz = 0; nz < 8; nz++) {
       for (i = 0; i < 6; i++) {
         b_pressure = airbag_13Hz_Y.cushionData[nz * 6 + i];
@@ -1680,17 +1704,17 @@ void airbag_13Hz_step(void)
         }
 
         rtb_cushionSum_b += b_pressure;
-        weightedY += (((real32_T)i + 1.0F) - 1.0F) * b_pressure;
-        pressure += (((real32_T)nz + 1.0F) - 1.0F) * b_pressure;
+        rtb_cop_x += (((real32_T)i + 1.0F) - 1.0F) * b_pressure;
+        b_weightedY += (((real32_T)nz + 1.0F) - 1.0F) * b_pressure;
       }
     }
 
     if (rtb_cushionSum_b > 0.0F) {
-      weightedY /= rtb_cushionSum_b;
-      pressure /= rtb_cushionSum_b;
+      rtb_cop_x /= rtb_cushionSum_b;
+      b_weightedY /= rtb_cushionSum_b;
     } else {
-      weightedY = 0.0F;
-      pressure = 0.0F;
+      rtb_cop_x = 0.0F;
+      b_weightedY = 0.0F;
     }
 
     if (!(rtb_cushionSum_b <= 0.0F)) {
@@ -1730,18 +1754,18 @@ void airbag_13Hz_step(void)
             nz = 124;
           }
 
-          b_pressure = weightedY - airbag_13Hz_DW.pCopBufX[nz];
-          dyNew = pressure - airbag_13Hz_DW.pCopBufY[nz];
+          b_pressure = rtb_cop_x - airbag_13Hz_DW.pCopBufX[nz];
+          dyNew = b_weightedY - airbag_13Hz_DW.pCopBufY[nz];
           addedEdgeLength = (real32_T)sqrt(b_pressure * b_pressure + dyNew *
             dyNew);
         }
 
         if (airbag_13Hz_DW.pBufLen < 125) {
           airbag_13Hz_DW.pBufLen++;
-          airbag_13Hz_DW.pSumX += weightedY;
-          airbag_13Hz_DW.pSumY += pressure;
-          airbag_13Hz_DW.pSumX2 += weightedY * weightedY;
-          airbag_13Hz_DW.pSumY2 += pressure * pressure;
+          airbag_13Hz_DW.pSumX += rtb_cop_x;
+          airbag_13Hz_DW.pSumY += b_weightedY;
+          airbag_13Hz_DW.pSumX2 += rtb_cop_x * rtb_cop_x;
+          airbag_13Hz_DW.pSumY2 += b_weightedY * b_weightedY;
           pathIncrement = addedEdgeLength - airbag_13Hz_DW.pPathCompensation;
           addedEdgeLength = airbag_13Hz_DW.pPathLength + pathIncrement;
           airbag_13Hz_DW.pPathCompensation = (addedEdgeLength -
@@ -1755,14 +1779,15 @@ void airbag_13Hz_step(void)
 
           b_pressure = airbag_13Hz_DW.pCopBufX[nz] - airbag_13Hz_DW.pCopBufX[i];
           dyNew = airbag_13Hz_DW.pCopBufY[nz] - airbag_13Hz_DW.pCopBufY[i];
-          airbag_13Hz_DW.pSumX = (airbag_13Hz_DW.pSumX + weightedY) -
+          airbag_13Hz_DW.pSumX = (airbag_13Hz_DW.pSumX + rtb_cop_x) -
             airbag_13Hz_DW.pCopBufX[i];
-          airbag_13Hz_DW.pSumY = (airbag_13Hz_DW.pSumY + pressure) -
+          airbag_13Hz_DW.pSumY = (airbag_13Hz_DW.pSumY + b_weightedY) -
             airbag_13Hz_DW.pCopBufY[i];
-          airbag_13Hz_DW.pSumX2 = (weightedY * weightedY + airbag_13Hz_DW.pSumX2)
+          airbag_13Hz_DW.pSumX2 = (rtb_cop_x * rtb_cop_x + airbag_13Hz_DW.pSumX2)
             - airbag_13Hz_DW.pCopBufX[i] * airbag_13Hz_DW.pCopBufX[i];
-          airbag_13Hz_DW.pSumY2 = (pressure * pressure + airbag_13Hz_DW.pSumY2)
-            - airbag_13Hz_DW.pCopBufY[i] * airbag_13Hz_DW.pCopBufY[i];
+          airbag_13Hz_DW.pSumY2 = (b_weightedY * b_weightedY +
+            airbag_13Hz_DW.pSumY2) - airbag_13Hz_DW.pCopBufY[i] *
+            airbag_13Hz_DW.pCopBufY[i];
           pathIncrement = addedEdgeLength - airbag_13Hz_DW.pPathCompensation;
           addedEdgeLength = airbag_13Hz_DW.pPathLength + pathIncrement;
           airbag_13Hz_DW.pPathCompensation = (addedEdgeLength -
@@ -1780,8 +1805,8 @@ void airbag_13Hz_step(void)
           }
         }
 
-        airbag_13Hz_DW.pCopBufX[i] = weightedY;
-        airbag_13Hz_DW.pCopBufY[i] = pressure;
+        airbag_13Hz_DW.pCopBufX[i] = rtb_cop_x;
+        airbag_13Hz_DW.pCopBufY[i] = b_weightedY;
         airbag_13Hz_DW.pWriteIndex = i + 1;
         if (airbag_13Hz_DW.pBufLen >= 2) {
           rtb_delta_x = airbag_13Hz_DW.pCopBufX[0];
@@ -1789,18 +1814,18 @@ void airbag_13Hz_step(void)
           rtb_delta_y = airbag_13Hz_DW.pCopBufY[0];
           rtb_rms_displacement = airbag_13Hz_DW.pCopBufY[0];
           for (nz = 2; nz <= airbag_13Hz_DW.pBufLen; nz++) {
-            weightedY = airbag_13Hz_DW.pCopBufX[nz - 1];
-            if (weightedY < rtb_delta_x) {
-              rtb_delta_x = weightedY;
-            } else if (weightedY > rtb_avg_velocity) {
-              rtb_avg_velocity = weightedY;
+            b_weightedY = airbag_13Hz_DW.pCopBufX[nz - 1];
+            if (b_weightedY < rtb_delta_x) {
+              rtb_delta_x = b_weightedY;
+            } else if (b_weightedY > rtb_avg_velocity) {
+              rtb_avg_velocity = b_weightedY;
             }
 
-            weightedY = airbag_13Hz_DW.pCopBufY[nz - 1];
-            if (weightedY < rtb_delta_y) {
-              rtb_delta_y = weightedY;
-            } else if (weightedY > rtb_rms_displacement) {
-              rtb_rms_displacement = weightedY;
+            b_weightedY = airbag_13Hz_DW.pCopBufY[nz - 1];
+            if (b_weightedY < rtb_delta_y) {
+              rtb_delta_y = b_weightedY;
+            } else if (b_weightedY > rtb_rms_displacement) {
+              rtb_rms_displacement = b_weightedY;
             }
           }
 
@@ -1860,11 +1885,75 @@ void airbag_13Hz_step(void)
 
   /* MATLAB Function: '<Root>/Ω°øµ∏…‘§øÿ÷∆' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion1'
+   *  Inport: '<Root>/ bumpMaxRangeMm'
+   *  Inport: '<Root>/ bumpMaxRms'
+   *  Inport: '<Root>/ bumpMinVelocity'
+   *  Inport: '<Root>/ sickBackDropRatio'
+   *  Inport: '<Root>/ sickForwardMinMm'
+   *  Inport: '<Root>/ sickPairWindowSec'
+   *  Inport: '<Root>/ spineBiasDeadband'
    *  Inport: '<Root>/resetFlag'
    *  Logic: '<Root>/Logical Operator'
    */
   airbag_13Hz_Y.cushionForwardMoveMm = 0.0F;
   airbag_13Hz_Y.backrestDropRatio = 1.0F;
+  spineDeadband = airbag_13Hz_U.spineBiasDeadband;
+  if (rtIsInfF(airbag_13Hz_U.spineBiasDeadband) || rtIsNaNF
+      (airbag_13Hz_U.spineBiasDeadband)) {
+    spineDeadband = 0.5F;
+  } else if (airbag_13Hz_U.spineBiasDeadband <= 0.0F) {
+    spineDeadband = 0.5F;
+  }
+
+  b_weightedY = airbag_13Hz_U.sickForwardMinMm;
+  if (rtIsInfF(airbag_13Hz_U.sickForwardMinMm) || rtIsNaNF
+      (airbag_13Hz_U.sickForwardMinMm)) {
+    b_weightedY = 5.0F;
+  } else if (airbag_13Hz_U.sickForwardMinMm <= 0.0F) {
+    b_weightedY = 5.0F;
+  }
+
+  b_pressure = airbag_13Hz_U.sickBackDropRatio;
+  if (rtIsInfF(airbag_13Hz_U.sickBackDropRatio) || rtIsNaNF
+      (airbag_13Hz_U.sickBackDropRatio)) {
+    b_pressure = 0.3F;
+  } else if ((airbag_13Hz_U.sickBackDropRatio <= 0.0F) ||
+             (airbag_13Hz_U.sickBackDropRatio >= 1.0F)) {
+    b_pressure = 0.3F;
+  }
+
+  dyNew = airbag_13Hz_U.sickPairWindowSec;
+  if (rtIsInfF(airbag_13Hz_U.sickPairWindowSec) || rtIsNaNF
+      (airbag_13Hz_U.sickPairWindowSec)) {
+    dyNew = 0.8F;
+  } else if (airbag_13Hz_U.sickPairWindowSec <= 0.0F) {
+    dyNew = 0.8F;
+  }
+
+  addedEdgeLength = airbag_13Hz_U.bumpMinVelocity;
+  if (rtIsInfF(airbag_13Hz_U.bumpMinVelocity) || rtIsNaNF
+      (airbag_13Hz_U.bumpMinVelocity)) {
+    addedEdgeLength = 8.0F;
+  } else if (airbag_13Hz_U.bumpMinVelocity <= 0.0F) {
+    addedEdgeLength = 8.0F;
+  }
+
+  pathIncrement = airbag_13Hz_U.bumpMaxRms;
+  if (rtIsInfF(airbag_13Hz_U.bumpMaxRms) || rtIsNaNF(airbag_13Hz_U.bumpMaxRms))
+  {
+    pathIncrement = 0.5F;
+  } else if (airbag_13Hz_U.bumpMaxRms <= 0.0F) {
+    pathIncrement = 0.5F;
+  }
+
+  bumpRangeMax = airbag_13Hz_U.bumpMaxRangeMm;
+  if (rtIsInfF(airbag_13Hz_U.bumpMaxRangeMm) || rtIsNaNF
+      (airbag_13Hz_U.bumpMaxRangeMm)) {
+    bumpRangeMax = 15.0F;
+  } else if (airbag_13Hz_U.bumpMaxRangeMm <= 0.0F) {
+    bumpRangeMax = 15.0F;
+  }
+
   if (rtb_stateChanged || airbag_13Hz_U.resetFlag || newReason) {
     airbag_13Hz_DW.pSpineBiasSec = 0.0F;
     airbag_13Hz_DW.pSpineDir = 0.0F;
@@ -1882,13 +1971,14 @@ void airbag_13Hz_step(void)
     airbag_13Hz_DW.pBackDropWindow = 0.0F;
     airbag_13Hz_DW.pSickPromptTimer = 0.0F;
   } else {
-    occupied = ((!rtIsInfF(rtb_backrestSum_j)) && (!rtIsNaNF(rtb_backrestSum_j)));
-    newReason = (occupied && (rtb_backrestSum_j >= 100.0F));
+    occupied = ((!rtIsInfF(baseInflationSeconds)) && (!rtIsNaNF
+      (baseInflationSeconds)));
+    newReason = (occupied && (baseInflationSeconds >= 100.0F));
     rtb_stateChanged = ((!rtIsInfF(rtb_cushionSum_b)) && (!rtIsNaNF
       (rtb_cushionSum_b)) && (rtb_cushionSum_b >= 200.0F));
     if (airbag_13Hz_DW.pHistoryValid == 0.0F) {
-      airbag_13Hz_DW.pPrevBackrestSum = rtb_backrestSum_j;
-      airbag_13Hz_DW.pForwardRefX = baseInflationSeconds;
+      airbag_13Hz_DW.pPrevBackrestSum = baseInflationSeconds;
+      airbag_13Hz_DW.pForwardRefX = rtb_cop_x;
       airbag_13Hz_DW.pForwardAge = 0.0F;
       airbag_13Hz_DW.pHistoryValid = 1.0F;
     }
@@ -1897,10 +1987,10 @@ void airbag_13Hz_step(void)
     guard2 = false;
     if (newReason && ((!rtIsInfF(rtb_backrest_cop_y)) && (!rtIsNaNF
           (rtb_backrest_cop_y)))) {
-      if (rtb_backrest_cop_y - 3.5F > 0.5F) {
+      if (rtb_backrest_cop_y - 3.5F > spineDeadband) {
         currentBiasDir = 1;
         guard2 = true;
-      } else if (rtb_backrest_cop_y - 3.5F < -0.5F) {
+      } else if (rtb_backrest_cop_y - 3.5F < -spineDeadband) {
         currentBiasDir = -1;
         guard2 = true;
       } else {
@@ -1942,9 +2032,9 @@ void airbag_13Hz_step(void)
     if (rtb_stateChanged && (rtb_isStable == 1) && ((!rtIsInfF(rtb_avg_velocity))
          && (!rtIsNaNF(rtb_avg_velocity)) && ((!rtIsInfF(rtb_rms_displacement)) &&
           (!rtIsNaNF(rtb_rms_displacement)) && ((!rtIsInfF(rtb_backrest_cop_y)) &&
-           (!rtIsNaNF(rtb_backrest_cop_y)) && ((rtb_avg_velocity >= 8.0F) &&
-            (rtb_rms_displacement <= 0.5F) && (rtb_backrest_cop_y <= 15.0F))))))
-    {
+           (!rtIsNaNF(rtb_backrest_cop_y)) && ((rtb_avg_velocity >=
+             addedEdgeLength) && (rtb_rms_displacement <= pathIncrement) &&
+            (rtb_backrest_cop_y <= bumpRangeMax)))))) {
       airbag_13Hz_DW.pBumpClearSec = 0.0F;
       if (airbag_13Hz_DW.pBumpLatched == 0.0F) {
         airbag_13Hz_DW.pBumpDetectSec += 0.0769230798F;
@@ -1966,48 +2056,48 @@ void airbag_13Hz_step(void)
       }
     }
 
-    if (rtb_stateChanged && ((!rtIsInfF(baseInflationSeconds)) && (!rtIsNaNF
-          (baseInflationSeconds)))) {
+    if (rtb_stateChanged && ((!rtIsInfF(rtb_cop_x)) && (!rtIsNaNF(rtb_cop_x))))
+    {
       airbag_13Hz_DW.pForwardAge += 0.0769230798F;
-      airbag_13Hz_Y.cushionForwardMoveMm = (baseInflationSeconds -
+      airbag_13Hz_Y.cushionForwardMoveMm = (rtb_cop_x -
         airbag_13Hz_DW.pForwardRefX) * 7.0F;
       if (airbag_13Hz_Y.cushionForwardMoveMm < -1.0F) {
-        airbag_13Hz_DW.pForwardRefX = baseInflationSeconds;
+        airbag_13Hz_DW.pForwardRefX = rtb_cop_x;
         airbag_13Hz_DW.pForwardAge = 0.0F;
         airbag_13Hz_Y.cushionForwardMoveMm = 0.0F;
       }
     } else {
-      airbag_13Hz_DW.pForwardRefX = baseInflationSeconds;
+      airbag_13Hz_DW.pForwardRefX = rtb_cop_x;
       airbag_13Hz_DW.pForwardAge = 0.0F;
     }
 
     if ((!rtIsInfF(airbag_13Hz_DW.pPrevBackrestSum)) && (!rtIsNaNF
          (airbag_13Hz_DW.pPrevBackrestSum)) && (airbag_13Hz_DW.pPrevBackrestSum >
          0.0F) && occupied) {
-      airbag_13Hz_Y.backrestDropRatio = rtb_backrestSum_j /
+      airbag_13Hz_Y.backrestDropRatio = baseInflationSeconds /
         airbag_13Hz_DW.pPrevBackrestSum;
     }
 
     if ((airbag_13Hz_DW.pPrevBackrestSum >= 100.0F) && (occupied &&
-         ((rtb_backrestSum_j <= 50.0F) || (airbag_13Hz_Y.backrestDropRatio <=
-           0.3F)))) {
-      airbag_13Hz_DW.pBackDropWindow = 0.8F;
+         ((baseInflationSeconds <= 50.0F) || (airbag_13Hz_Y.backrestDropRatio <=
+           b_pressure)))) {
+      airbag_13Hz_DW.pBackDropWindow = dyNew;
     }
 
     if ((airbag_13Hz_DW.pBackDropWindow > 0.0F) && rtb_stateChanged &&
-        (airbag_13Hz_Y.cushionForwardMoveMm >= 5.0F)) {
+        (airbag_13Hz_Y.cushionForwardMoveMm >= b_weightedY)) {
       airbag_13Hz_DW.pSickPromptTimer = 10.0F;
       airbag_13Hz_DW.pBackDropWindow = 0.0F;
-      airbag_13Hz_DW.pForwardRefX = baseInflationSeconds;
+      airbag_13Hz_DW.pForwardRefX = rtb_cop_x;
       airbag_13Hz_DW.pForwardAge = 0.0F;
     }
 
     if (airbag_13Hz_DW.pForwardAge >= 1.0F) {
-      airbag_13Hz_DW.pForwardRefX = baseInflationSeconds;
+      airbag_13Hz_DW.pForwardRefX = rtb_cop_x;
       airbag_13Hz_DW.pForwardAge = 0.0F;
     }
 
-    airbag_13Hz_DW.pPrevBackrestSum = rtb_backrestSum_j;
+    airbag_13Hz_DW.pPrevBackrestSum = baseInflationSeconds;
 
     /* Outport: '<Root>/spineProtectActive' */
     airbag_13Hz_Y.spineProtectActive = airbag_13Hz_DW.pSpineActive;
