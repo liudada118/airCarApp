@@ -1150,9 +1150,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               gears.push(gear);
               if (gear === 3 || gear === 4) anyActive = true;
             }
+            // 蓝光只在「充气(档位=3)」时亮；放气(4)和其它档位都不亮。
             const liveZones = new Set<string>();
             gears.slice(0, 10).forEach((g, idx) => {
-              if (g !== 3 && g !== 4) return;
+              if (g !== 3) return;
               const id = idx + 1;
               if (id === 1 || id === 2) liveZones.add(id === 1 ? 'topL' : 'topR');
               else if (id === 3 || id === 4) liveZones.add(id === 3 ? 'midR' : 'midL');
