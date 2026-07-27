@@ -231,6 +231,11 @@ interface SeatCushionProps {
    */
   glowOn?: boolean;
   /**
+   * 硬件实时动作中的正常气囊区域。传入的区域持续发光，移除后立即淡出。
+   * 仅用于首页跟随气囊回传状态，不使用定时闪烁。
+   */
+  liveGlowZones?: string[];
+  /**
    * 新功能:14 个「大涟漪点」全局开/关(演示用,一键控制全部)。
    */
   bigDotsOn?: boolean;
@@ -260,7 +265,16 @@ export const AIRBAG_ZONE_TO_CUSHION_ZONES: Record<string, string[]> = {
  * 中间固定座椅:座椅底图 + 发光底 + 8 部位「点」图层 + (新)14 个大涟漪点。
  * 本组件是纯展示、不可交互(pointerEvents=none)。
  */
-const SeatCushion: React.FC<SeatCushionProps> = ({style, activeZones, dotsOn = false, glowOn = false, bigDotsOn = false, bigDotStates, flash = null}) => {
+const SeatCushion: React.FC<SeatCushionProps> = ({
+  style,
+  activeZones,
+  dotsOn = false,
+  glowOn = false,
+  liveGlowZones = [],
+  bigDotsOn = false,
+  bigDotStates,
+  flash = null,
+}) => {
   // 发光底整层透明度:glowOn 变化时 0↔1 淡入淡出
   const glow = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -270,6 +284,26 @@ const SeatCushion: React.FC<SeatCushionProps> = ({style, activeZones, dotsOn = f
       useNativeDriver: true,
     }).start();
   }, [glowOn, glow]);
+
+  // 硬件回传实时发光：档位 3/4 时亮，回传 0 或超时后快速淡出。
+  const liveGlowOpacity = useRef<Record<string, Animated.Value>>(
+    Object.fromEntries(GLOW_ZONES.map(g => [g.key, new Animated.Value(0)])),
+  ).current;
+  const liveGlowKey = [...liveGlowZones].sort().join('|');
+  useEffect(() => {
+    const active = new Set(liveGlowZones);
+    GLOW_ZONES.forEach(g => {
+      const v = liveGlowOpacity[g.key];
+      v.stopAnimation();
+      Animated.timing(v, {
+        toValue: active.has(g.key) ? 1 : 0,
+        duration: active.has(g.key) ? 180 : 260,
+        useNativeDriver: true,
+      }).start();
+    });
+    // liveGlowKey 是排序后的稳定内容，避免相同区域的新数组重复启动动画。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveGlowKey]);
 
   // 逐部位闪烁:每个 GLOW_ZONES 项一个独立 opacity(按 key)
   const flashOpacity = useRef<Record<string, Animated.Value>>(
@@ -310,6 +344,23 @@ const SeatCushion: React.FC<SeatCushionProps> = ({style, activeZones, dotsOn = f
           </View>
         ))}
       </Animated.View>
+
+      {/* 正常气囊硬件实时动作发光层：只跟随 1～10 号气囊回传。 */}
+      {GLOW_ZONES.map(g => (
+        <Animated.View
+          key={`live-${g.key}`}
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: `${g.left}%`,
+            top: `${g.top}%`,
+            width: `${g.width}%`,
+            aspectRatio: g.ar,
+            opacity: liveGlowOpacity[g.key],
+          }}>
+          <g.Comp width="100%" height="100%" />
+        </Animated.View>
+      ))}
 
       {/* 逐部位闪烁层:各自独立 opacity(点某气囊 +/- 或 算法非手动变动 时闪一下) */}
       {GLOW_ZONES.map(g => (

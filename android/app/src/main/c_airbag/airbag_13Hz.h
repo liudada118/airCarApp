@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.213
+ * Model version                  : 1.217
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Thu Jul 23 16:07:14 2026
+ * C/C++ source code generated on : Mon Jul 27 11:25:27 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -45,6 +45,12 @@ typedef struct {
   real_T livingQueueLen;               /* '<Root>/活体检测' */
   real32_T UnitDelay1_DSTATE[4];       /* '<Root>/Unit Delay1' */
   real32_T UnitDelay_DSTATE[15];       /* '<Root>/Unit Delay' */
+  real32_T pBaseB[56];                 /* '<Root>/矩阵处理' */
+  real32_T pBaseC[48];                 /* '<Root>/矩阵处理' */
+  real32_T pPrevB[56];                 /* '<Root>/矩阵处理' */
+  real32_T pPrevC[48];                 /* '<Root>/矩阵处理' */
+  real32_T pStable;                    /* '<Root>/矩阵处理' */
+  real32_T pDone;                      /* '<Root>/矩阵处理' */
   real32_T prevCushion[48];            /* '<Root>/活体检测' */
   real32_T prevBackrest[56];           /* '<Root>/活体检测' */
   real32_T sadHistCushion[13];         /* '<Root>/活体检测' */
@@ -114,6 +120,7 @@ typedef struct {
   boolean_T phase_not_empty;           /* '<Root>/久坐按摩' */
   boolean_T livingLatched;             /* '<Root>/久坐按摩' */
   boolean_T prevOccupied;              /* '<Root>/久坐按摩' */
+  boolean_T prevManualCmd;             /* '<Root>/久坐按摩' */
 } DW_airbag_13Hz_T;
 
 /* External inputs (root inport signals with default storage) */
@@ -149,6 +156,8 @@ typedef struct {
   real32_T bumpMinVelocity;            /* '<Root>/ bumpMinVelocity' */
   real32_T bumpMaxRms;                 /* '<Root>/ bumpMaxRms' */
   real32_T bumpMaxRangeMm;             /* '<Root>/ bumpMaxRangeMm' */
+  real32_T manualMassageOn;            /* '<Root>/manualMassageOn' */
+  real32_T sitThresholdmin;            /* '<Root>/sitThresholdmin' */
 } ExtU_airbag_13Hz_T;
 
 /* External outputs (root outports fed by signals with default storage) */

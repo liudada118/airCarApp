@@ -866,8 +866,11 @@ class SerialModule(
 
     /** 待发的 frontCmd 脉冲 [mode, part, dir]；每帧取出并清零 → 天然实现"发一帧脉冲后回零" */
     private val pendingFrontCmd = AtomicReference(floatArrayOf(0f, 0f, 0f))
-    /** 久坐按摩开关：0=允许自动按摩，1=停止。默认允许 */
-    @Volatile private var longSitMassageStop = 0f
+    /** 手动按摩命令均只持续一个算法周期，下一帧自动回零。 */
+    private val pendingManualMassageOn = AtomicReference(0f)
+    private val pendingMassageStop = AtomicReference(0f)
+    /** 新算法默认入座 5 分钟自动启动按摩。 */
+    @Volatile private var sitThresholdMin = 5f
 
     /** JS：发一次 frontCmd 脉冲（自定义气囊/品味命令）。Kotlin 会在下一帧应用后自动回零。 */
     @ReactMethod
@@ -877,11 +880,17 @@ class SerialModule(
         promise.resolve(true)
     }
 
-    /** JS：久坐按摩开关。enabled=true→允许自动按摩(0)，false→停止(1)。 */
+    /** JS：手动按摩开关。true=立即启动脉冲，false=立即停止脉冲；自动按摩仍保持启用。 */
     @ReactMethod
     fun setLongSitMassageEnabled(enabled: Boolean, promise: Promise) {
-        longSitMassageStop = if (enabled) 0f else 1f
-        Log.i(logTag, "[massage] setEnabled=$enabled (stop=$longSitMassageStop)")
+        if (enabled) {
+            pendingMassageStop.set(0f)
+            pendingManualMassageOn.set(1f)
+        } else {
+            pendingManualMassageOn.set(0f)
+            pendingMassageStop.set(1f)
+        }
+        Log.i(logTag, "[massage] manual command=${if (enabled) "start" else "stop"}")
         promise.resolve(true)
     }
 
@@ -898,7 +907,17 @@ class SerialModule(
             }
             // 取出本帧 frontCmd 脉冲并清零（下一帧自动发 [0,0,0]）
             val fc = pendingFrontCmd.getAndSet(floatArrayOf(0f, 0f, 0f))
-            val out = AirbagNative.nativeStep(payload, fc[0], fc[1], fc[2], longSitMassageStop)
+            val manualMassageOn = pendingManualMassageOn.getAndSet(0f)
+            val massageStop = pendingMassageStop.getAndSet(0f)
+            val out = AirbagNative.nativeStep(
+                payload,
+                fc[0],
+                fc[1],
+                fc[2],
+                massageStop,
+                manualMassageOn,
+                sitThresholdMin,
+            )
             emitAirbag13Result(out)
             // 把算法输出的 frame[55] 转 55 字节下发硬件（复用 autoWrite 通道，串口连着就一直发）
             downlinkAirbagFrame(out)

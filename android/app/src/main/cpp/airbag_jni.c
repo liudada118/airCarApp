@@ -70,6 +70,8 @@ static void set_input_defaults(void) {
     U->ratioInflate          = 1.2F;
     U->ratioDeflate          = 0.35F;
     U->longSitMassageStop    = 0.0F;
+    U->manualMassageOn       = 0.0F;
+    U->sitThresholdmin       = 5.0F;
     U->frontCmd[0] = 0.0F;
     U->frontCmd[1] = 0.0F;
     U->frontCmd[2] = 0.0F;
@@ -103,7 +105,8 @@ Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeTerminate(JNIEnv *env, jobj
 // massageStop: 久坐按摩开关（0=允许自动按摩，1=停止）。
 JNIEXPORT jfloatArray JNICALL
 Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeStep(JNIEnv *env, jobject thiz,
-        jbyteArray payload, jfloat mode, jfloat part, jfloat dir, jfloat massageStop) {
+        jbyteArray payload, jfloat mode, jfloat part, jfloat dir,
+        jfloat massageStop, jfloat manualMassageOn, jfloat sitThresholdMin) {
     (void)thiz;
     jsize n = (*env)->GetArrayLength(env, payload);
     jbyte *bytes = (*env)->GetByteArrayElements(env, payload, NULL);
@@ -121,6 +124,8 @@ Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeStep(JNIEnv *env, jobject t
     airbag_13Hz_U.frontCmd[1] = (real32_T)part;
     airbag_13Hz_U.frontCmd[2] = (real32_T)dir;
     airbag_13Hz_U.longSitMassageStop = (real32_T)massageStop;
+    airbag_13Hz_U.manualMassageOn = (real32_T)manualMassageOn;
+    airbag_13Hz_U.sitThresholdmin = (real32_T)sitThresholdMin;
 
     airbag_13Hz_step();
 

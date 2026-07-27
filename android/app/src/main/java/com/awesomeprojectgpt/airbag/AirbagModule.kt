@@ -35,12 +35,12 @@ class AirbagModule(reactContext: ReactApplicationContext) :
             ensureInit()
 
             // ① 空座帧（全 0）
-            val emptyOut = AirbagNative.nativeStep(ByteArray(92), 0f, 0f, 0f, 0f)
+            val emptyOut = AirbagNative.nativeStep(ByteArray(92), 0f, 0f, 0f, 0f, 0f, 5f)
 
             // ② 假造一帧：坐垫区(索引46..91)给一片高压，模拟有人坐
             val pressed = ByteArray(92)
             for (i in 46 until 92) pressed[i] = 200.toByte()
-            val pressedOut = AirbagNative.nativeStep(pressed, 0f, 0f, 0f, 0f)
+            val pressedOut = AirbagNative.nativeStep(pressed, 0f, 0f, 0f, 0f, 0f, 5f)
 
             val result = Arguments.createMap()
             result.putInt("outLen", emptyOut.size)
@@ -71,7 +71,7 @@ class AirbagModule(reactContext: ReactApplicationContext) :
             val bytes = ByteArray(92)
             val n = minOf(payload.size(), 92)
             for (i in 0 until n) bytes[i] = (payload.getInt(i) and 0xFF).toByte()
-            val out = AirbagNative.nativeStep(bytes, 0f, 0f, 0f, 0f)
+            val out = AirbagNative.nativeStep(bytes, 0f, 0f, 0f, 0f, 0f, 5f)
             val arr = Arguments.createArray()
             for (v in out) arr.pushDouble(v.toDouble())
             promise.resolve(arr)

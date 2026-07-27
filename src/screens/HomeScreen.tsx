@@ -116,7 +116,7 @@ interface SerialModuleType {
   clearAirbagOverride?: () => Promise<string>;
   /** 发一次 frontCmd 脉冲(自定义气囊/品味命令)：[modeCmd, partCmd, direction] */
   pulseFrontCmd?: (mode: number, part: number, dir: number) => Promise<boolean>;
-  /** 久坐按摩开关：true=允许自动按摩(0)，false=停止(1) */
+  /** 手动按摩：true=立即启动，false=立即停止；算法仍会在入座 5 分钟后自动启动 */
   setLongSitMassageEnabled?: (enabled: boolean) => Promise<boolean>;
 }
 
@@ -644,8 +644,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   });
   // 中间座椅 8 部位「点」的全局开/关(测试用;以后接数据)
   const [dotsOn, setDotsOn] = useState(false);
-  // 发光底(蓝色渐变圈)的全局开/关,淡入淡出(测试用;以后接数据)
-  const [glowOn, setGlowOn] = useState(false);
   // 新功能:14 个「大涟漪点」的全局开/关(测试用;以后接数据)
   const [bigDotsOn, setBigDotsOn] = useState(false);
 
@@ -679,8 +677,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const fakePressureRef = useRef(false);
 
   // ─── 久坐按摩(座椅按摩调节)───
-  // 开关状态:true=允许自动按摩(longSitMassageStop=0),false=停止(1)。默认允许。
-  const [massageAllowed, setMassageAllowed] = useState(true);
   // 久坐状态每帧存 ref,限流刷新显示(时间是分钟级,1s 刷新足够)
   const massageRef = useRef({minutes: 0, remainSec: 0, active: 0});
   const [massageView, setMassageView] = useState({minutes: 0, remainSec: 0, active: false});
@@ -691,6 +687,31 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const downlinkRef = useRef<{hex: string; gears: number[]} | null>(null);
   const [showDownlink, setShowDownlink] = useState(false);
   const [downlinkView, setDownlinkView] = useState<{hex: string; gears: number[]} | null>(null);
+  // 正常气囊(1～10)当前真实动作区域，只由硬件回传控制。
+  const [liveAirbagGlowZones, setLiveAirbagGlowZones] = useState<string[]>([]);
+  const liveAirbagGlowKeyRef = useRef('');
+  const liveAirbagGlowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const updateLiveAirbagGlow = useCallback((zones: string[]) => {
+    const uniqueZones = Array.from(new Set(zones)).sort();
+    const nextKey = uniqueZones.join('|');
+    if (nextKey !== liveAirbagGlowKeyRef.current) {
+      liveAirbagGlowKeyRef.current = nextKey;
+      setLiveAirbagGlowZones(uniqueZones);
+    }
+    if (liveAirbagGlowTimerRef.current) {
+      clearTimeout(liveAirbagGlowTimerRef.current);
+      liveAirbagGlowTimerRef.current = null;
+    }
+    // 防止串口突然停止回传时蓝光卡住；正常回传周期约 500ms。
+    if (uniqueZones.length > 0) {
+      liveAirbagGlowTimerRef.current = setTimeout(() => {
+        liveAirbagGlowTimerRef.current = null;
+        liveAirbagGlowKeyRef.current = '';
+        setLiveAirbagGlowZones([]);
+      }, 1200);
+    }
+  }, []);
 
   // ─── 首页座椅图「逐部位闪烁」口子 ───
   // 【口子】以后气囊「非手动」变动(算法自适应/久坐按摩等)时,调 flashSeatParts(['back',...]) 触发闪烁。
@@ -702,44 +723,74 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     setSeatFlash({zones, seq: seatFlashSeqRef.current});
   }, []);
 
-  // ─── 语音播报 + 语音条：按数据触发 ───────────────────────────
-  // triggerVoice(key)：播对应 MP3 + 弹语音条(显示该条文字)，播完约 1s 收起(15s 兜底)。
+  // ─── 语音播报 + 语音条：按数据触发，严格串行排队 ──────────────
   const voiceHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const triggerVoice = useCallback((key: VoiceKey) => {
-    if (voiceHideTimerRef.current) {
-      clearTimeout(voiceHideTimerRef.current);
-      voiceHideTimerRef.current = null;
+  const voiceQueueRef = useRef<VoiceKey[]>([]);
+  const voicePlayingRef = useRef(false);
+  const voiceMountedRef = useRef(true);
+  const playNextVoiceRef = useRef<() => void>(() => {});
+
+  playNextVoiceRef.current = () => {
+    if (!voiceMountedRef.current || voicePlayingRef.current) return;
+    const key = voiceQueueRef.current.shift();
+    if (!key) {
+      setVoiceBar(prev => (prev.visible ? {...prev, visible: false} : prev));
+      return;
     }
+
+    voicePlayingRef.current = true;
     setVoiceBar({visible: true, text: VOICE_TEXT[key]});
-    const hide = () => {
+
+    let finished = false;
+    const finishCurrent = () => {
+      if (finished) return;
+      finished = true;
       if (voiceHideTimerRef.current) {
         clearTimeout(voiceHideTimerRef.current);
         voiceHideTimerRef.current = null;
       }
-      setVoiceBar(prev => (prev.visible ? {...prev, visible: false} : prev));
+
+      // 当前语音播完后稍作停留，再切换到队列中的下一条。
+      voiceHideTimerRef.current = setTimeout(() => {
+        voiceHideTimerRef.current = null;
+        if (!voiceMountedRef.current) return;
+        voicePlayingRef.current = false;
+        if (voiceQueueRef.current.length > 0) {
+          playNextVoiceRef.current();
+        } else {
+          setVoiceBar(prev => (prev.visible ? {...prev, visible: false} : prev));
+        }
+      }, 700);
     };
+
     if (VOICE_AUDIO_ENABLED) {
-      // 播完 1s 收起；didJustFinish 没来时 15s 兜底收起
-      playVoice(key, () => {
-        if (voiceHideTimerRef.current) clearTimeout(voiceHideTimerRef.current);
-        voiceHideTimerRef.current = setTimeout(hide, 1000);
-      });
-      voiceHideTimerRef.current = setTimeout(hide, 15000);
+      // 正常使用音频完成事件推进队列；60 秒仅用于播放器异常时防止队列永久卡住。
+      voiceHideTimerRef.current = setTimeout(finishCurrent, 60000);
+      playVoice(key, finishCurrent);
     } else {
-      // 当前只显示语音条、不出声：停留 8 秒后收起
-      voiceHideTimerRef.current = setTimeout(hide, 8000);
+      voiceHideTimerRef.current = setTimeout(finishCurrent, 8000);
     }
+  };
+
+  const triggerVoice = useCallback((key: VoiceKey) => {
+    voiceQueueRef.current.push(key);
+    playNextVoiceRef.current();
   }, []);
-  // 上升沿(0→1)检测用的上一帧值：健康三项 + 久坐按摩运行
+  // 上升沿(0→1)检测用的上一帧值：健康三项
   const prevSpineRef = useRef(0);
   const prevBumpRef = useRef(0);
   const prevMotionRef = useRef(0);
-  const prevMassageActiveRef = useRef(0);
   // 「试听语音」按钮的循环下标(依次播 5 条)
   const voiceTestIdxRef = useRef(0);
   useEffect(
-    () => () => {
-      if (voiceHideTimerRef.current) clearTimeout(voiceHideTimerRef.current);
+    () => {
+      voiceMountedRef.current = true;
+      return () => {
+        voiceMountedRef.current = false;
+        voiceQueueRef.current = [];
+        voicePlayingRef.current = false;
+        if (voiceHideTimerRef.current) clearTimeout(voiceHideTimerRef.current);
+      };
     },
     [],
   );
@@ -1074,10 +1125,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
       // 气囊回传帧（格式同下发 frame[55]：[0]帧头 + 24 组 [编号,档位]，档位在 bytes[id*2]，3充/4放）
       // → 更新气囊指令状态 + 驱动「下发监控」面板 + 首页座椅充放气闪烁（这是气囊硬件回传的真实动作）
-      if (entry.csv && (entry.length ?? 0) >= 21) {
+      if (entry.csv && entry.length === 51) {
         try {
           const bytes = entry.csv.split(',').map(Number);
-          if (bytes.length >= 21) {
+          const hasValidHeader = bytes[0] === 0x1f;
+          const hasValidIds = Array.from(
+            {length: 24},
+            (_, i) => bytes[1 + i * 2] === i + 1,
+          ).every(Boolean);
+          if (bytes.length === 51 && hasValidHeader && hasValidIds) {
             const newStates = parseAirbagCommand(bytes);
             // console.log('[NonStdFrame] 解析回传指令, length:', bytes.length, 'states:', JSON.stringify(newStates));
             setAlgoState(prev => ({
@@ -1092,22 +1148,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             for (let id = 1; id <= 24; id++) {
               const gear = bytes[id * 2] ?? 0;
               gears.push(gear);
-              if (gear !== 0) anyActive = true;
+              if (gear === 3 || gear === 4) anyActive = true;
             }
-            downlinkRef.current = {hex: entry.hex, gears};
+            const liveZones = new Set<string>();
+            gears.slice(0, 10).forEach((g, idx) => {
+              if (g !== 3 && g !== 4) return;
+              const id = idx + 1;
+              if (id === 1 || id === 2) liveZones.add(id === 1 ? 'topL' : 'topR');
+              else if (id === 3 || id === 4) liveZones.add(id === 3 ? 'midR' : 'midL');
+              else if (id === 5 || id === 6) liveZones.add('back');
+              else if (id === 7 || id === 8) liveZones.add('cushion');
+              else if (id === 9 || id === 10) liveZones.add(id === 9 ? 'legR' : 'legL');
+            });
+            // 即使只有 11～24 号按摩气囊动作，这里也是空数组，正常气囊蓝光会关闭。
+            updateLiveAirbagGlow(Array.from(liveZones));
+
             // 气囊编号(1-based)→ 首页座椅图部位。有动作(档位≠0)就闪对应部位。
             if (anyActive) {
-              const zones = new Set<string>();
-              gears.forEach((g, idx) => {
-                if (g === 0) return;
-                const id = idx + 1; // 气囊编号 1..24
-                if (id === 1 || id === 2) zones.add(id === 1 ? 'topL' : 'topR');
-                else if (id === 3 || id === 4) zones.add(id === 3 ? 'midR' : 'midL');
-                else if (id === 5 || id === 6) zones.add('back');
-                else if (id === 7 || id === 8) zones.add('cushion');
-                else if (id === 9 || id === 10) zones.add(id === 9 ? 'legR' : 'legL');
-              });
-              if (zones.size) flashSeatParts(Array.from(zones));
+              // 监控只保留硬件确认正在充/放气的回传帧，全 0 帧不覆盖最后一次动作。
+              downlinkRef.current = {hex: entry.hex, gears};
             }
           }
         } catch (e) {
@@ -1164,6 +1223,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         const prompt = event.longSitPrompt ?? 0;
         if (prompt >= 0.5 && lastMassagePromptRef.current < 0.5) {
           setMassageToast(true);
+          // longSitPrompt 只在到达定时时间自动启动时产生；手动启动不播报语音条。
+          triggerVoice('massage_on');
         }
         lastMassagePromptRef.current = prompt;
 
@@ -1172,15 +1233,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         const bump = event.bumpReliefActive ?? 0;
         const motion = event.motionSicknessActive ?? 0;
         const massageActive = event.longSitMassageActive ?? 0;
+        // 14 个按摩气囊涟漪严格跟随算法实际运行状态（自动或手动启动都生效）。
+        setBigDotsOn(massageActive >= 0.5);
         if (spine >= 0.5 && prevSpineRef.current < 0.5) triggerVoice('spine_protect');
         prevSpineRef.current = spine;
         if (bump >= 0.5 && prevBumpRef.current < 0.5) triggerVoice('bump_relief');
         prevBumpRef.current = bump;
         if (motion >= 0.5 && prevMotionRef.current < 0.5) triggerVoice('motion_sickness');
         prevMotionRef.current = motion;
-        // 按摩真正开始运行(0→1)时播报（与「久坐按摩已启动」提示同一时机）
-        if (massageActive >= 0.5 && prevMassageActiveRef.current < 0.5) triggerVoice('massage_on');
-        prevMassageActiveRef.current = massageActive;
 
         // 喂 3D 压力云图:[坐垫48, 靠背56]=104,新数组(新引用)触发 CarAirRN 更新
         // 假压力开启时不覆盖(用假数据对齐位置)
@@ -1251,8 +1311,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       nonStdSub.remove();
       airbagSub.remove();
       airbag13Sub.remove();
+      if (liveAirbagGlowTimerRef.current) {
+        clearTimeout(liveAirbagGlowTimerRef.current);
+        liveAirbagGlowTimerRef.current = null;
+      }
     };
-  }, [handleAlgoResult, onAdaptiveChange, onSeatStatusChange, flashSeatParts, triggerVoice]);
+  }, [handleAlgoResult, onAdaptiveChange, onSeatStatusChange, triggerVoice, updateLiveAirbagGlow]);
 
   // 弹窗打开时按 250ms（约 4Hz）限流刷新显示，避免每帧重渲染卡顿。
   // 同时每约 1 秒用帧计数实测一次真实帧率（收帧不受限流影响，全部照收）。
@@ -1520,7 +1584,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
         {/* 中间:固定座椅气垫图(不可交互) */}
         <View style={styles.centerPanel} pointerEvents="none">
-          <SeatCushion style={styles.seatCushion} dotsOn={dotsOn} glowOn={glowOn} bigDotsOn={bigDotsOn} flash={seatFlash} />
+          <SeatCushion
+            style={styles.seatCushion}
+            dotsOn={dotsOn}
+            glowOn={false}
+            liveGlowZones={liveAirbagGlowZones}
+            bigDotsOn={bigDotsOn}
+            flash={seatFlash}
+          />
         </View>
 
         {/* ─── 右侧面板 ─── */}
@@ -1546,7 +1617,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               active={occupantType === 'person'}
               icon={iconOccupantPerson}
               title="有人落座"
-              subtitle="有儿童或宠物入座"
+              subtitle=""
             />
             <OccupantCard
               active={occupantType === 'object'}
@@ -1561,11 +1632,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>座椅按摩调节</Text>
             </View>
-            {/* 开启=允许久坐自动按摩(入座满60分钟自动触发); 关闭=停止。无手动立即启动。 */}
+            {/* 手动开启/关闭；未手动操作时算法会在连续入座 5 分钟后自动开启。 */}
             <SlideToggle
-              on={massageAllowed}
+              on={massageView.active}
               onChange={v => {
-                setMassageAllowed(v);
                 SerialModule?.setLongSitMassageEnabled?.(v).catch(() => {});
               }}
             />
@@ -1575,12 +1645,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               <Text style={styles.massageStatusText}>
                 {massageView.active
                   ? '按摩运行中'
-                  : massageAllowed
-                    ? `已连续入座 ${Math.floor(massageView.minutes)} 分钟`
-                    : '已停止'}
+                  : `已连续入座 ${Math.floor(massageView.minutes)} 分钟`}
               </Text>
             </View>
-            {massageAllowed && !massageView.active && massageView.remainSec > 0 ? (
+            {!massageView.active && massageView.remainSec > 0 ? (
               <Text style={styles.massageSubText}>
                 距下次自动约 {(massageView.remainSec / 60).toFixed(1)} 分钟
               </Text>
@@ -2304,15 +2372,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         activeOpacity={0.8}>
         <Text style={styles.airbagDataFabText}>{dotsOn ? '点关闭' : '点开启'}</Text>
       </TouchableOpacity>
-
-      {/* 测试按钮:发光底 淡入/淡出(以后换成按数据) */}
-      <TouchableOpacity
-        style={styles.glowTestFab}
-        onPress={() => setGlowOn(prev => !prev)}
-        activeOpacity={0.8}>
-        <Text style={styles.airbagDataFabText}>{glowOn ? '光关闭' : '光开启'}</Text>
-      </TouchableOpacity>
-
 
       {/* 板子数据帧弹窗（1376B / 343×float32） */}
       <AirbagFullFrameModal

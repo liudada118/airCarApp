@@ -35,6 +35,8 @@ object AirbagNative {
         part: Float,
         dir: Float,
         massageStop: Float,
+        manualMassageOn: Float,
+        sitThresholdMin: Float,
     ): FloatArray
 
     // 输出数组索引常量
