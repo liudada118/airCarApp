@@ -432,7 +432,7 @@ function getSeatStateLabel(state: AlgoSeatStatus): string {
     return '离座';
   }
   if (state.is_resetting) {
-    return '复位中';
+    return '复位中'; 
   }
   if (state.state === 'CUSHION_ONLY') {
     return '检测中';

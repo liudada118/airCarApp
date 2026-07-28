@@ -137,6 +137,9 @@ const App: React.FC = () => {
   // 导航到自定义气囊调节页面（同时重置定时充气）
   const navigateToCustomize = useCallback(() => {
     resetSeatedInflateRef.current?.();
+    // 打开弹窗即进入品味模式[1,0,0]，自适应已在硬件/算法层关闭；
+    // 这里同步把开关按钮置「关闭」，之后无论叉号/取消/保存关闭，按钮都停在关闭。
+    setAdaptiveEnabled(false);
     setCurrentScreen('customAirbag');
   }, []);
 
