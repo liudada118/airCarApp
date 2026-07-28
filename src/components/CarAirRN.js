@@ -17,7 +17,7 @@ import * as FileSystem from 'expo-file-system';
 import {GLView} from 'expo-gl';
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
-import {addSide, lineInterpnew, jetWhite3} from '../../util/util';
+import {addSide, lineInterpnew} from '../../util/util';
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 const SEPARATION = 100;
@@ -32,7 +32,40 @@ const POINT_STRIDE = 1;
 const EDGE_FADE_POINTS = 5;
 // 低压透明度地板:压力越低越透明(0=完全消失)。留一点底让静止时能看到淡淡的场。
 const LOW_ALPHA_FLOOR = 0.12;
-const MODEL_ASSET = require('../assets/3D/carSeatModel.glb');
+// 无压力阈值:归一化压力(smoothBig/color)低于此值视为「没压力」→ 直接不显示这些点(shader discard)。
+const NO_PRESSURE_NORM = 0.05;
+// 整体色调提亮系数:RGB 统一乘该值(clamp 到 1),让点云更亮。
+const COLOR_BRIGHTNESS = 1.35;
+
+// 压力云图本地配色表:高压=红 → 低压=蓝紫。
+// 去掉了共享表 rainbowTextColorsxy 尾部的「灰白→纯白」段,
+// 所以最外圈(低压)收在蓝紫色,不再出现白点。
+const CLOUD_COLORS = [
+  [220, 20, 20], [240, 50, 10], [255, 80, 0], [255, 110, 0], [255, 140, 0],
+  [255, 170, 0], [255, 200, 0], [255, 230, 0], [255, 255, 0], [230, 255, 0],
+  [200, 255, 0], [150, 255, 0], [100, 255, 0], [50, 255, 30], [0, 255, 80],
+  [0, 255, 140], [0, 255, 200], [0, 240, 255], [0, 200, 255], [0, 160, 255],
+  [0, 120, 255], [0, 90, 255], [40, 60, 230], [90, 40, 210], [140, 40, 190],
+];
+// 与 jetWhite3 同样的映射逻辑(min=0,range=max*2),只是换成 CLOUD_COLORS。
+// x=0 → 表末尾(蓝紫),x 越大越靠表头(红)。
+function cloudColor(max, x) {
+  const n = CLOUD_COLORS.length;
+  const range = max * 2;
+  const t = range > 0 ? Math.max(0, Math.min(x / range, 1)) : 0;
+  const idx = t * (n - 1);
+  const f = Math.floor(idx);
+  const c = Math.min(f + 1, n - 1);
+  const frac = idx - f;
+  const c0 = CLOUD_COLORS[n - 1 - f];
+  const c1 = CLOUD_COLORS[n - 1 - c];
+  return [
+    c0[0] + (c1[0] - c0[0]) * frac,
+    c0[1] + (c1[1] - c0[1]) * frac,
+    c0[2] + (c1[2] - c0[2]) * frac,
+  ];
+}
+const MODEL_ASSET = require('../assets/3D/111.glb');
 const DEFAULT_SETTINGS = {
   gauss: 3.0,        // 用户实机调定
   color: 450,        // 色阶映射范围(用户实机调定)
@@ -56,12 +89,12 @@ const IDLE_RENDER_FRAMES = 3;
 // 需在 3D 视图右侧调节面板里拖滑块微调，然后「打印参数」把结果填回这里。
 const DEFAULT_POINT_FIT_LAYOUT = {
   // 用户实机调定并固化(坐垫/靠背贴合座椅)
-  center: {position: [13, -61, -29], rotation: [3.28, 0, 0], sx: 5.7, sy: 4.6, sz: 3},
+  center: {position: [13, -65, -29], rotation: [3.28, 0, 0], sx: 5.7, sy: 4.6, sz: 3},
   centersit: {position: [15, 2, 24], rotation: [2.07, 0, 0], sx: 5.7, sy: 0.7, sz: 4.9},
   leftsit: {position: [-28, -9, -30], rotation: [1.35, 0, -0.50], sx: 3.3, sy: 3.3, sz: 3.3},
   rightsit: {position: [64, -7, -10], rotation: [1.35, 0, 0.50], sx: 3.3, sy: 3.3, sz: 3.3},
 };
-const DEFAULT_POINT_SIZE = 4.0;  // 默认点大小
+const DEFAULT_POINT_SIZE = 6.0;  // 默认点大小
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
 const POINT_MAP_SCALE_DEFAULT = 1.8;
@@ -395,7 +428,7 @@ function initPoint(config, pointConfig, name, group) {
     depthWrite: false,
     depthTest: true,
     blending: THREE.NormalBlending,
-    opacity: 0.9,
+    opacity: 1.0,
     size: DEFAULT_POINT_SIZE,
     map: circleTexture,
     alphaTest: 0.0, // 不裁剪柔和边缘，让光斑平滑叠成连续热力场
@@ -547,7 +580,6 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
   const heightSign = flipHeight ? 1 : -1;
   let k = 0;
   let j = 0;
-  const hideThreshold = color * HIDE_THRESHOLD_RATIO;
   for (let ix = 0; ix < amountX; ix += 1) {
     // flipRow: 翻转行遍历方向（座椅前后）
     const dataRow = flipRow ? (amountX - 1 - ix) : ix;
@@ -563,28 +595,28 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
       position[k + 1] = heightSign * smoothBig[l] * height;
       position[k + 2] = ix * SEPARATION - (amountY * SEPARATION) / 2;
 
+      // 归一化压力(0~1),供隐藏判断与透明度共用
+      const norm = color > 0 ? Math.max(0, Math.min(1, smoothBig[l] / color)) : 0;
       if (scales) {
-        // 用平滑后的值判断隐藏，避免阈值附近反复闪烁
-        const isHidden = ENABLE_POINT_HIDE && smoothBig[l] <= hideThreshold;
         // 抽稀:每隔 POINT_STRIDE 显示一个点(矩形布局,减少点数,不改变贴合)
         const thinned = POINT_STRIDE > 1 && (ix % POINT_STRIDE !== 0 || iy % POINT_STRIDE !== 0);
-        if (isHidden || thinned) {
+        // 没压力的点直接不显示(不再置灰),只显示有压力的点
+        if (norm <= NO_PRESSURE_NORM || thinned) {
           scales[j] = 0;
         } else {
           // 边缘淡出:离矩形边界越近越透明(用几何行列 ix/iy,不受 flipRow 影响)
           const distEdge = Math.min(ix, amountX - 1 - ix, iy, amountY - 1 - iy);
           const edgeFade = Math.max(0, Math.min(1, distEdge / EDGE_FADE_POINTS));
-          // 低压淡出:压力越低越透明,留一点底(LOW_ALPHA_FLOOR)
-          const norm = color > 0 ? Math.max(0, Math.min(1, smoothBig[l] / color)) : 0;
-          const pressureAlpha = LOW_ALPHA_FLOOR + (1 - LOW_ALPHA_FLOOR) * norm;
-          scales[j] = edgeFade * pressureAlpha;
+          // 有压力的点直接以(接近)满透明度显示,不再按压力压暗
+          scales[j] = edgeFade;
         }
       }
 
-      const rgb = jetWhite3(0, color, smoothBig[l]);
-      colors[k] = rgb[0] / 255;
-      colors[k + 1] = rgb[1] / 255;
-      colors[k + 2] = rgb[2] / 255;
+      const rgb = cloudColor(color, smoothBig[l]);
+      // 整体提亮:RGB 统一乘 COLOR_BRIGHTNESS 后 clamp 到 [0,1]
+      colors[k] = Math.min(1, (rgb[0] / 255) * COLOR_BRIGHTNESS);
+      colors[k + 1] = Math.min(1, (rgb[1] / 255) * COLOR_BRIGHTNESS);
+      colors[k + 2] = Math.min(1, (rgb[2] / 255) * COLOR_BRIGHTNESS);
 
       k += 3;
       j += 1;
@@ -1385,9 +1417,15 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         return;
       }
 
+      // 旋转/拖动期间跳过重的热力场重算(插值+高斯+着色),
+      // 只做便宜的相机变换渲染,避免每 ~66ms 一次重算卡住旋转帧。
+      // 松手后 isInteracting=false，数据自动恢复更新。
+      const interacting = !!(frameState.controls && frameState.controls.isInteracting);
+
       if (
-        !frameState.lastSeatUpdate ||
-        now - frameState.lastSeatUpdate >= SEAT_UPDATE_INTERVAL
+        !interacting &&
+        (!frameState.lastSeatUpdate ||
+          now - frameState.lastSeatUpdate >= SEAT_UPDATE_INTERVAL)
       ) {
         const currentData = dataRef.current;
         let hash = 0;

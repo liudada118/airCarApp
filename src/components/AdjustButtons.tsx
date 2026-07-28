@@ -41,7 +41,7 @@ const AdjustButtons: React.FC<AdjustButtonsProps> = ({
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[styles.button, styles.buttonLit]}>
-            <IconFont name="plus-full" size={30} color={Colors.textWhite} />
+            <IconFont name="plus-full" size={40} color={Colors.textWhite} />
           </LinearGradient>
         ) : (
           <View style={[styles.button, styles.disabledButton]}>
@@ -63,7 +63,7 @@ const AdjustButtons: React.FC<AdjustButtonsProps> = ({
           ]}>
           <IconFont
             name="minus-full"
-            size={30}
+            size={40}
             color={decreaseEnabled ? Colors.textWhite : Colors.textGray}
           />
         </View>
@@ -72,8 +72,8 @@ const AdjustButtons: React.FC<AdjustButtonsProps> = ({
   );
 };
 
-const BTN = 64;
-const RADIUS = 18; // 圆角方(不是圆)
+const BTN = 84;
+const RADIUS = 22; // 圆角方(不是圆)
 
 const styles = StyleSheet.create({
   container: {

@@ -534,7 +534,9 @@ const SlideToggle: React.FC<{
   on: boolean;
   onChange: (v: boolean) => void;
   style?: any; // 轨道额外样式(主要用来指定宽度)
-}> = ({on, onChange, style}) => {
+  onLabel?: string;  // "开启态"文字
+  offLabel?: string; // "关闭态"文字
+}> = ({on, onChange, style, onLabel = '开启', offLabel = '关闭'}) => {
   // 0 = 开启(滑块在左) / 1 = 关闭(滑块在右)
   const slide = useRef(new Animated.Value(on ? 0 : 1)).current;
   const [trackW, setTrackW] = useState(0);
@@ -558,10 +560,10 @@ const SlideToggle: React.FC<{
       </Animated.View>
       {/* 两个可点区域(文字固定,滑块从下面滑过) */}
       <TouchableOpacity style={styles.slideHalf} activeOpacity={0.9} onPress={() => onChange(true)}>
-        <Text style={[styles.slideText, on && styles.slideTextActive]}>开启</Text>
+        <Text style={[styles.slideText, on && styles.slideTextActive]}>{onLabel}</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.slideHalf} activeOpacity={0.9} onPress={() => onChange(false)}>
-        <Text style={[styles.slideText, !on && styles.slideTextActive]}>关闭</Text>
+        <Text style={[styles.slideText, !on && styles.slideTextActive]}>{offLabel}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -681,6 +683,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const massageRef = useRef({minutes: 0, remainSec: 0, active: 0});
   const [massageView, setMassageView] = useState({minutes: 0, remainSec: 0, active: false});
   const lastMassagePromptRef = useRef(0); // longSitPrompt 上升沿检测
+  const prevMassageActiveRef = useRef(0); // longSitMassageActive 上升沿检测(按摩开启→关闭自适应)
   const [massageToast, setMassageToast] = useState(false); // "久坐按摩已启动"提示
 
   // ─── 下发命令监控(临时测试面板)───
@@ -1236,6 +1239,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         const massageActive = event.longSitMassageActive ?? 0;
         // 14 个按摩气囊涟漪严格跟随算法实际运行状态（自动或手动启动都生效）。
         setBigDotsOn(massageActive >= 0.5);
+        // 按摩开启(上升沿 0→1)→ 气囊自适应切到关闭：算法在按摩期间本就暂停自适应跟随
+        // (living 被 !massageEnable 门控)。这里同步 UI 开关并下发 [5,0,0] 锁存 pAdaptiveOff，
+        // 使按摩结束后自适应仍保持关闭，不自动切回开启(需用户手动开)。已关则保持关，不重发。
+        if (massageActive >= 0.5 && prevMassageActiveRef.current < 0.5) {
+          if (adaptiveEnabledRef.current) {
+            onAdaptiveChange(false);
+            SerialModule?.pulseFrontCmd?.(5, 0, 0).catch(() => {});
+          }
+        }
+        prevMassageActiveRef.current = massageActive;
         if (spine >= 0.5 && prevSpineRef.current < 0.5) triggerVoice('spine_protect');
         prevSpineRef.current = spine;
         if (bump >= 0.5 && prevBumpRef.current < 0.5) triggerVoice('bump_relief');
@@ -1551,6 +1564,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 SerialModule?.pulseFrontCmd?.(v ? 3 : 5, 0, 0).catch(() => {});
               }}
               style={styles.adaptiveSlide}
+              onLabel="开启自适应"
+              offLabel="关闭自适应"
             />
             {/* 自定义气囊调节:进入品味模式[1,0,0] 并跳转 */}
             <TouchableOpacity
@@ -1610,7 +1625,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           </View>
 
           {/* 乘员识别(仅页面，暂无功能) */}
-          <View style={styles.section}>
+          <View style={[styles.section, styles.occupantSection]}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>乘员识别</Text>
             </View>
@@ -1639,6 +1654,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               onChange={v => {
                 SerialModule?.setLongSitMassageEnabled?.(v).catch(() => {});
               }}
+              onLabel="开始按摩"
+              offLabel="结束按摩"
             />
             {/* 久坐状态 */}
             <View style={styles.massageStatusRow}>
@@ -2501,8 +2518,8 @@ const styles = StyleSheet.create({
   },
   // ─── 左侧面板 ───
   leftPanel: {
-    width: SCREEN_WIDTH * 0.27,
-    maxWidth: SCREEN_WIDTH * 0.27,
+    width: SCREEN_WIDTH * 0.23,
+    maxWidth: SCREEN_WIDTH * 0.23,
     flexShrink: 0,
     flexGrow: 0,
     paddingRight: Spacing.sm,
@@ -2557,7 +2574,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    height: 46,
+    height: 58,
     borderRadius: BorderRadius.md,
   },
   customizeIconNew: {
@@ -2573,10 +2590,12 @@ const styles = StyleSheet.create({
   // ─── 实时压力云图(3D) ───
   pressureSection: {
     flex: 1,
+    marginTop: SCREEN_HEIGHT * 0.03,   // 标题与上面"气囊自适应"区的间距
     marginBottom: 0,
   },
   pressureBox: {
-    flex: 1,
+    marginTop: Spacing.md,             // 3D 框往下顶一点(与标题拉开)
+    height: SCREEN_HEIGHT * 0.5,   // 固定高度,不再撑满剩余空间
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
@@ -2705,8 +2724,8 @@ const styles = StyleSheet.create({
   },
   // ─── 座椅按摩调节:滑块式开关 ───
   slideTrack: {
-    width: GROUP_W,               // 和座椅状态/乘员识别同宽
-    height: 46,
+    width: GROUP_W,               // 右边按摩开关:和座椅状态/乘员识别同宽
+    height: 76,
     borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
@@ -2718,7 +2737,7 @@ const styles = StyleSheet.create({
   },
   // 左栏「气囊自适应调节」滑块:和下面自定义按钮同宽,并与它拉开间距
   adaptiveSlide: {
-    width: '90%',
+    width: '90%',                 // 左边自适应开关:和下面"自定义气囊调节"同宽
     marginBottom: Spacing.md,
   },
   slideThumb: {
@@ -2752,6 +2771,9 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: SCREEN_HEIGHT * 0.02,
+  },
+  occupantSection: {
+    marginTop: SCREEN_HEIGHT * 0.03,   // 与左边"实时压力云图"上方间距对应
   },
   sectionHeader: {
     flexDirection: 'row',

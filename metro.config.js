@@ -12,7 +12,14 @@ const config = {
     // 让 .svg 文件经 react-native-svg-transformer 变成可 import 的 React 组件
     babelTransformerPath: require.resolve('react-native-svg-transformer'),
   },
+  //debug
   resolver: {
+    // Gradle/Chaquopy removes and recreates these directories while building.
+    // Ignoring them prevents Metro's file watcher from exiting with ENOENT.
+    blockList: [
+      /[/\\]android[/\\]app[/\\]build[/\\].*/,
+      /[/\\]android[/\\]build[/\\].*/,
+    ],
     // glb 仍作为二进制资源；svg 从 assetExts 移到 sourceExts(改由 transformer 处理)
     assetExts: [
       ...defaultConfig.resolver.assetExts.filter(ext => ext !== 'svg'),

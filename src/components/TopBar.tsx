@@ -94,8 +94,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   logoImage: {
-    width: 120,
-    height: 30,
+    width: 88,
+    height: 22,
   },
   connectionIcon: {
     width: 18,

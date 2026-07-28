@@ -122,20 +122,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   activeContainer: {
     backgroundColor: Colors.textWhite,
   },
   icon: {
-    width: 22,
-    height: 22,
+    width: 28,
+    height: 28,
   },
   label: {
-    fontSize: FontSize.md,
+    fontSize: FontSize.xl,
     fontWeight: '600',
   },
   // 3 小段
