@@ -84,6 +84,12 @@ static void set_input_defaults(void) {
     U->bumpMinVelocity   = 8.0F;
     U->bumpMaxRms        = 0.5F;
     U->bumpMaxRangeMm    = 15.0F;
+    // 模型 1.225 新增的判活标定输入。显式写入（否则为 0 会走模型内置回退值）。
+    // sadThresholdIn：单次判活分数阈值，sadScore >= 该值记一次"活体"，(0,1]。
+    // 模型内置回退 0.4，这里按标定值改为 0.3（降低阈值，更容易判活）。
+    U->sadThresholdIn      = 0.3F;
+    U->sadNormalizeScaleIn = 2.0F;   // 模型内置回退值
+    U->livingConfirmCountIn = 2.0F;  // 确认活体所需判活次数(最近3次中)，1~3
 }
 
 JNIEXPORT void JNICALL

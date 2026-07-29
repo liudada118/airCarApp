@@ -37,28 +37,74 @@ const NO_PRESSURE_NORM = 0.05;
 // 整体色调提亮系数:RGB 统一乘该值(clamp 到 1),让点云更亮。
 const COLOR_BRIGHTNESS = 1.35;
 
-// 压力云图本地配色表:高压=红 → 低压=蓝紫。
-// 去掉了共享表 rainbowTextColorsxy 尾部的「灰白→纯白」段,
-// 所以最外圈(低压)收在蓝紫色,不再出现白点。
-const CLOUD_COLORS = [
-  [220, 20, 20], [240, 50, 10], [255, 80, 0], [255, 110, 0], [255, 140, 0],
-  [255, 170, 0], [255, 200, 0], [255, 230, 0], [255, 255, 0], [230, 255, 0],
-  [200, 255, 0], [150, 255, 0], [100, 255, 0], [50, 255, 30], [0, 255, 80],
-  [0, 255, 140], [0, 255, 200], [0, 240, 255], [0, 200, 255], [0, 160, 255],
-  [0, 120, 255], [0, 90, 255], [40, 60, 230], [90, 40, 210], [140, 40, 190],
+// ─── 云图配色:5 个 RGB 锚点(高压→低压)生成 25 级调色板 ─────────────────
+// colorRGB[0]=最高压端颜色, colorRGB[4]=最低压端颜色。每个是 [r,g,b](0~255)。
+// 默认 5 个颜色还原「红→橙→黄→蓝→蓝紫」的原彩虹表。
+const DEFAULT_RGB = [
+  [220, 20, 20],   // 最高压
+  [255, 140, 0],
+  [255, 255, 0],
+  [0, 160, 255],
+  [140, 40, 190],  // 最低压
 ];
-// 与 jetWhite3 同样的映射逻辑(min=0,range=max*2),只是换成 CLOUD_COLORS。
-// x=0 → 表末尾(蓝紫),x 越大越靠表头(红)。
-function cloudColor(max, x) {
-  const n = CLOUD_COLORS.length;
+// 预设方案:每个是 5 个 RGB 锚点(高压→低压)。
+const COLOR_PRESETS = {
+  彩虹: [[220, 20, 20], [255, 140, 0], [255, 255, 0], [0, 160, 255], [140, 40, 190]],
+  蓝红: [[255, 30, 30], [220, 20, 120], [150, 20, 180], [60, 40, 200], [0, 90, 255]],
+  火焰: [[255, 240, 120], [255, 180, 0], [255, 90, 0], [200, 20, 0], [120, 0, 0]],
+  蓝绿: [[0, 255, 120], [0, 230, 200], [0, 190, 255], [40, 90, 230], [110, 40, 200]],
+};
+const CLOUD_PALETTE_STOPS = 25;
+
+// 5 个 RGB 锚点 → 25 级调色板(在锚点之间线性插值)。
+// 返回数组 index 0 = 高压端(rgb[0]), index n-1 = 低压端(rgb[4])。
+function buildPalette(rgb) {
+  const anchors = (Array.isArray(rgb) && rgb.length >= 2) ? rgb : DEFAULT_RGB;
+  const seg = anchors.length - 1;
+  const n = CLOUD_PALETTE_STOPS;
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const fp = (i / (n - 1)) * seg;
+    const a = Math.floor(fp);
+    const b = Math.min(a + 1, seg);
+    const fr = fp - a;
+    const c0 = anchors[a];
+    const c1 = anchors[b];
+    out[i] = [
+      c0[0] + (c1[0] - c0[0]) * fr,
+      c0[1] + (c1[1] - c0[1]) * fr,
+      c0[2] + (c1[2] - c0[2]) * fr,
+    ];
+  }
+  return out;
+}
+
+// 调色板缓存:颜色不变时复用,避免每帧重建。
+const rgbKey = (rgb) => (Array.isArray(rgb) ? rgb : DEFAULT_RGB).map(c => c.join('-')).join(',');
+let _paletteCache = buildPalette(DEFAULT_RGB);
+let _paletteKey = rgbKey(DEFAULT_RGB);
+function getPalette(rgb) {
+  const key = rgbKey(rgb);
+  if (key !== _paletteKey) {
+    _paletteCache = buildPalette(rgb);
+    _paletteKey = key;
+  }
+  return _paletteCache;
+}
+
+// 与 jetWhite3 同样的映射逻辑(min=0,range=max*2),使用动态调色板。
+// x=0 → 表末尾(低压色),x 越大越靠表头(高压色)。
+function cloudColor(palette, max, x) {
+  const pal = palette || _paletteCache;
+  const n = pal.length;
   const range = max * 2;
   const t = range > 0 ? Math.max(0, Math.min(x / range, 1)) : 0;
   const idx = t * (n - 1);
   const f = Math.floor(idx);
   const c = Math.min(f + 1, n - 1);
   const frac = idx - f;
-  const c0 = CLOUD_COLORS[n - 1 - f];
-  const c1 = CLOUD_COLORS[n - 1 - c];
+  const c0 = pal[n - 1 - f];
+  const c1 = pal[n - 1 - c];
   return [
     c0[0] + (c1[0] - c0[0]) * frac,
     c0[1] + (c1[1] - c0[1]) * frac,
@@ -74,6 +120,8 @@ const DEFAULT_SETTINGS = {
   rawSmooth: 1.5,    // 第一层平滑(插值前):越小越跟手(3→1.5 加快响应)
   deadZone: 9,       // 死区阈值,用户实机调定
   zeroFrameThreshold: 10, // 全 0 帧检测：帧总和低于此值视为气囊动作干扰帧，直接跳过
+  colorRGB: DEFAULT_RGB.map(c => [...c]), // 云图 5 段颜色 RGB(高压→低压)
+  colorPreset: '彩虹',                     // 当前配色预设名(改单圈颜色后置为「自定义」)
 };
 // 数据更新频率：15Hz（匹配串口数据源）
 const SEAT_UPDATE_INTERVAL = 1000 / 15;
@@ -557,6 +605,7 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
   const scales = scalesAttr?.array instanceof Float32Array ? scalesAttr.array : null;
 
   const {color, height, coherent} = dynSettings || DEFAULT_SETTINGS;
+  const palette = getPalette((dynSettings || DEFAULT_SETTINGS).colorRGB);
 
   const bigArr = lineInterpnew(ndata1, sitnum2, sitnum1, sitInterp1, sitInterp);
   const bigArrs = addSide(
@@ -612,7 +661,7 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
         }
       }
 
-      const rgb = cloudColor(color, smoothBig[l]);
+      const rgb = cloudColor(palette, color, smoothBig[l]);
       // 整体提亮:RGB 统一乘 COLOR_BRIGHTNESS 后 clamp 到 [0,1]
       colors[k] = Math.min(1, (rgb[0] / 255) * COLOR_BRIGHTNESS);
       colors[k + 1] = Math.min(1, (rgb[1] / 255) * COLOR_BRIGHTNESS);
@@ -811,6 +860,42 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       return next;
     });
   }, []);
+
+  // 强制下一帧重新着色(即使数据没变):用于纯配色调整时立即生效。
+  const forceRecolor = useCallback(() => {
+    const fs = stateRef.current;
+    if (fs) {
+      fs.lastDataHash = -1; // 与任何真实 hash(>=0)都不相等 → 触发重算
+      fs.dirty = true;
+    }
+  }, []);
+
+  // 应用整套配色预设(5 段 RGB)
+  const applyColorPreset = useCallback((name) => {
+    const preset = COLOR_PRESETS[name];
+    if (!preset) return;
+    setPointSettings(prev => {
+      const next = {...prev, colorRGB: preset.map(c => [...c]), colorPreset: name};
+      pointSettingsRef.current = next;
+      forceRecolor();
+      NativeModules.SerialModule?.savePointSettings?.(JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, [forceRecolor]);
+
+  // 调整某一圈的某个 RGB 通道(ring 0=最高压 … 4=最低压;ch 0=R 1=G 2=B),自动切到「自定义」
+  const updateColorChannel = useCallback((ring, ch, value) => {
+    setPointSettings(prev => {
+      const base = (prev.colorRGB && prev.colorRGB.length >= 5) ? prev.colorRGB : DEFAULT_RGB;
+      const rgb = base.map(c => [...c]);
+      rgb[ring][ch] = value;
+      const next = {...prev, colorRGB: rgb, colorPreset: '自定义'};
+      pointSettingsRef.current = next;
+      forceRecolor();
+      NativeModules.SerialModule?.savePointSettings?.(JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, [forceRecolor]);
 
   // 暴露清零/取消清零方法给父组件
   useImperativeHandle(ref, () => ({
@@ -1254,6 +1339,12 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
 
   // 初始化 3D 场景
   const onContextCreate = useCallback(gl => {
+    // GL context 可能重建(切后台/弹窗重挂/丢context)：先取消上一个渲染循环,避免同时跑两个循环。
+    if (frameRef.current) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    mountedRef.current = true;
     // ─── expo-gl 补丁：修复重新创建 GL context 时部分方法返回 undefined 导致 THREE.js .trim() 报错 ───
     const _origGetShaderInfoLog = gl.getShaderInfoLog.bind(gl);
     gl.getShaderInfoLog = (shader) => {
@@ -1401,6 +1492,12 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     };
 
     const animate = () => {
+      if (!mountedRef.current) return;
+      // 无论本帧成功还是抛异常,都要续下一帧,否则循环一崩就永久黑屏(座椅+云图全没)。
+      const scheduleNext = () => {
+        if (mountedRef.current) frameRef.current = requestAnimationFrame(animate);
+      };
+      try {
       const now = Date.now();
       const frameState = stateRef.current;
 
@@ -1413,7 +1510,6 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           gl.endFrameEXP();
           frameState.dirty = false;
         }
-        frameRef.current = requestAnimationFrame(animate);
         return;
       }
 
@@ -1469,7 +1565,6 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             if (frameState._zeroFrameCount <= 3 && frameState.rawSmoothInited) {
               // 连续 3 帧以内的全 0：可能是气囊动作干扰，跳过不更新
               frameState.lastSeatUpdate = now;
-              frameRef.current = requestAnimationFrame(animate);
               return;
             }
             // 连续超过 3 帧全 0：真正离座，清零 3D 图
@@ -1526,8 +1621,12 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           frameState.idleFrames--;
         }
       }
-
-      frameRef.current = requestAnimationFrame(animate);
+      } catch (e) {
+        // 单帧异常(最常见是 GL context 丢失时 render/endFrameEXP 抛错)不应杀死整个循环:
+        // 吞掉本帧错误,靠 finally 续下一帧,context 恢复/重建后画面自动回来。
+      } finally {
+        scheduleNext();
+      }
     };
     animate();
   }, []);
@@ -1671,6 +1770,60 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             decimals={0}
             onValueChange={v => updatePointSetting('deadZone', v)}
           />
+
+          {/* ─── 云图配色:预设 + 逐圈 RGB ─── */}
+          <Text style={styles.sectionLabel}>云图配色</Text>
+          {/* 预设方案(整体一键切换) */}
+          <View style={styles.presetRow}>
+            {Object.keys(COLOR_PRESETS).map(name => (
+              <TouchableOpacity
+                key={name}
+                style={[styles.presetBtn, pointSettings.colorPreset === name && styles.presetBtnActive]}
+                onPress={() => applyColorPreset(name)}>
+                <Text style={[styles.presetBtnText, pointSettings.colorPreset === name && styles.presetBtnTextActive]}>
+                  {name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* 调色板预览条(高压左 → 低压右) */}
+          <View style={styles.gradientPreview}>
+            {getPalette(pointSettings.colorRGB).map((c, i) => (
+              <View
+                key={i}
+                style={{flex: 1, backgroundColor: `rgb(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])})`}}
+              />
+            ))}
+          </View>
+          <View style={styles.gradientLabelRow}>
+            <Text style={styles.gradientLabel}>高压</Text>
+            <Text style={styles.gradientLabel}>低压</Text>
+          </View>
+          {/* 逐圈 RGB(第1圈=最高压 … 第5圈=最低压),每圈 R/G/B 各 0~255 */}
+          {[0, 1, 2, 3, 4].map(ring => {
+            const rgbArr = (pointSettings.colorRGB && pointSettings.colorRGB.length >= 5 ? pointSettings.colorRGB : DEFAULT_RGB)[ring];
+            const ringLabel = ['第1圈(最高压)', '第2圈', '第3圈', '第4圈', '第5圈(最低压)'][ring];
+            return (
+              <View key={ring} style={styles.rgbRing}>
+                <View style={styles.rgbRingHeader}>
+                  <View style={[styles.rgbSwatch, {backgroundColor: `rgb(${Math.round(rgbArr[0])},${Math.round(rgbArr[1])},${Math.round(rgbArr[2])})`}]} />
+                  <Text style={styles.rgbRingLabel}>{ringLabel}</Text>
+                </View>
+                {['R', 'G', 'B'].map((chName, ch) => (
+                  <StepControl
+                    key={chName}
+                    label={chName}
+                    value={rgbArr[ch]}
+                    min={0}
+                    max={255}
+                    step={5}
+                    decimals={0}
+                    onValueChange={v => updateColorChannel(ring, ch, v)}
+                  />
+                ))}
+              </View>
+            );
+          })}
 
           {/* ─── 热力图区域调节 ─── */}
           <Text style={styles.sectionLabel}>热力图区域</Text>
@@ -2036,6 +2189,76 @@ const styles = StyleSheet.create({
   },
   zoneTabTextActive: {
     color: '#7cf',
+    fontWeight: 'bold',
+  },
+
+  // ─── 云图配色 ──────────────────────────────────────────────────────
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  presetBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#1a3050',
+    backgroundColor: '#0d1520',
+  },
+  presetBtnActive: {
+    backgroundColor: '#1a3a60',
+    borderColor: '#2a5a90',
+  },
+  presetBtnText: {
+    color: '#556',
+    fontSize: 11,
+  },
+  presetBtnTextActive: {
+    color: '#7cf',
+    fontWeight: 'bold',
+  },
+  gradientPreview: {
+    flexDirection: 'row',
+    height: 14,
+    borderRadius: 4,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#1a3050',
+  },
+  gradientLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  gradientLabel: {
+    color: '#556',
+    fontSize: 9,
+  },
+  rgbRing: {
+    marginBottom: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#141f2e',
+  },
+  rgbRingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  rgbSwatch: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#2a3a50',
+  },
+  rgbRingLabel: {
+    color: '#8ab',
+    fontSize: 11,
     fontWeight: 'bold',
   },
 
