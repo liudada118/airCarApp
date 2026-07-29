@@ -137,10 +137,10 @@ const BIGDOTS_TOP: BigDot[] = [
 const BIGDOTS_BOTTOM: BigDot[] = [
   {left: 40, top: 70, w: 10, squashY: 0.62},
   {left: 56, top: 68.7, w: 10, squashY: 0.62},
-  {left: 44, top: 76, w: 10, squashY: 0.62},
-  {left: 62, top: 74.7, w: 10, squashY: 0.62},
-  {left: 48.5 , top: 82, w: 10, squashY: 0.62},
-  {left: 68, top: 80.5, w: 10, squashY: 0.62},
+  {left: 47, top: 75.5, w: 10, squashY: 0.62},
+  {left: 65, top: 74, w: 10, squashY: 0.62},
+  {left: 54 , top: 81.5, w: 10, squashY: 0.62},
+  {left: 73, top:79, w: 10, squashY: 0.62},
 ];
 const BIGDOTS: BigDot[] = [...BIGDOTS_TOP, ...BIGDOTS_BOTTOM];
 
