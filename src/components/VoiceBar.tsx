@@ -3,7 +3,6 @@ import {
   Animated,
   Easing,
   StyleSheet,
-  Text,
   View,
   StyleProp,
   ViewStyle,
@@ -108,6 +107,38 @@ const Orb: React.FC = () => {
   );
 };
 
+// 换句只淡入新句,上一句不淡出(直接被顶掉)——否则中间会空一段,
+// 新句也会比语音晚出来。想完全无动画硬切:把 TEXT_IN 和 TEXT_RISE 设成 0。
+const TEXT_IN = 180; // 新句淡入时长
+const TEXT_RISE = 5; // 新句从下方进场的距离(px)
+
+/**
+ * 一句字幕。外层用 key={text},所以每换一句都是一个全新实例,
+ * 初始值直接写在 Animated.Value 里 → 第一帧渲染出来就是「透明 + 偏下」。
+ *
+ * 【别改回 setValue 那种写法】opacity 走原生驱动,setValue 要经原生动画队列异步生效,
+ * 而文字内容走 UIManager 队列;先画出的新句会带着上一句的不透明度闪一下才变透明。
+ */
+const Caption: React.FC<{text: string; animate: boolean}> = ({text, animate}) => {
+  const fade = useRef(new Animated.Value(animate ? 0 : 1)).current;
+  const shift = useRef(new Animated.Value(animate ? TEXT_RISE : 0)).current;
+  useEffect(() => {
+    if (!animate) return;
+    Animated.parallel([
+      Animated.timing(fade, {toValue: 1, duration: TEXT_IN, easing: Easing.out(Easing.quad), useNativeDriver: true}),
+      Animated.timing(shift, {toValue: 0, duration: TEXT_IN, easing: Easing.out(Easing.quad), useNativeDriver: true}),
+    ]).start();
+    // animate/fade/shift 挂载时就定死了,这里只跑一次
+  }, [animate, fade, shift]);
+  return (
+    <Animated.Text
+      style={[styles.barText, {opacity: fade, transform: [{translateY: shift}]}]}
+      numberOfLines={1}>
+      {text}
+    </Animated.Text>
+  );
+};
+
 interface VoiceBarProps {
   visible: boolean;
   text: string;
@@ -117,11 +148,18 @@ interface VoiceBarProps {
 /**
  * 右下角语音提示:彩球 + 文字条。
  * 动画:球先弹出(spring),再从球里滑出文字条(宽度展开 + 淡入)。
- * 目前纯 UI:由 visible 控制显隐,text 写死传入;以后有数据时改成按数据 setVisible/setText 即可。
+ * 字幕:text 一变就立刻换成新句(上一句不淡出),新句淡入(念到哪显示哪,由调用方按播放进度换 text)。
  */
 const VoiceBar: React.FC<VoiceBarProps> = ({visible, text, style}) => {
   const orb = useRef(new Animated.Value(0)).current; // 0 隐藏 / 1 显示(球缩放)
   const bar = useRef(new Animated.Value(0)).current; // 0 收起 / 1 展开(条宽度)
+  const shownVisibleRef = useRef(visible); // 上一次渲染时条是否已经展开
+
+  // 条「刚展开」的第一句不做淡入(展开本身就带淡入),之后换句才淡入。
+  const animateCaption = visible && shownVisibleRef.current;
+  useEffect(() => {
+    shownVisibleRef.current = visible;
+  }, [visible]);
 
   useEffect(() => {
     if (visible) {
@@ -139,6 +177,7 @@ const VoiceBar: React.FC<VoiceBarProps> = ({visible, text, style}) => {
     }
   }, [visible, orb, bar]);
 
+  // 条宽固定 BAR_W(不随字幕长短变),只有展开/收起时 0→BAR_W
   const barWidth = bar.interpolate({inputRange: [0, 1], outputRange: [0, BAR_W]});
   const barOpacity = bar.interpolate({inputRange: [0, 0.35, 1], outputRange: [0, 0, 1]});
 
@@ -146,15 +185,15 @@ const VoiceBar: React.FC<VoiceBarProps> = ({visible, text, style}) => {
     <View style={[styles.wrap, style]} pointerEvents="none">
       {/* 文字条:宽度 0→BAR_W 从球里展开;内容右对齐,所以是"从球那侧"抽出来 */}
       <Animated.View style={[styles.barClip, {width: barWidth, opacity: barOpacity}]}>
+        {/* 内层定宽 BAR_W:文字才不会在条展开过程中被挤压换行 */}
         <View style={styles.barInner}>
           <LinearGradient
             colors={['rgba(48,56,92,0.92)', 'rgba(82,58,120,0.92)']}
             start={{x: 0, y: 0}}
             end={{x: 1, y: 0}}
             style={styles.barBg}>
-            <Text style={styles.barText} numberOfLines={1}>
-              {text}
-            </Text>
+            {/* key={text}:换句 = 换一个新实例,新句第一帧就是透明的,不会闪 */}
+            <Caption key={text} text={text} animate={animateCaption} />
           </LinearGradient>
         </View>
       </Animated.View>

@@ -25,7 +25,13 @@ import SeatMatrix46, {PressureLegend} from '../components/SeatMatrix46';
 import AirbagFullFrameModal from '../components/AirbagFullFrameModal';
 import AirbagHeatmap from '../components/AirbagHeatmap';
 import {parseAirbagFullFrame, AirbagFullFrame} from '../utils/airbagFullFrame';
-import {playVoice, VOICE_TEXT, type VoiceKey} from '../utils/voicePlayer';
+import {
+  playVoice,
+  VOICE_SEGMENTS,
+  segmentIndexAt,
+  estimateDurationMs,
+  type VoiceKey,
+} from '../utils/voicePlayer';
 
 // icon 图片资源
 const iconSitStatus = require('../assets/icons/icon-sitStatus.png');
@@ -732,6 +738,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const voicePlayingRef = useRef(false);
   const voiceMountedRef = useRef(true);
   const playNextVoiceRef = useRef<() => void>(() => {});
+  // 字幕：当前显示第几段(-1=还没开始)，以及无音频时推假进度的定时器
+  const voiceSegIdxRef = useRef(-1);
+  const voiceSegTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 按播放进度把语音条文字换成对应那一句；只在「换句」时 setState，
+  // 否则 100ms 一次的进度回调会让整个首页疯狂重渲染。
+  const showVoiceSegment = useCallback((key: VoiceKey, progress: number) => {
+    const idx = segmentIndexAt(key, progress);
+    if (idx === voiceSegIdxRef.current) return;
+    voiceSegIdxRef.current = idx;
+    const seg = VOICE_SEGMENTS[key][idx];
+    if (seg) setVoiceBar({visible: true, text: seg.text});
+  }, []);
 
   playNextVoiceRef.current = () => {
     if (!voiceMountedRef.current || voicePlayingRef.current) return;
@@ -742,7 +761,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     }
 
     voicePlayingRef.current = true;
-    setVoiceBar({visible: true, text: VOICE_TEXT[key]});
+    // 先亮第一句，等 duration 就绪后由进度回调接着往后推
+    voiceSegIdxRef.current = -1;
+    showVoiceSegment(key, 0);
 
     let finished = false;
     const finishCurrent = () => {
@@ -751,6 +772,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       if (voiceHideTimerRef.current) {
         clearTimeout(voiceHideTimerRef.current);
         voiceHideTimerRef.current = null;
+      }
+      if (voiceSegTimerRef.current) {
+        clearInterval(voiceSegTimerRef.current);
+        voiceSegTimerRef.current = null;
       }
 
       // 当前语音播完后稍作停留，再切换到队列中的下一条。
@@ -769,9 +794,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     if (VOICE_AUDIO_ENABLED) {
       // 正常使用音频完成事件推进队列；60 秒仅用于播放器异常时防止队列永久卡住。
       voiceHideTimerRef.current = setTimeout(finishCurrent, 60000);
-      playVoice(key, finishCurrent);
+      playVoice(key, finishCurrent, progress => {
+        if (!voiceMountedRef.current || finished) return;
+        showVoiceSegment(key, progress);
+      });
     } else {
-      voiceHideTimerRef.current = setTimeout(finishCurrent, 8000);
+      // 不出声时没有真实进度，按字数估算整句时长，用假进度把字幕走完。
+      const durMs = estimateDurationMs(key);
+      const startedAt = Date.now();
+      voiceSegTimerRef.current = setInterval(() => {
+        if (!voiceMountedRef.current || finished) return;
+        showVoiceSegment(key, (Date.now() - startedAt) / durMs);
+      }, 120);
+      voiceHideTimerRef.current = setTimeout(finishCurrent, durMs);
     }
   };
 
@@ -793,6 +828,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         voiceQueueRef.current = [];
         voicePlayingRef.current = false;
         if (voiceHideTimerRef.current) clearTimeout(voiceHideTimerRef.current);
+        if (voiceSegTimerRef.current) clearInterval(voiceSegTimerRef.current);
       };
     },
     [],
