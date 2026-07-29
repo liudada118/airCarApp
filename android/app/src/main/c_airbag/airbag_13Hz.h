@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.217
+ * Model version                  : 1.226
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Mon Jul 27 11:25:27 2026
+ * C/C++ source code generated on : Tue Jul 28 16:46:44 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -95,11 +95,15 @@ typedef struct {
   real32_T pBumpLatched;               /* '<Root>/健康干预控制' */
   real32_T pBumpActionTimer;           /* '<Root>/健康干预控制' */
   real32_T pHistoryValid;              /* '<Root>/健康干预控制' */
-  real32_T pPrevBackrestSum;           /* '<Root>/健康干预控制' */
   real32_T pForwardRefX;               /* '<Root>/健康干预控制' */
   real32_T pForwardAge;                /* '<Root>/健康干预控制' */
   real32_T pBackDropWindow;            /* '<Root>/健康干预控制' */
   real32_T pSickPromptTimer;           /* '<Root>/健康干预控制' */
+  real32_T pBackPeakSum;               /* '<Root>/健康干预控制' */
+  real32_T pBackPeakAge;               /* '<Root>/健康干预控制' */
+  real32_T pSickEventCount;            /* '<Root>/健康干预控制' */
+  real32_T pSickEventGap;              /* '<Root>/健康干预控制' */
+  real32_T pSickCountAge;              /* '<Root>/健康干预控制' */
   int32_T pReplayIndex;                /* '<Root>/品味系数' */
   int32_T pGapCycles;                  /* '<Root>/品味系数' */
   int32_T pOffCounter;                 /* '<Root>/入座处理' */
@@ -146,9 +150,9 @@ typedef struct {
   real32_T ratioDeflate;               /* '<Root>/ratioDeflate' */
   real32_T longSitMassageStop;         /* '<Root>/longSitMassageStop' */
   real32_T frontCmd[3];                /* '<Root>/frontCmd' */
-  real32_T sadThreshold;               /* '<Root>/sadThreshold' */
-  real32_T sadNormalizeScale;          /* '<Root>/sadNormalizeScale' */
-  real32_T livingConfirmCount;         /* '<Root>/livingConfirmCount' */
+  real32_T sadThresholdIn;             /* '<Root>/sadThresholdIn' */
+  real32_T sadNormalizeScaleIn;        /* '<Root>/sadNormalizeScaleIn' */
+  real32_T livingConfirmCountIn;       /* '<Root>/livingConfirmCountIn' */
   real32_T spineBiasDeadband;          /* '<Root>/ spineBiasDeadband' */
   real32_T sickForwardMinMm;           /* '<Root>/ sickForwardMinMm' */
   real32_T sickBackDropRatio;          /* '<Root>/ sickBackDropRatio' */
@@ -158,6 +162,14 @@ typedef struct {
   real32_T bumpMaxRangeMm;             /* '<Root>/ bumpMaxRangeMm' */
   real32_T manualMassageOn;            /* '<Root>/manualMassageOn' */
   real32_T sitThresholdmin;            /* '<Root>/sitThresholdmin' */
+  real32_T welcomeSideWingTime;        /* '<Root>/welcomeSideWingTime' */
+  real32_T welcomeLegTime;             /* '<Root>/welcomeLegTime' */
+  real32_T welcomeLumbarTime;          /* '<Root>/welcomeLumbarTime' */
+  real32_T welcomeHipTime;             /* '<Root>/welcomeHipTime' */
+  real32_T cushionForwardSign;         /* '<Root>/ cushionForwardSign' */
+  real32_T bumpTimeThresholdSec;       /* '<Root>/ bumpTimeThresholdSec' */
+  real32_T spineTimeThresholdSec;      /* '<Root>/ spineTimeThresholdSec' */
+  real32_T pointThreshold;             /* '<Root>/pointThreshold' */
 } ExtU_airbag_13Hz_T;
 
 /* External outputs (root outports fed by signals with default storage) */
@@ -219,6 +231,9 @@ typedef struct {
   real32_T bumpDetectSeconds;          /* '<Root>/bumpDetectSeconds' */
   real32_T cushionForwardMoveMm;       /* '<Root>/cushionForwardMoveMm' */
   real32_T backrestDropRatio;          /* '<Root>/backrestDropRatio' */
+  real32_T sickEventCount;             /* '<Root>/sickEventCount' */
+  real32_T isLiving;                   /* '<Root>/isLiving' */
+  real32_T isStatic;                   /* '<Root>/isStatic' */
 } ExtY_airbag_13Hz_T;
 
 /* Real-time Model Data Structure */

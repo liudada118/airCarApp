@@ -2,9 +2,16 @@
  * @format
  */
 
-import { AppRegistry } from 'react-native';
+import { AppRegistry, LogBox } from 'react-native';
 import App from './App.js';
 import { name as appName } from './app.json';
+
+// 111.glb 内嵌贴图在 expo-gl 环境无法加载(不支持从 ArrayBuffer 创建 Blob),
+// 座椅正常显示为浅灰色、不影响功能。这个第三方警告无害,屏蔽掉底部红色报错条。
+LogBox.ignoreLogs([
+  "THREE.GLTFLoader: Couldn't load texture",
+  'Creating blobs from',
+]);
 
 if (typeof global.TextDecoder === 'undefined') {
   const decodeUtf8 = input => {

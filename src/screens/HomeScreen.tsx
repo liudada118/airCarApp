@@ -1632,8 +1632,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             <OccupantCard
               active={occupantType === 'person'}
               icon={iconOccupantPerson}
-              title="有人落座"
-              subtitle=""
+              title="乘员入座"
+              subtitle="座椅上有乘员落座"
             />
             <OccupantCard
               active={occupantType === 'object'}

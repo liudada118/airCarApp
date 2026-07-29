@@ -94,7 +94,7 @@ const DEFAULT_POINT_FIT_LAYOUT = {
   leftsit: {position: [-28, -9, -30], rotation: [1.35, 0, -0.50], sx: 3.3, sy: 3.3, sz: 3.3},
   rightsit: {position: [64, -7, -10], rotation: [1.35, 0, 0.50], sx: 3.3, sy: 3.3, sz: 3.3},
 };
-const DEFAULT_POINT_SIZE = 6.0;  // 默认点大小
+const DEFAULT_POINT_SIZE = 8.5;  // 默认点大小
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
 const POINT_MAP_SCALE_DEFAULT = 1.8;

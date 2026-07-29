@@ -9,6 +9,7 @@ import {
   NativeEventEmitter,
   ScrollView,
   Animated,
+  Easing,
   Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -123,6 +124,49 @@ function getLockDuration(zone: string): number {
   return 2000;
 }
 
+/** 进入弹窗时气囊放气恢复初始状态的时长(毫秒) */
+const INIT_LOADING_MS = 5000;
+
+/** 圆点旋转加载指示器(蓝色,白卡片上用) */
+const LoadingSpinner: React.FC = () => {
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [rotateAnim]);
+  const rotate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+  return (
+    <Animated.View style={[loadingStyles.spinner, {transform: [{rotate}]}]}>
+      {[...Array(8)].map((_, i) => {
+        const angle = (i * 45 * Math.PI) / 180;
+        const x = Math.cos(angle) * 16;
+        const y = Math.sin(angle) * 16;
+        const opacity = 0.15 + (i / 8) * 0.85;
+        return (
+          <View
+            key={i}
+            style={[
+              loadingStyles.dot,
+              {left: 20 + x - 3.5, top: 20 + y - 3.5, opacity},
+            ]}
+          />
+        );
+      })}
+    </Animated.View>
+  );
+};
+
 interface CmdLog {
   id: number;
   time: string;
@@ -156,6 +200,12 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   /** 根据体型获取存储 key */
   const storageKey = bodyShape ? `${ASYNC_STORAGE_KEY_PREFIX}${bodyShape}` : LEGACY_ASYNC_STORAGE_KEY;
   const [connectionStatus] = useState<ConnectionStatus>('connected');
+  // 进入弹窗即显示的「气囊恢复初始状态」Loading 覆盖层,5 秒后自动消失
+  const [initLoading, setInitLoading] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setInitLoading(false), INIT_LOADING_MS);
+    return () => clearTimeout(t);
+  }, []);
   const [selectedZone, setSelectedZone] = useState<CustomAirbagZone>('lumbar');
   const [commandStates, setCommandStates] = useState<AirbagCommandStates>(DEFAULT_AIRBAG_COMMAND_STATES);
 
@@ -1025,6 +1075,19 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         visible={modalType === 'saving'}
         onCancel={handleCancelSaving}
       />
+
+      {/* 进入弹窗时:气囊放气恢复初始状态 Loading 覆盖层(5秒,盖在最上层) */}
+      {initLoading && (
+        <View style={loadingStyles.overlay}>
+          <View style={loadingStyles.card}>
+            <LoadingSpinner />
+            <Text style={loadingStyles.title}>Loading...</Text>
+            <Text style={loadingStyles.subtitle}>
+              气囊调节中，正在恢复初始状态，预计5秒完成。
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -1439,6 +1502,50 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xl,
     color: Colors.textWhite,
     fontWeight: '500',
+  },
+});
+
+// ─── 进入弹窗 Loading 覆盖层样式(白卡片) ───
+const loadingStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  card: {
+    width: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingHorizontal: 48,
+    paddingVertical: 76,
+    alignItems: 'center',
+  },
+  spinner: {
+    width: 40,
+    height: 40,
+    marginBottom: 26,
+  },
+  dot: {
+    position: 'absolute',
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#2978CE',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 14,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#8A8A8A',
+    lineHeight: 20,
+    textAlign: 'center',
   },
 });
 
