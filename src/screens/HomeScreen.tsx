@@ -1195,7 +1195,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               if (g !== 3) return;
               const id = idx + 1;
               if (id === 1 || id === 2) liveZones.add(id === 1 ? 'topL' : 'topR');
-              else if (id === 3 || id === 4) liveZones.add(id === 3 ? 'midR' : 'midL');
+              // 03↔midR、04↔midL。因两张 mid 发光图之前被互换过,这里交叉映射抵消,
+              // 使 03 充气时右侧(midR)亮、04 充气时左侧(midL)亮。
+              else if (id === 3 || id === 4) liveZones.add(id === 3 ? 'midL' : 'midR');
               else if (id === 5 || id === 6) liveZones.add('back');
               else if (id === 7 || id === 8) liveZones.add('cushion');
               else if (id === 9 || id === 10) liveZones.add(id === 9 ? 'legR' : 'legL');
