@@ -114,6 +114,8 @@ const styles = StyleSheet.create({
   },
   wrapperRight: {
     flexDirection: 'row-reverse',
+    // 靠左收拢：让连接线的左端(朝座椅一侧)对齐，块向右延伸(按线对齐，不按块对齐)
+    justifyContent: 'flex-end',
   },
   boxColumn: {
     alignItems: 'stretch',

@@ -7,11 +7,9 @@ import {
   StyleSheet,
   Animated,
   Easing,
-  Dimensions,
 } from 'react-native';
-import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
-
-const {width: SCREEN_WIDTH} = Dimensions.get('window');
+import {Colors, FontSize, Spacing} from '../theme';
+import ModalCard from './ModalCard';
 
 interface SavingModalProps {
   visible: boolean;
@@ -97,7 +95,7 @@ const SavingModal: React.FC<SavingModalProps> = ({visible, onCancel}) => {
       animationType="fade"
       statusBarTranslucent>
       <View style={styles.overlay}>
-        <View style={styles.container}>
+        <ModalCard style={styles.container}>
           <LoadingSpinner />
           <Text style={styles.message}>
             正在保存座椅气囊调节参数。请保持舒适坐姿、背部贴合座椅，约 5
@@ -106,7 +104,7 @@ const SavingModal: React.FC<SavingModalProps> = ({visible, onCancel}) => {
           <TouchableOpacity onPress={onCancel} activeOpacity={0.7}>
             <Text style={styles.cancelText}>取消保存</Text>
           </TouchableOpacity>
-        </View>
+        </ModalCard>
       </View>
     </Modal>
   );
@@ -120,12 +118,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    width: Math.min(SCREEN_WIDTH * 0.4, 380),
-    backgroundColor: Colors.modalBackground,
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.xxxl,
-    paddingTop: Spacing.xxxl,
-    paddingBottom: Spacing.xxl,
+    // 尺寸/背景/垂直居中由 ModalCard 提供(固定长宽 440×300、圆角 24、背景图)。这里只给左右内边距+水平居中。
+    paddingHorizontal: 48,
     alignItems: 'center',
   },
   message: {

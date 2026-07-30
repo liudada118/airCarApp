@@ -393,7 +393,7 @@ const SeatCushion: React.FC<SeatCushionProps> = ({
           {dotsOn ? (
             <z.On width="100%" height="100%" />
           ) : (
-            <Image source={DOT_OFF[z.key]} style={styles.seat} resizeMode="contain" resizeMethod="resize" />
+            <Image source={DOT_OFF[z.key]} style={[styles.seat, {opacity: 0.3}]} resizeMode="contain" resizeMethod="resize" />
           )}
         </View>
       ))}

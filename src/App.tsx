@@ -38,7 +38,13 @@ type Screen = 'home' | 'customAirbag';
  */
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
-  const [adaptiveEnabled, setAdaptiveEnabled] = useState(true);
+  const [adaptiveEnabled, _setAdaptiveEnabled] = useState(true);
+  // 【排查开关:自适应同步】取消下面 console.log 注释,即可追踪每次 adaptiveEnabled 改动
+  // 及其调用来源(from),用于排查「UI 显示与算法 mode 不同步」。平时保持注释。
+  const setAdaptiveEnabled = useCallback((v: boolean) => {
+    // console.log('[自适应UI] adaptiveEnabled ->', v, '  from:', new Error().stack?.split('\n')[2]?.trim());
+    _setAdaptiveEnabled(v);
+  }, []);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [homeToast, setHomeToast] = useState({
     visible: false,

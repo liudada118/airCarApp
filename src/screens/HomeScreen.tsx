@@ -39,7 +39,6 @@ const iconAirStatus = require('../assets/icons/icon-airStatus.png');
 const iconSetting = require('../assets/icons/icon-setting.png');
 const iconOnSeat = require('../assets/icons/icon-onSeat.png');
 const iconOutSeat = require('../assets/icons/icon-outSeat.png');
-const iconCustomAirbag = require('../assets/icons/icon-customAirbag.png');
 // 新 UI 图标(座椅状态 / 乘员识别)
 const iconSeated = require('../assets/images/icon/seated.png');
 const iconAway = require('../assets/images/icon/away.png');
@@ -73,6 +72,9 @@ const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
 const DEFAULT_BAUD_RATE = 1000000;
 const INITIAL_SENSOR_FRAME: number[] = new Array(144).fill(0);
 let hasTriedAutoConnect = false;
+// 启动首次连上串口后发一次 mode=3(开启自适应),让算法和默认「开启」的 UI 对齐。
+// 只发一次:断线重连不重发,避免覆盖用户手动关掉的自适应。
+let hasSentStartupAdaptive = false;
 
 /** 是否使用模拟数据（无真实硬件时自动启用） */
 // 新板子（1372 字节 float32 帧，算法在单片机内完成）已接入，改为读取真实串口。
@@ -1073,6 +1075,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       }
 
       setConnectionStatus('connected');
+
+      // 启动首次连上 → 发一次 mode=3(开启自适应),对齐默认「开启」的 UI。仅一次。
+      if (!hasSentStartupAdaptive) {
+        hasSentStartupAdaptive = true;
+        // console.log('[自适应下发] mode=3(开) 触发=启动首次连上');
+        SerialModule?.pulseFrontCmd?.(3, 0, 0).catch(() => {});
+      }
     } catch (error) {
       setConnectionStatus('error');
       setConnectionErrorMessage(getErrorMessage(error));
@@ -1282,6 +1291,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         // 使按摩结束后自适应仍保持关闭，不自动切回开启(需用户手动开)。已关则保持关，不重发。
         if (massageActive >= 0.5 && prevMassageActiveRef.current < 0.5) {
           if (adaptiveEnabledRef.current) {
+            // console.log('[自适应下发] mode=5(关) 触发=按摩开启自动关自适应');
             onAdaptiveChange(false);
             SerialModule?.pulseFrontCmd?.(5, 0, 0).catch(() => {});
           }
@@ -1311,8 +1321,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           );
           // 在座 → 点亮座椅「点」，离座 → 关闭（首页中间座椅图，仅点、不联动光）
           setDotsOn(nextSeat === 'seated');
-          // 乘员入座（离座→在座）→ 欢迎语播报 + 语音条
-          if (nextSeat === 'seated') triggerVoice('seat_welcome');
+          // 注：欢迎语不在这里播。入座瞬间乘员识别还没跑完（可能是静物占位），
+          // 改到下方「确认活人」的上升沿才播（静物占位不播）。
           // 上报给 App，供自定义气囊弹窗同步联动
           onSeatStatusChange?.(nextSeat);
         }
@@ -1333,6 +1343,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             if (w.length > 3) w.splice(0, w.length - 3);
             // 最近连续 3 次均为 1 → 判「活人」，锁存到离座
             if (w.length === 3 && w.every(v => v === 1)) {
+              // 上升沿(刚从未锁存变为活人)→ 播欢迎语。静物占位永不进这里,故不会播。
+              if (!livingLatchedRef.current) triggerVoice('seat_welcome');
               livingLatchedRef.current = true;
             }
           }
@@ -1598,6 +1610,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             <SlideToggle
               on={adaptiveEnabled}
               onChange={v => {
+                // console.log(`[自适应下发] mode=${v ? 3 : 5}(${v ? '开' : '关'}) 触发=手动点开关`);
                 onAdaptiveChange(v);
                 SerialModule?.pulseFrontCmd?.(v ? 3 : 5, 0, 0).catch(() => {});
               }}
@@ -1610,11 +1623,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               activeOpacity={0.85}
               style={styles.customizeTouch}
               onPress={() => {
+                // console.log('[自适应下发] mode=1(品味/自定义) 触发=点自定义气囊调节');
                 SerialModule?.pulseFrontCmd?.(1, 0, 0).catch(() => {});
                 onNavigateToCustomize();
               }}>
               <LinearGradient colors={GRAD_BTN} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.customizeBtnNew}>
-                <Image source={iconCustomAirbag} style={styles.customizeIconNew} resizeMode="contain" />
                 <Text style={styles.customizeTextNew}>自定义气囊调节</Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -2615,13 +2628,8 @@ const styles = StyleSheet.create({
     height: 58,
     borderRadius: BorderRadius.md,
   },
-  customizeIconNew: {
-    width: 16,
-    height: 16,
-    tintColor: Colors.textWhite,
-  },
   customizeTextNew: {
-    fontSize: FontSize.md,
+    fontSize: 18, // 自定义气囊调节 文字(原 14)
     color: Colors.textWhite,
     fontWeight: '600',
   },
@@ -2664,11 +2672,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
   },
   statusIcon: {
-    width: 40,
-    height: 40,
+    width: 50, // 在座/离座 图标大小(原 40)
+    height: 50,
   },
   statusLabel: {
-    fontSize: FontSize.md,
+    fontSize: 18, // 在座/离座 文字大小(原 14)
     color: Colors.textGray,
     fontWeight: '600',
   },
@@ -2684,9 +2692,10 @@ const styles = StyleSheet.create({
   occupantCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.lg,
+    justifyContent: 'center', // 图标+文字整组水平居中
+    gap: Spacing.lg,
+    paddingHorizontal: Spacing.sm, // 左右内边距减小 → 内容更靠边、两侧空白更少
+    paddingVertical: Spacing.xxl,  // 上下加高 → 框更高(原 Spacing.lg=16 → 24)
     borderRadius: BorderRadius.lg,
   },
   occupantCardActive: {
@@ -2699,9 +2708,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
   },
   occupantRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 54, // 圆圈图标底(原 44)
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -2713,24 +2722,26 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.5)',
   },
   occupantIcon: {
-    width: 24,
-    height: 24,
+    width: 30, // 图标(原 24)
+    height: 30,
   },
   occupantTextWrap: {
-    flex: 1,
+    alignItems: 'flex-start', // 文字块左对齐(标题+小字都靠左)
   },
   occupantTitle: {
-    fontSize: FontSize.md,
+    fontSize: 18, // 标题「乘员入座/静物占位」字号(原 14)
     color: Colors.textLightGray,
     fontWeight: '600',
+    textAlign: 'left',
   },
   occupantTitleActive: {
     color: Colors.textWhite,
   },
   occupantSubtitle: {
-    fontSize: FontSize.xs,
+    fontSize: 14, // 副标题字号(原 10)
     color: Colors.textGray,
-    marginTop: 2,
+    marginTop: 3,
+    textAlign: 'left',
   },
   occupantSubtitleActive: {
     color: 'rgba(255,255,255,0.85)',
@@ -2797,7 +2808,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   slideText: {
-    fontSize: FontSize.md,
+    fontSize: 18, // 开启/关闭自适应、开始/结束按摩 文字(原 14)
     fontWeight: '600',
     color: Colors.textGray,
   },

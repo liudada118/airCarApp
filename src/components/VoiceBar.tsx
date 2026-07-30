@@ -12,7 +12,6 @@ import Svg, {Defs, RadialGradient, Stop, Circle, Ellipse} from 'react-native-svg
 
 const ORB = 74; // 彩球直径
 const AURA = ORB * 1.24; // 外层波浪光环尺寸(贴着球一圈;改大=波浪更大)
-const BAR_W = 352; // 语音条完全展开时的宽度(够放下整句)
 
 // ─── 彩球(用 SVG 径向渐变近似 Spline 的 Siri 球 + 缓慢旋转的高光)──────
 const Orb: React.FC = () => {
@@ -177,15 +176,16 @@ const VoiceBar: React.FC<VoiceBarProps> = ({visible, text, style}) => {
     }
   }, [visible, orb, bar]);
 
-  // 条宽固定 BAR_W(不随字幕长短变),只有展开/收起时 0→BAR_W
-  const barWidth = bar.interpolate({inputRange: [0, 1], outputRange: [0, BAR_W]});
+  // 条宽不再固定,也不测量:整条按文字内容自然撑开(左 padding 恒定 → 左边离第一个字距离一样,
+  // 长短随字数变)。展开/收起用淡入 + 从球那侧横向滑出(translateX),不靠宽度动画,
+  // 因此单行文字永远不会被裁成「...」。
   const barOpacity = bar.interpolate({inputRange: [0, 0.35, 1], outputRange: [0, 0, 1]});
+  const barShift = bar.interpolate({inputRange: [0, 1], outputRange: [24, 0]}); // 从右(球侧)滑出
 
   return (
     <View style={[styles.wrap, style]} pointerEvents="none">
-      {/* 文字条:宽度 0→BAR_W 从球里展开;内容右对齐,所以是"从球那侧"抽出来 */}
-      <Animated.View style={[styles.barClip, {width: barWidth, opacity: barOpacity}]}>
-        {/* 内层定宽 BAR_W:文字才不会在条展开过程中被挤压换行 */}
+      {/* 文字条:淡入 + 从球那侧横移出来;宽度由内容决定,右锚定(内层 marginRight 塞到球下) */}
+      <Animated.View style={[styles.barClip, {opacity: barOpacity, transform: [{translateX: barShift}]}]}>
         <View style={styles.barInner}>
           <LinearGradient
             colors={['rgba(48,56,92,0.92)', 'rgba(82,58,120,0.92)']}
@@ -212,14 +212,11 @@ const styles = StyleSheet.create({
   },
   barClip: {
     height: 40,
-    overflow: 'hidden',
     marginRight: -ORB * 0.42, // 右端塞到球下面
     justifyContent: 'center',
   },
   barInner: {
-    position: 'absolute',
-    right: 0,
-    width: BAR_W,
+    // 在流内、按内容自然撑开:宽度由文字 + 左右 padding 决定(不测量、不设上限)。
   },
   barBg: {
     height: 40,
@@ -232,7 +229,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '500',
-    textAlign: 'center',
+    textAlign: 'right',
   },
 });
 

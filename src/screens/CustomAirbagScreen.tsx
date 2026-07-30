@@ -2,7 +2,6 @@ import React, {useState, useCallback, useRef, useEffect, useMemo} from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   NativeModules,
@@ -24,12 +23,10 @@ import {
   SavingModal,
   Toast,
   SeatFront,
+  ModalCard,
 } from '../components';
 import {AIRBAG_ZONE_TO_PARTS} from '../components/SeatFront';
 import IconFont from '../components/IconFont';
-
-// icon 图片资源
-const iconCustomAirbag = require('../assets/icons/icon-customAirbag.png');
 import type {
   CustomAirbagZone,
   CustomAirbagValues,
@@ -192,7 +189,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
   onClose,
   onSaveSuccess,
   initialValues,
-  adaptiveEnabled = true,
   bodyShape = '',
   onManualAdjust,
   seatStatus = 'away',
@@ -387,21 +383,21 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     [],
   );
 
-  // 关闭页面时恢复算法模式
+  // 关闭页面时：下发 mode=5(关自适应)，与首页手动点「关闭自适应」一致，
+  // 使算法退出品味模式(mode=1)、停在关闭态，UI 开关显示「关闭」即与算法一致。
   const handleClose = useCallback(() => {
-    if (adaptiveEnabled) {
-      sm?.setAlgoMode?.(true);
-    }
+    // console.log('[自适应下发] mode=5(关) 触发=自定义弹窗点关闭');
+    sm?.pulseFrontCmd?.(5, 0, 0).catch(() => {});
     onClose();
-  }, [adaptiveEnabled, onClose]);
+  }, [onClose]);
 
   // 保存成功时恢复算法模式，并将当前气囊值回传给 App 层
   // 同时写入 SharedPreferences + AsyncStorage 双重保障
   const handleSaveAndRestore = useCallback(async () => {
-    if (adaptiveEnabled) {
-      sm?.setAlgoMode?.(true);
-
-    }
+    // 保存收尾:关自适应(mode=5),与 App 层保存后把开关置「关闭」对齐。
+    // 距 handleConfirmSave 的 mode=2 已隔 5s,单槽脉冲不会互相覆盖。
+    // console.log('[自适应下发] mode=5(关) 触发=保存后关自适应');
+    sm?.pulseFrontCmd?.(5, 0, 0).catch(() => {});
     const latestValues = airbagValuesRef.current;
     const jsonStr = JSON.stringify(latestValues);
 
@@ -432,7 +428,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
 
     // 回传给 App 层（更新内存状态 + 返回首页）
     onSaveSuccess(latestValues);
-  }, [adaptiveEnabled, onSaveSuccess]);
+  }, [onSaveSuccess]);
 
   // 监听 Native 端发送的气囊指令事件
   useEffect(() => {
@@ -552,6 +548,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     });
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] + 1}));
     // 发送 frontCmd 充气脉冲 [0, 部位, +1]（算法折进 frame[55] 下发；Kotlin 一帧后自动回零）
+    // console.log(`[自适应下发] mode=0(部位) part=${ZONE_TO_PART[selectedZone]} dir=+1 触发=自定义充气`);
     sm?.pulseFrontCmd?.(0, ZONE_TO_PART[selectedZone] ?? 0, 1).catch(() => {});
     addLog(selectedZone, 'inflate', `frontCmd[0,${ZONE_TO_PART[selectedZone]},1]`, 0);
     triggerFlash(selectedZone); // 对应部位闪烁一下
@@ -577,6 +574,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     });
     setCmdCounts(prev => ({...prev, [selectedZone]: prev[selectedZone] - 1}));
     // 发送 frontCmd 放气脉冲 [0, 部位, -1]
+    // console.log(`[自适应下发] mode=0(部位) part=${ZONE_TO_PART[selectedZone]} dir=-1 触发=自定义放气`);
     sm?.pulseFrontCmd?.(0, ZONE_TO_PART[selectedZone] ?? 0, -1).catch(() => {});
     addLog(selectedZone, 'deflate', `frontCmd[0,${ZONE_TO_PART[selectedZone]},-1]`, 0);
     triggerFlash(selectedZone); // 对应部位闪烁一下
@@ -610,6 +608,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     });
 
     // 新算法:保存品味 frontCmd [2,0,0]（保存当前五组调节量及阈值）
+    // console.log('[自适应下发] mode=2(存) 触发=保存自定义');
     sm?.pulseFrontCmd?.(2, 0, 0)?.catch?.(() => {});
     // 兼容旧 Python 品味记录（新算法不走此路，保留不影响）
     sm?.triggerPreferenceRecording?.(bodyShape || null, airbagOps)?.catch?.(() => {});
@@ -648,6 +647,7 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       legRest: 0,
     });
     // 新算法:清除品味记忆 frontCmd [4,0,0]（清记忆并排空 1~10 号支撑气囊）
+    // console.log('[自适应下发] mode=4(清) 触发=恢复默认/清记忆');
     sm?.pulseFrontCmd?.(4, 0, 0)?.catch?.(() => {});
     // 恢复默认时清除当前体型的本地缓存
     AsyncStorage.removeItem(storageKey).catch(() => {});
@@ -656,12 +656,15 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     }
     // 恢复默认时清除品味系数
     sm?.clearPreference?.(bodyShape || null)?.catch?.(() => {});
+    // 恢复默认后关自适应(mode=5)。mode=4 与 mode=5 都是单槽脉冲,同 tick 连发会互相
+    // 覆盖(mode=4 清记忆会失效),故延时 400ms,等 mode=4 那帧被取走后再发 mode=5。
+    setTimeout(() => {
+      // console.log('[自适应下发] mode=5(关) 触发=恢复默认后关自适应');
+      sm?.pulseFrontCmd?.(5, 0, 0).catch(() => {});
+    }, 400);
     // 恢复默认后直接关闭弹窗，回传默认值给 App 层
-    if (adaptiveEnabled) {
-      sm?.setAlgoMode?.(true);
-    }
     onSaveSuccess({...DEFAULT_CUSTOM_AIRBAG_VALUES});
-  }, [sendAirbagCmd, adaptiveEnabled, onSaveSuccess]);
+  }, [sendAirbagCmd, onSaveSuccess]);
 
   // 点击归零按钮
   const handleResetPress = useCallback(() => {
@@ -749,11 +752,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
         {/* 标题栏 */}
         <View style={styles.titleBar}>
           <View style={styles.titleLeft}>
-            <Image
-              source={iconCustomAirbag}
-              style={{width: 20, height: 20, tintColor: Colors.textWhite}}
-              resizeMode="contain"
-            />
             <Text style={styles.title}>自定义气囊调节</Text>
             {/* 锁定状态指示 */}
             {isLocked && (
@@ -1079,13 +1077,13 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
       {/* 进入弹窗时:气囊放气恢复初始状态 Loading 覆盖层(5秒,盖在最上层) */}
       {initLoading && (
         <View style={loadingStyles.overlay}>
-          <View style={loadingStyles.card}>
+          <ModalCard style={loadingStyles.card}>
             <LoadingSpinner />
             <Text style={loadingStyles.title}>Loading...</Text>
             <Text style={loadingStyles.subtitle}>
               气囊调节中，正在恢复初始状态，预计5秒完成。
             </Text>
-          </View>
+          </ModalCard>
         </View>
       )}
     </View>
@@ -1204,25 +1202,23 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   closeButton: {
+    // 去掉外圈:只保留点击区域,不画圆环边框
     width: 32,
     height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.textGray,
     justifyContent: 'center',
     alignItems: 'center',
   },
   closeIcon: {
-    width: 14,
-    height: 14,
+    width: 11, // 叉号缩小(原 14)
+    height: 11,
     position: 'relative',
   },
   closeLine: {
     position: 'absolute',
-    width: 16,
+    width: 13, // 叉号线长缩短(原 16)
     height: 1.5,
     backgroundColor: Colors.textGray,
-    top: 6,
+    top: 5,
     left: -1,
   },
   closeLine1: {
@@ -1464,6 +1460,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: Spacing.md,
     paddingTop: Spacing.lg,
+    marginBottom: Spacing.lg,  // 整体往上挪一点
+    paddingRight: Spacing.lg,  // 整体往左挪一点
   },
   restoreButton: {
     paddingHorizontal: Spacing.xxxl,
@@ -1515,11 +1513,9 @@ const loadingStyles = StyleSheet.create({
     zIndex: 100,
   },
   card: {
-    width: 440,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    // 尺寸/背景/垂直居中由 ModalCard 提供(固定长宽 440×300、圆角 24、背景图)。这里只给左右内边距+水平居中。
     paddingHorizontal: 48,
-    paddingVertical: 76,
+    paddingBottom: 50, // 底部留白 → 内容(转圈图标+Loading...+说明)整体上移一点
     alignItems: 'center',
   },
   spinner: {

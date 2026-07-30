@@ -5,12 +5,10 @@ import {
   Modal,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   ActivityIndicator,
 } from 'react-native';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
-
-const {width: SCREEN_WIDTH} = Dimensions.get('window');
+import ModalCard from './ModalCard';
 
 interface ConnectionErrorModalProps {
   visible: boolean;
@@ -32,7 +30,7 @@ const ConnectionErrorModal: React.FC<ConnectionErrorModalProps> = ({
       animationType="fade"
       statusBarTranslucent>
       <View style={styles.overlay}>
-        <View style={styles.container}>
+        <ModalCard style={styles.container}>
           <Text style={styles.title}>连接异常，请检查设备</Text>
           <Text style={styles.description}>
             当前软件未能正常连接。请检查您的接线或硬件设备，确保一切连接正确后，点击重新连接。如有持续问题，请联系技术支持。
@@ -58,7 +56,7 @@ const ConnectionErrorModal: React.FC<ConnectionErrorModalProps> = ({
               <Text style={[styles.linkText, retrying && styles.linkTextDisabled]}>我知道了</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ModalCard>
       </View>
     </Modal>
   );
@@ -72,12 +70,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    width: Math.min(SCREEN_WIDTH * 0.4, 380),
-    backgroundColor: Colors.modalBackground,
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.xxxl,
-    paddingTop: Spacing.xxxl,
-    paddingBottom: Spacing.xxl,
+    // 尺寸/背景/垂直居中由 ModalCard 提供(固定长宽 440×300、圆角 24、背景图)。这里只给左右内边距。
+    paddingHorizontal: 48,
   },
   title: {
     fontSize: FontSize.xl,
