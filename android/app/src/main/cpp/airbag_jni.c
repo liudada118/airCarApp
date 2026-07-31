@@ -49,62 +49,84 @@
 #define OUT_IS_STATIC       175
 #define OUT_LEN             176
 
+// ===== 可运行时调节的算法阈值表 =====
+// 这些原本写死在 set_input_defaults() 里、改一次就得重编 .so 的标定输入，
+// 现在统一登记到一张参数表：既用于回灌默认值，也通过 JNI 暴露给配置面板
+// 逐项读/改/恢复默认（改动只在内存里，重启后由 Kotlin 端从 SharedPreferences 回放）。
+//
+// 每一行：结构体字段 | 默认值 | 分组(中文,面板分节) | 标签(中文,面板显示名)
+// 只有「标定阈值」类输入进表；逐帧控制信号(frame_data1/frontCmd1/
+// longSitMassageStop1/manualMassageOn1) 和 resetFlag1 不进表，单独处理。
+#define AIRBAG_PARAM_TABLE(X) \
+    X(cushionThreshold1,        1700.0F, "在座判定",   "坐垫压力阈值") \
+    X(backrestThreshold1,       1500.0F, "在座判定",   "靠背压力阈值") \
+    X(backTotalThreshold1,      22.0F,   "在座判定",   "靠背总压阈值") \
+    X(pointThreshold1,          20.0F,   "在座判定",   "单点有效压力阈值") \
+    X(detectorEnabled1,         1.0F,    "在座判定",   "检测器使能(0/1)") \
+    X(inflation_time2,          10.0F,   "充放气时序", "充气时长1(s)") \
+    X(inflation_time3,          5.0F,    "充放气时序", "充气时长2(s)") \
+    X(holding_time1,            30.0F,   "充放气时序", "保持时长(s)") \
+    X(deflation_time1,          10.0F,   "充放气时序", "放气时长(s)") \
+    X(adoption_frequency1,      13.0F,   "充放气时序", "自适应频率") \
+    X(leftInflateThreshold1,    0.75F,   "充放气阈值", "左充气阈值") \
+    X(leftDeflateThreshold1,    0.9F,    "充放气阈值", "左放气阈值") \
+    X(rightInflateThreshold1,   0.75F,   "充放气阈值", "右充气阈值") \
+    X(rightDeflateThreshold1,   0.9F,    "充放气阈值", "右放气阈值") \
+    X(ratioInflateLeft1,        0.8F,    "充放气阈值", "左充气比例") \
+    X(ratioDeflateLeft1,        1.3F,    "充放气阈值", "左放气比例") \
+    X(ratioInflate1,            1.2F,    "充放气阈值", "充气比例") \
+    X(ratioDeflate1,            0.35F,   "充放气阈值", "放气比例") \
+    X(sadThresholdIn1,          0.3F,    "活体检测",   "判活分数阈值") \
+    X(sadNormalizeScaleIn1,     3.0F,    "活体检测",   "判活归一化尺度") \
+    X(livingConfirmCountIn1,    2.0F,    "活体检测",   "确认活体次数(1~3)") \
+    X(spineBiasDeadband1,       0.5F,    "健康-脊椎",  "脊椎偏移死区") \
+    X(spineTimeThresholdSec1,   60.0F,   "健康-脊椎",  "脊椎持续阈值(s)") \
+    X(bumpMinVelocity1,         8.0F,    "健康-颠簸",  "颠簸最小速度") \
+    X(bumpMaxRms1,              0.5F,    "健康-颠簸",  "颠簸最大RMS") \
+    X(bumpMaxRangeMm1,          15.0F,   "健康-颠簸",  "颠簸最大幅度(mm)") \
+    X(bumpTimeThresholdSec1,    3.0F,    "健康-颠簸",  "颠簸持续阈值(s)") \
+    X(sickForwardMinMm1,        5.0F,    "健康-晕车",  "前移最小距离(mm)") \
+    X(sickBackDropRatio1,       0.3F,    "健康-晕车",  "靠背压降比例") \
+    X(sickPairWindowSec1,       0.8F,    "健康-晕车",  "配对时间窗(s)") \
+    X(cushionForwardSign1,      -1.0F,   "健康-晕车",  "坐垫前移方向符号") \
+    X(welcomeSideWingTime1,     2.0F,    "入座欢迎",   "侧翼时长(s)") \
+    X(welcomeLegTime1,          2.0F,    "入座欢迎",   "腿托时长(s)") \
+    X(welcomeLumbarTime1,       3.0F,    "入座欢迎",   "腰托时长(s)") \
+    X(welcomeHipTime1,          3.0F,    "入座欢迎",   "臀部时长(s)") \
+    X(sitThresholdmin1,         5.0F,    "久坐按摩",   "久坐触发(分钟)")
+
+typedef struct {
+    const char *name;    // 字段名（与 JS/Kotlin 一致的键）
+    real32_T   *ptr;     // 指向 airbag_13Hz_U 里的字段（链接期常量地址）
+    real32_T    def;     // 默认值
+    const char *group;   // 面板分组
+    const char *label;   // 面板显示名
+} AirbagParam;
+
+static AirbagParam g_params[] = {
+#define X(field, defv, grp, lbl) { #field, &airbag_13Hz_U.field, (real32_T)(defv), grp, lbl },
+    AIRBAG_PARAM_TABLE(X)
+#undef X
+};
+static const int g_paramCount = (int)(sizeof(g_params) / sizeof(g_params[0]));
+
 // 把算法输入结构体设为文档默认值（阈值/时序等）。
 // initialize() 不会给输入设默认值，若不填全局输入会是 0，
 // cushionThreshold=0 会导致「压力和>=0 恒成立 → 永远判定有人坐」。
 static void set_input_defaults(void) {
     ExtU_airbag_13Hz_T *U = &airbag_13Hz_U;
-    // 注：新 C 包把所有输入字段都加了「1」后缀；inflation_time/inflation_time1
-    //     被重命名为 inflation_time2/inflation_time3（含义不变）。
+    // 逐帧控制信号 / 复位标志：不进阈值表，这里单独清零。
     memset(U->frame_data1, 0, sizeof(U->frame_data1));
-    U->backTotalThreshold1    = 22.0F;
-    U->resetFlag1             = 0;
-    U->detectorEnabled1       = 1.0F;
-    U->inflation_time2        = 10.0F;
-    U->inflation_time3        = 5.0F;
-    U->holding_time1          = 30.0F;
-    U->deflation_time1        = 10.0F;
-    U->adoption_frequency1    = 13.0F;
-    U->cushionThreshold1      = 1700.0F;
-    U->backrestThreshold1     = 1500.0F;
-    U->leftInflateThreshold1  = 0.75F;
-    U->leftDeflateThreshold1  = 0.9F;
-    U->rightInflateThreshold1 = 0.75F;
-    U->rightDeflateThreshold1 = 0.9F;
-    U->ratioInflateLeft1      = 0.8F;
-    U->ratioDeflateLeft1      = 1.3F;
-    U->ratioInflate1          = 1.2F;
-    U->ratioDeflate1          = 0.35F;
-    U->longSitMassageStop1    = 0.0F;
-    U->manualMassageOn1       = 0.0F;
-    U->sitThresholdmin1       = 5.0F;
-    U->frontCmd1[0] = 0.0F;
-    U->frontCmd1[1] = 0.0F;
-    U->frontCmd1[2] = 0.0F;
-    // 模型 1.213 新增的健康检测标定输入。显式写入模型内置的回退值，
-    // 避免依赖全局变量恰好为 0，也方便后续算法方给出车型标定值后统一替换。
-    U->spineBiasDeadband1 = 0.5F;
-    U->sickForwardMinMm1  = 5.0F;
-    U->sickBackDropRatio1 = 0.3F;
-    U->sickPairWindowSec1 = 0.8F;
-    U->bumpMinVelocity1   = 8.0F;
-    U->bumpMaxRms1        = 0.5F;
-    U->bumpMaxRangeMm1    = 15.0F;
-    // 模型 1.225 新增的判活标定输入。显式写入（否则为 0 会走模型内置回退值）。
-    // sadThresholdIn：单次判活分数阈值，sadScore >= 该值记一次"活体"，(0,1]。
-    // 模型内置回退 0.4，这里按标定值改为 0.3（降低阈值，更容易判活）。
-    U->sadThresholdIn1      = 0.3F;
-    U->sadNormalizeScaleIn1 = 3.0F;   // 模型内置回退值
-    U->livingConfirmCountIn1 = 2.0F;  // 确认活体所需判活次数(最近3次中)，1~3
-    // 新 C 包新增输入：显式写入模型内置回退值（<=0 时算法会用这些值）。
-    U->welcomeSideWingTime1 = 2.0F;   // 入座欢迎-侧翼时长(s)
-    U->welcomeLegTime1      = 2.0F;   // 入座欢迎-腿托时长(s)
-    U->welcomeLumbarTime1   = 3.0F;   // 入座欢迎-腰托时长(s)
-    U->welcomeHipTime1      = 3.0F;   // 入座欢迎-臀部时长(s)
-    U->cushionForwardSign1  = -1.0F;  // 坐垫前移方向符号(0/负→-1)
-    U->bumpTimeThresholdSec1  = 3.0F;   // 颠簸持续时间阈值(s)
-    U->spineTimeThresholdSec1 = 60.0F;  // 脊椎偏移持续时间阈值(s)
-    U->pointThreshold1        = 20.0F;  // 单点有效压力阈值
+    U->resetFlag1          = 0;
+    U->frontCmd1[0]        = 0.0F;
+    U->frontCmd1[1]        = 0.0F;
+    U->frontCmd1[2]        = 0.0F;
+    U->longSitMassageStop1 = 0.0F;
+    U->manualMassageOn1    = 0.0F;
+    // 标定阈值：统一从参数表回灌默认值。
+    for (int i = 0; i < g_paramCount; i++) {
+        *g_params[i].ptr = g_params[i].def;
+    }
 }
 
 JNIEXPORT void JNICALL
@@ -146,7 +168,11 @@ Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeStep(JNIEnv *env, jobject t
     airbag_13Hz_U.frontCmd1[2] = (real32_T)dir;
     airbag_13Hz_U.longSitMassageStop1 = (real32_T)massageStop;
     airbag_13Hz_U.manualMassageOn1 = (real32_T)manualMassageOn;
-    airbag_13Hz_U.sitThresholdmin1 = (real32_T)sitThresholdMin;
+    // 注：sitThresholdmin1 已改为「阈值表」管理（配置面板可调），不再逐帧覆盖。
+    //     这里保留形参兼容旧签名；传 <=0 表示「用面板/默认值」，>0 才临时覆盖。
+    if ((real32_T)sitThresholdMin > 0.0F) {
+        airbag_13Hz_U.sitThresholdmin1 = (real32_T)sitThresholdMin;
+    }
 
     airbag_13Hz_step();
 
@@ -181,4 +207,77 @@ Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeStep(JNIEnv *env, jobject t
     jfloatArray result = (*env)->NewFloatArray(env, OUT_LEN);
     (*env)->SetFloatArrayRegion(env, result, 0, OUT_LEN, out);
     return result;
+}
+
+// ===== 阈值表的 JNI 读/改/恢复接口 =====
+// 面板打开时：Count → 逐项 Name/Group/Label/Value/Default 拉一遍；
+// 用户改一项：SetThreshold(name,value)；点恢复默认：ResetThresholds()。
+
+JNIEXPORT jint JNICALL
+Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeThresholdCount(JNIEnv *env, jobject thiz) {
+    (void)env; (void)thiz;
+    return (jint)g_paramCount;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeThresholdName(JNIEnv *env, jobject thiz, jint i) {
+    (void)thiz;
+    if (i < 0 || i >= g_paramCount) return (*env)->NewStringUTF(env, "");
+    return (*env)->NewStringUTF(env, g_params[i].name);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeThresholdGroup(JNIEnv *env, jobject thiz, jint i) {
+    (void)thiz;
+    if (i < 0 || i >= g_paramCount) return (*env)->NewStringUTF(env, "");
+    return (*env)->NewStringUTF(env, g_params[i].group);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeThresholdLabel(JNIEnv *env, jobject thiz, jint i) {
+    (void)thiz;
+    if (i < 0 || i >= g_paramCount) return (*env)->NewStringUTF(env, "");
+    return (*env)->NewStringUTF(env, g_params[i].label);
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeThresholdValue(JNIEnv *env, jobject thiz, jint i) {
+    (void)env; (void)thiz;
+    if (i < 0 || i >= g_paramCount) return 0.0F;
+    return (jfloat)(*g_params[i].ptr);
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeThresholdDefault(JNIEnv *env, jobject thiz, jint i) {
+    (void)env; (void)thiz;
+    if (i < 0 || i >= g_paramCount) return 0.0F;
+    return (jfloat)g_params[i].def;
+}
+
+// 按字段名设置一项阈值；返回是否命中。
+JNIEXPORT jboolean JNICALL
+Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeSetThreshold(JNIEnv *env, jobject thiz,
+        jstring name, jfloat value) {
+    (void)thiz;
+    if (name == NULL) return JNI_FALSE;
+    const char *n = (*env)->GetStringUTFChars(env, name, NULL);
+    jboolean hit = JNI_FALSE;
+    for (int i = 0; i < g_paramCount; i++) {
+        if (strcmp(n, g_params[i].name) == 0) {
+            *g_params[i].ptr = (real32_T)value;
+            hit = JNI_TRUE;
+            break;
+        }
+    }
+    (*env)->ReleaseStringUTFChars(env, name, n);
+    return hit;
+}
+
+// 全部阈值恢复出厂默认值。
+JNIEXPORT void JNICALL
+Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeResetThresholds(JNIEnv *env, jobject thiz) {
+    (void)env; (void)thiz;
+    for (int i = 0; i < g_paramCount; i++) {
+        *g_params[i].ptr = g_params[i].def;
+    }
 }

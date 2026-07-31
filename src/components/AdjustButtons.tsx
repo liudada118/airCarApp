@@ -50,23 +50,26 @@ const AdjustButtons: React.FC<AdjustButtonsProps> = ({
         )}
       </TouchableOpacity>
 
-      {/* − 按钮:灰色圆角方 #4c5a6c;禁用=更暗灰方 */}
+      {/* − 按钮:启用=蓝色渐变圆角方 + 柔光(与 + 一致);禁用=灰方 */}
       <TouchableOpacity
         onPress={onDecrease}
         disabled={!decreaseEnabled}
         activeOpacity={0.8}
         style={styles.slot}>
-        <View
-          style={[
-            styles.button,
-            decreaseEnabled ? styles.decreaseButton : styles.disabledButton,
-          ]}>
-          <IconFont
-            name="minus-full"
-            size={40}
-            color={decreaseEnabled ? Colors.textWhite : Colors.textGray}
-          />
-        </View>
+        {decreaseEnabled && <View style={styles.glow} pointerEvents="none" />}
+        {decreaseEnabled ? (
+          <LinearGradient
+            colors={BLUE_GRAD}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.button, styles.buttonLit]}>
+            <IconFont name="minus-full" size={40} color={Colors.textWhite} />
+          </LinearGradient>
+        ) : (
+          <View style={[styles.button, styles.disabledButton]}>
+            <IconFont name="minus-full" size={30} color={Colors.textGray} />
+          </View>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -115,9 +118,6 @@ const styles = StyleSheet.create({
     height: BTN + 14,
     borderRadius: RADIUS + 8,
     backgroundColor: 'rgba(78, 155, 238, 0.28)',
-  },
-  decreaseButton: {
-    backgroundColor: '#4c5a6c',
   },
   disabledButton: {
     backgroundColor: '#3A4250',

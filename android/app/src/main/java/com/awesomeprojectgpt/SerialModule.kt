@@ -356,6 +356,63 @@ class SerialModule(
         }
     }
 
+    // ─── C 算法阈值（airbag_13Hz）运行时读改 ───────────────────────
+    // 与上面 Python 的 get/set/reset_config 无关：这些是本项目 C 算法的标定输入，
+    // 直接读改 airbag_13Hz_U，改动即时生效并存到 SharedPreferences(重启回放)。
+
+    /** 返回所有可调阈值：[{name, group, label, value, default}, ...] */
+    @ReactMethod
+    fun getAirbagThresholds(promise: Promise) {
+        try {
+            ensureAirbag13Init()
+            val arr = Arguments.createArray()
+            val count = AirbagNative.nativeThresholdCount()
+            for (i in 0 until count) {
+                val m = Arguments.createMap()
+                m.putString("name", AirbagNative.nativeThresholdName(i))
+                m.putString("group", AirbagNative.nativeThresholdGroup(i))
+                m.putString("label", AirbagNative.nativeThresholdLabel(i))
+                m.putDouble("value", AirbagNative.nativeThresholdValue(i).toDouble())
+                m.putDouble("default", AirbagNative.nativeThresholdDefault(i).toDouble())
+                arr.pushMap(m)
+            }
+            promise.resolve(arr)
+        } catch (e: Throwable) {
+            promise.reject("AIRBAG_ERROR", e.message ?: "getAirbagThresholds failed")
+        }
+    }
+
+    /** 设置一项阈值：立即生效 + 存 SharedPreferences。返回是否命中该字段。 */
+    @ReactMethod
+    fun setAirbagThreshold(name: String, value: Double, promise: Promise) {
+        try {
+            ensureAirbag13Init()
+            val f = value.toFloat()
+            val hit = AirbagNative.nativeSetThreshold(name, f)
+            if (hit) {
+                reactContext.getSharedPreferences("airbag_thresholds", Context.MODE_PRIVATE)
+                    .edit().putFloat(name, f).apply()
+            }
+            promise.resolve(hit)
+        } catch (e: Throwable) {
+            promise.reject("AIRBAG_ERROR", e.message ?: "setAirbagThreshold failed")
+        }
+    }
+
+    /** 全部阈值恢复默认：清空 SharedPreferences + C 端复位。 */
+    @ReactMethod
+    fun resetAirbagThresholds(promise: Promise) {
+        try {
+            ensureAirbag13Init()
+            AirbagNative.nativeResetThresholds()
+            reactContext.getSharedPreferences("airbag_thresholds", Context.MODE_PRIVATE)
+                .edit().clear().apply()
+            promise.resolve(true)
+        } catch (e: Throwable) {
+            promise.reject("AIRBAG_ERROR", e.message ?: "resetAirbagThresholds failed")
+        }
+    }
+
     // ─── 品味记录接口 ─────────────────────────────────────────
 
     @ReactMethod
@@ -869,8 +926,42 @@ class SerialModule(
     /** 手动按摩命令均只持续一个算法周期，下一帧自动回零。 */
     private val pendingManualMassageOn = AtomicReference(0f)
     private val pendingMassageStop = AtomicReference(0f)
-    /** 新算法默认入座 5 分钟自动启动按摩。 */
-    @Volatile private var sitThresholdMin = 5f
+    // 久坐触发分钟数(sitThresholdmin1)已并入「阈值表」，由配置面板管理，
+    // 逐帧不再从这里覆盖（nativeStep 的 sitThresholdMin 形参传 0f 表示"用表里的值"）。
+
+    private val airbagInitLock = Any()
+
+    /** 确保 C 算法已 initialize，并把 SharedPreferences 里保存的阈值覆盖回灌一次。
+     *  幂等：只在首帧或面板首次读取时真正执行。 */
+    private fun ensureAirbag13Init() {
+        synchronized(airbagInitLock) {
+            if (!airbag13Inited) {
+                AirbagNative.nativeInitialize()
+                applySavedThresholds()
+                airbag13Inited = true
+            }
+        }
+    }
+
+    /** 把设备上保存过的阈值覆盖值回灌到 C 算法（重启后仍生效）。 */
+    private fun applySavedThresholds() {
+        try {
+            val prefs = reactContext.getSharedPreferences("airbag_thresholds", Context.MODE_PRIVATE)
+            for ((k, v) in prefs.all) {
+                val f = when (v) {
+                    is Float -> v
+                    is Double -> v.toFloat()
+                    is Int -> v.toFloat()
+                    is Long -> v.toFloat()
+                    is String -> v.toFloatOrNull()
+                    else -> null
+                } ?: continue
+                AirbagNative.nativeSetThreshold(k, f)
+            }
+        } catch (e: Throwable) {
+            Log.w(logTag, "applySavedThresholds failed: ${e.message}")
+        }
+    }
 
     /** JS：发一次 frontCmd 脉冲（自定义气囊/品味命令）。Kotlin 会在下一帧应用后自动回零。 */
     @ReactMethod
@@ -901,10 +992,7 @@ class SerialModule(
         val n = minOf(values.size, 92)
         for (i in 0 until n) payload[i] = (values[i] and 0xFF).toByte()
         try {
-            if (!airbag13Inited) {
-                AirbagNative.nativeInitialize()
-                airbag13Inited = true
-            }
+            ensureAirbag13Init()
             // 取出本帧 frontCmd 脉冲并清零（下一帧自动发 [0,0,0]）
             val fc = pendingFrontCmd.getAndSet(floatArrayOf(0f, 0f, 0f))
             val manualMassageOn = pendingManualMassageOn.getAndSet(0f)
@@ -916,7 +1004,7 @@ class SerialModule(
                 fc[2],
                 massageStop,
                 manualMassageOn,
-                sitThresholdMin,
+                0f, // sitThresholdMin 交给阈值表/面板管理，传 0 表示"不覆盖"
             )
             emitAirbag13Result(out)
             // 把算法输出的 frame[55] 转 55 字节下发硬件（复用 autoWrite 通道，串口连着就一直发）

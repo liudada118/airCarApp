@@ -39,6 +39,17 @@ object AirbagNative {
         sitThresholdMin: Float,
     ): FloatArray
 
+    // ===== 可运行时调节的算法阈值表（对应 cpp/airbag_jni.c 的 g_params）=====
+    // 面板打开时逐项拉取；改一项用 nativeSetThreshold；恢复默认用 nativeResetThresholds。
+    external fun nativeThresholdCount(): Int
+    external fun nativeThresholdName(i: Int): String
+    external fun nativeThresholdGroup(i: Int): String
+    external fun nativeThresholdLabel(i: Int): String
+    external fun nativeThresholdValue(i: Int): Float
+    external fun nativeThresholdDefault(i: Int): Float
+    external fun nativeSetThreshold(name: String, value: Float): Boolean
+    external fun nativeResetThresholds()
+
     // 输出数组索引常量
     const val IDX_REASON_CODE = 0
     const val IDX_IS_FULL_SEAT = 1

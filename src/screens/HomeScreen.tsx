@@ -840,6 +840,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [nonStdFrameVersion, setNonStdFrameVersion] = useState(0);
   const [configData, setConfigData] = useState<Record<string, {value: any; comment: string | null}> | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
+  // C 算法阈值（airbag_13Hz 标定输入，运行时可改，改完即时生效并存设备）
+  const [airbagThresholds, setAirbagThresholds] = useState<
+    {name: string; group: string; label: string; value: number; default: number}[] | null
+  >(null);
   // realtimeData 已合并到 algoState 中
 
    // ─── 处理算法结果（单次 setState，减少 87.5% 重渲染）────────────
@@ -964,10 +968,36 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       .catch(() => {});
   }, [loadConfig]);
 
+  // ─── C 算法阈值管理（airbag_13Hz 标定输入）────────────────────
+  const loadThresholds = useCallback(() => {
+    NativeModules.SerialModule?.getAirbagThresholds?.()
+      .then((arr: any[]) => setAirbagThresholds(Array.isArray(arr) ? arr : []))
+      .catch(() => setAirbagThresholds([]));
+  }, []);
+
+  const handleSetThreshold = useCallback((name: string, value: number) => {
+    NativeModules.SerialModule?.setAirbagThreshold?.(name, value)
+      .then((ok: boolean) => {
+        if (ok) {
+          setAirbagThresholds(prev =>
+            prev ? prev.map(t => (t.name === name ? {...t, value} : t)) : prev,
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleResetThresholds = useCallback(() => {
+    NativeModules.SerialModule?.resetAirbagThresholds?.()
+      .then(() => loadThresholds())
+      .catch(() => {});
+  }, [loadThresholds]);
+
   const openConfigModal = useCallback(() => {
     setShowConfig(true);
     loadConfig();
-  }, [loadConfig]);
+    loadThresholds();
+  }, [loadConfig, loadThresholds]);
 
   // ─── 模拟串口逻辑 ──────────────────────────────────────
   const mockStartedRef = useRef(false);
@@ -1843,9 +1873,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               <View style={{flexDirection: 'row', alignItems: 'center'}}>
                 <TouchableOpacity
                   onPress={() => {
-                    Alert.alert('确认重置', '是否恢复所有配置为默认值？', [
+                    Alert.alert('确认重置', '是否恢复所有阈值/配置为默认值？', [
                       {text: '取消', style: 'cancel'},
-                      {text: '确认', onPress: handleResetConfig},
+                      {
+                        text: '确认',
+                        onPress: () => {
+                          handleResetThresholds();
+                          handleResetConfig();
+                        },
+                      },
                     ]);
                   }}
                   activeOpacity={0.7}
@@ -1860,13 +1896,61 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 </TouchableOpacity>
               </View>
             </View>
-            {configLoading ? (
-              <View style={{padding: 40, alignItems: 'center'}}>
-                <Text style={{color: Colors.textGray}}>加载中...</Text>
-              </View>
-            ) : configData ? (
-              <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
-                {(() => {
+            <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={true}>
+              {/* C 算法阈值（本项目，运行时可改，改完即时生效并存设备）*/}
+              {airbagThresholds && airbagThresholds.length > 0 ? (() => {
+                type Thr = {name: string; group: string; label: string; value: number; default: number};
+                const order: string[] = [];
+                const grp: Record<string, Thr[]> = {};
+                airbagThresholds.forEach(t => {
+                  if (!grp[t.group]) {
+                    grp[t.group] = [];
+                    order.push(t.group);
+                  }
+                  grp[t.group].push(t);
+                });
+                return (
+                  <View style={{marginBottom: 8}}>
+                    <Text style={{color: Colors.warning, fontSize: 13, fontWeight: '700', marginBottom: 6, paddingHorizontal: 12}}>
+                      C算法阈值（本项目 · 改完即时生效）
+                    </Text>
+                    {order.map(g => (
+                      <View key={g} style={{marginBottom: 10}}>
+                        <Text style={{color: Colors.primary, fontSize: 12, fontWeight: '700', marginBottom: 4, paddingHorizontal: 12}}>{g}</Text>
+                        {grp[g].map(t => (
+                          <View key={t.name} style={styles.cfgRow}>
+                            <View style={{flex: 1, marginRight: 8}}>
+                              <Text style={styles.cfgKey} numberOfLines={1}>{t.label}</Text>
+                              <Text style={styles.cfgComment} numberOfLines={1}>{t.name} · 默认 {t.default}</Text>
+                            </View>
+                            <TextInput
+                              key={`${t.name}:${t.value}`}
+                              style={styles.cfgInput}
+                              defaultValue={String(t.value)}
+                              keyboardType="numeric"
+                              returnKeyType="done"
+                              onEndEditing={(e) => {
+                                const text = e.nativeEvent.text.trim();
+                                const num = Number(text);
+                                if (text === '' || isNaN(num) || num === t.value) return;
+                                handleSetThreshold(t.name, num);
+                              }}
+                            />
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                );
+              })() : null}
+
+              {/* Python 配置（本项目通常没有；若有则一并展示）*/}
+              {configLoading ? (
+                <View style={{padding: 20, alignItems: 'center'}}>
+                  <Text style={{color: Colors.textGray}}>加载中...</Text>
+                </View>
+              ) : configData ? (
+                (() => {
                   // 按一级 key 分组
                   const groups: Record<string, {key: string; value: any; comment: string | null}[]> = {};
                   Object.entries(configData).forEach(([key, info]) => {
@@ -1936,13 +2020,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                       })}
                     </View>
                   ));
-                })()}
-              </ScrollView>
-            ) : (
-              <View style={{padding: 40, alignItems: 'center'}}>
-                <Text style={{color: Colors.textGray}}>无配置数据</Text>
-              </View>
-            )}
+                })()
+              ) : null}
+
+              {/* 两边都没有数据时的占位 */}
+              {!configLoading && !configData && (!airbagThresholds || airbagThresholds.length === 0) ? (
+                <View style={{padding: 40, alignItems: 'center'}}>
+                  <Text style={{color: Colors.textGray}}>无配置数据</Text>
+                </View>
+              ) : null}
+            </ScrollView>
           </View>
         </View>
       </Modal>
