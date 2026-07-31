@@ -1304,23 +1304,34 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         if (motion >= 0.5 && prevMotionRef.current < 0.5) triggerVoice('motion_sickness');
         prevMotionRef.current = motion;
 
-        // 喂 3D 压力云图:[坐垫48, 靠背56]=104,新数组(新引用)触发 CarAirRN 更新
-        // 假压力开启时不覆盖(用假数据对齐位置)
-        if (!fakePressureRef.current) {
+        // ── 先算「在座/离座」，再决定 3D 云图喂不喂 ──
+        const reason = event.reasonCode ?? 0;
+        const nextSeat = seatStatusFromReasonCode(reason, airbag13SeatRef.current);
+
+        // 喂 3D 压力云图:[坐垫48, 靠背56]=104,新数组(新引用)触发 CarAirRN 更新。
+        // 仅「在座」时喂真实数据;「离座」时 CarAirRN 已被 resetToZero 冻结,即便传感器
+        // 仍有微弱残留也不喂、不显示。假压力开启时不覆盖(用假数据对齐位置)。
+        if (!fakePressureRef.current && nextSeat === 'seated') {
           sensorDataRef.current = cushion.concat(backrest);
           setSeat3dTick(t => (t + 1) & 0xffff);
         }
         // ── 用 reasonCode 驱动首页「在座/离座」方块（92帧 C 算法链路）──
-        const reason = event.reasonCode ?? 0;
-        const nextSeat = seatStatusFromReasonCode(reason, airbag13SeatRef.current);
         if (nextSeat !== airbag13SeatRef.current) {
           airbag13SeatRef.current = nextSeat;
           seatStatusRef.current = nextSeat;
           setAlgoState(prev =>
             prev.seatStatus === nextSeat ? prev : {...prev, seatStatus: nextSeat},
           );
-          // 在座 → 点亮座椅「点」，离座 → 关闭（首页中间座椅图，仅点、不联动光）
+          // 在座 → 点亮座椅「点」+ 解冻云图；离座 → 关闭「点」+ 清零并冻结云图。
           setDotsOn(nextSeat === 'seated');
+          // 假压力调试模式下不动冻结状态（否则假数据会被一起隐藏）。
+          if (!fakePressureRef.current) {
+            if (nextSeat === 'seated') {
+              carAirRef.current?.unfreeze?.();
+            } else {
+              carAirRef.current?.resetToZero?.();
+            }
+          }
           // 注：欢迎语不在这里播。入座瞬间乘员识别还没跑完（可能是静物占位），
           // 改到下方「确认活人」的上升沿才播（静物占位不播）。
           // 上报给 App，供自定义气囊弹窗同步联动
