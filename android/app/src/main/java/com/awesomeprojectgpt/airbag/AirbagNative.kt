@@ -71,5 +71,8 @@ object AirbagNative {
     const val IDX_HEALTH_CODE = 173     // healthReasonCode（健康位掩码 0~7）
     const val IDX_IS_LIVING = 174       // isLiving（乘员入座/活体 0/1）
     const val IDX_IS_STATIC = 175       // isStatic（静物占位 0/1）；两者都 0 = 识别中/离座
-    const val OUT_LEN = 176
+    const val IDX_IS_CHILD = 176        // isChild（儿童确认 0/1，先活体后儿童，重物恒 0）
+    const val IDX_IS_ADULT = 177        // isAdult（成人确认 0/1，与 isChild 互斥）
+    const val IDX_CHILD_THRESHOLD = 178 // childThreshold_out（儿童坐垫压力阈值回显，非法/未接线=1400）
+    const val OUT_LEN = 179
 }

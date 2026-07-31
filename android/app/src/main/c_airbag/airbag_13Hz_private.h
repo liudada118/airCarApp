@@ -3,13 +3,13 @@
  * course requirements at degree granting institutions only.  Not for
  * government, commercial, or other organizational use.
  *
- * File: airbag_13Hz_private.h
+ * File: airbag_13Hz_v2_private.h
  *
- * Code generated for Simulink model 'airbag_13Hz'.
+ * Code generated for Simulink model 'airbag_13Hz_v2'.
  *
- * Model version                  : 1.226
+ * Model version                  : 1.227
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Fri Jul 31 10:34:52 2026
+ * C/C++ source code generated on : Fri Jul 31 13:39:56 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -17,14 +17,14 @@
  * Validation result: Not run
  */
 
-#ifndef airbag_13Hz_private_h_
-#define airbag_13Hz_private_h_
+#ifndef airbag_13Hz_v2_private_h_
+#define airbag_13Hz_v2_private_h_
 #include "rtwtypes.h"
 #include "airbag_13Hz_types.h"
 
 extern real32_T rt_roundf_snf(real32_T u);
 
-#endif                                 /* airbag_13Hz_private_h_ */
+#endif                                 /* airbag_13Hz_v2_private_h_ */
 
 /*
  * File trailer for generated code.

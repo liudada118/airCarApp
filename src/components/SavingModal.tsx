@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   cancelText: {
-    fontSize: FontSize.lg,
+    fontSize: FontSize.xl,
     fontWeight: '500',
     color: Colors.primary,
     textDecorationLine: 'underline',

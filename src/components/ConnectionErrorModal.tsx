@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   linkText: {
-    fontSize: FontSize.lg,
+    fontSize: FontSize.xl,
     fontWeight: '500',
     color: Colors.primary,
     textAlign: 'center',

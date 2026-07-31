@@ -1,8 +1,8 @@
 // JNI 包装：把 Simulink 生成的 airbag_13Hz 算法暴露给 Kotlin 调用。
 // 数据流：Kotlin 传入 92 字节原始压力帧 → 逐个转 float 填 frame_data[92]
-//         → airbag_13Hz_step() → 读输出结构体 → 打包成 float[] 返回。
+//         → airbag_13Hz_v2_step() → 读输出结构体 → 打包成 float[] 返回。
 //
-// 注意：Simulink 生成代码是全局单实例（airbag_13Hz_U / _Y / _DW），
+// 注意：Simulink 生成代码是全局单实例（airbag_13Hz_v2_U / _Y / _DW），
 // 只能单线程串行调用，不要并发 step()。
 
 #include <jni.h>
@@ -31,6 +31,9 @@
 //   [173] healthReasonCode（健康位掩码 0~7：1脊椎 2颠簸 4晕车）
 //   [174] isLiving（乘员入座/活体，microState==3 时为 1）
 //   [175] isStatic（静物占位，microState==2 时为 1）——两者都为 0 = 识别中/离座
+//   [176] isChild（儿童确认 0/1，先活体后儿童，重物恒 0）
+//   [177] isAdult（成人确认 0/1，与 isChild 互斥；isLiving=1 时二者恰一为 1）
+//   [178] childThreshold_out（儿童坐垫压力阈值回显，非法/未接线回显 1400）
 #define OUT_FRAME_BASE      4
 #define OUT_CUSHION_BASE    59
 #define OUT_BACKREST_BASE   107
@@ -47,7 +50,10 @@
 #define OUT_HEALTH_CODE     173
 #define OUT_IS_LIVING       174
 #define OUT_IS_STATIC       175
-#define OUT_LEN             176
+#define OUT_IS_CHILD        176  // 儿童确认标志(1/0)：先活体后儿童，重物恒0
+#define OUT_IS_ADULT        177  // 成人确认标志(1/0)：与 isChild 互斥；isLiving=1 时二者恰一为1
+#define OUT_CHILD_THRESHOLD 178  // 儿童坐垫压力阈值回显(有效值回显下发，非法/未接线回显1400)
+#define OUT_LEN             179
 
 // ===== 可运行时调节的算法阈值表 =====
 // 这些原本写死在 set_input_defaults() 里、改一次就得重编 .so 的标定输入，
@@ -93,18 +99,19 @@
     X(welcomeLegTime1,          2.0F,    "入座欢迎",   "腿托时长(s)") \
     X(welcomeLumbarTime1,       3.0F,    "入座欢迎",   "腰托时长(s)") \
     X(welcomeHipTime1,          3.0F,    "入座欢迎",   "臀部时长(s)") \
-    X(sitThresholdmin1,         5.0F,    "久坐按摩",   "久坐触发(分钟)")
+    X(sitThresholdmin1,         5.0F,    "久坐按摩",   "久坐触发(分钟)") \
+    X(childCushionThresholdIn,  1400.0F, "儿童识别",   "儿童坐垫压力阈值")
 
 typedef struct {
     const char *name;    // 字段名（与 JS/Kotlin 一致的键）
-    real32_T   *ptr;     // 指向 airbag_13Hz_U 里的字段（链接期常量地址）
+    real32_T   *ptr;     // 指向 airbag_13Hz_v2_U 里的字段（链接期常量地址）
     real32_T    def;     // 默认值
     const char *group;   // 面板分组
     const char *label;   // 面板显示名
 } AirbagParam;
 
 static AirbagParam g_params[] = {
-#define X(field, defv, grp, lbl) { #field, &airbag_13Hz_U.field, (real32_T)(defv), grp, lbl },
+#define X(field, defv, grp, lbl) { #field, &airbag_13Hz_v2_U.field, (real32_T)(defv), grp, lbl },
     AIRBAG_PARAM_TABLE(X)
 #undef X
 };
@@ -114,7 +121,7 @@ static const int g_paramCount = (int)(sizeof(g_params) / sizeof(g_params[0]));
 // initialize() 不会给输入设默认值，若不填全局输入会是 0，
 // cushionThreshold=0 会导致「压力和>=0 恒成立 → 永远判定有人坐」。
 static void set_input_defaults(void) {
-    ExtU_airbag_13Hz_T *U = &airbag_13Hz_U;
+    ExtU_airbag_13Hz_v2_T *U = &airbag_13Hz_v2_U;
     // 逐帧控制信号 / 复位标志：不进阈值表，这里单独清零。
     memset(U->frame_data1, 0, sizeof(U->frame_data1));
     U->resetFlag1          = 0;
@@ -132,7 +139,7 @@ static void set_input_defaults(void) {
 JNIEXPORT void JNICALL
 Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeInitialize(JNIEnv *env, jobject thiz) {
     (void)env; (void)thiz;
-    airbag_13Hz_initialize();
+    airbag_13Hz_v2_initialize();
     set_input_defaults();
     LOGI("airbag_13Hz initialized, defaults set");
 }
@@ -140,7 +147,7 @@ Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeInitialize(JNIEnv *env, job
 JNIEXPORT void JNICALL
 Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeTerminate(JNIEnv *env, jobject thiz) {
     (void)env; (void)thiz;
-    airbag_13Hz_terminate();
+    airbag_13Hz_v2_terminate();
 }
 
 // payload: 板子发的 92 字节原始压力（前 46 靠背、后 46 坐垫，每点 1 字节 0..255）。
@@ -158,51 +165,54 @@ Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeStep(JNIEnv *env, jobject t
     for (int i = 0; i < 92; i++) {
         // 关键：单字节值逐个转 float，不能 memcpy uint8[92] 到 real32[92]
         float v = (i < count) ? (float)((unsigned char)bytes[i]) : 0.0F;
-        airbag_13Hz_U.frame_data1[i] = (real32_T)v;
+        airbag_13Hz_v2_U.frame_data1[i] = (real32_T)v;
     }
     (*env)->ReleaseByteArrayElements(env, payload, bytes, JNI_ABORT);
 
     // 本帧输入：frontCmd 脉冲 + 久坐按摩开关
-    airbag_13Hz_U.frontCmd1[0] = (real32_T)mode;
-    airbag_13Hz_U.frontCmd1[1] = (real32_T)part;
-    airbag_13Hz_U.frontCmd1[2] = (real32_T)dir;
-    airbag_13Hz_U.longSitMassageStop1 = (real32_T)massageStop;
-    airbag_13Hz_U.manualMassageOn1 = (real32_T)manualMassageOn;
+    airbag_13Hz_v2_U.frontCmd1[0] = (real32_T)mode;
+    airbag_13Hz_v2_U.frontCmd1[1] = (real32_T)part;
+    airbag_13Hz_v2_U.frontCmd1[2] = (real32_T)dir;
+    airbag_13Hz_v2_U.longSitMassageStop1 = (real32_T)massageStop;
+    airbag_13Hz_v2_U.manualMassageOn1 = (real32_T)manualMassageOn;
     // 注：sitThresholdmin1 已改为「阈值表」管理（配置面板可调），不再逐帧覆盖。
     //     这里保留形参兼容旧签名；传 <=0 表示「用面板/默认值」，>0 才临时覆盖。
     if ((real32_T)sitThresholdMin > 0.0F) {
-        airbag_13Hz_U.sitThresholdmin1 = (real32_T)sitThresholdMin;
+        airbag_13Hz_v2_U.sitThresholdmin1 = (real32_T)sitThresholdMin;
     }
 
-    airbag_13Hz_step();
+    airbag_13Hz_v2_step();
 
     jfloat out[OUT_LEN];
-    out[0] = airbag_13Hz_Y.reasonCode1;
-    out[1] = airbag_13Hz_Y.isFullSeat1;
-    out[2] = airbag_13Hz_Y.cushionSum1;
-    out[3] = airbag_13Hz_Y.backrestSum1;
+    out[0] = airbag_13Hz_v2_Y.reasonCode1;
+    out[1] = airbag_13Hz_v2_Y.isFullSeat1;
+    out[2] = airbag_13Hz_v2_Y.cushionSum1;
+    out[3] = airbag_13Hz_v2_Y.backrestSum1;
     for (int i = 0; i < 55; i++) {
-        out[OUT_FRAME_BASE + i] = airbag_13Hz_Y.frame1[i];
+        out[OUT_FRAME_BASE + i] = airbag_13Hz_v2_Y.frame1[i];
     }
     for (int i = 0; i < 48; i++) {
-        out[OUT_CUSHION_BASE + i] = airbag_13Hz_Y.cushionData1[i];
+        out[OUT_CUSHION_BASE + i] = airbag_13Hz_v2_Y.cushionData1[i];
     }
     for (int i = 0; i < 56; i++) {
-        out[OUT_BACKREST_BASE + i] = airbag_13Hz_Y.backrestData1[i];
+        out[OUT_BACKREST_BASE + i] = airbag_13Hz_v2_Y.backrestData1[i];
     }
-    out[OUT_IS_LIVING_RAW] = airbag_13Hz_Y.isLivingRaw1;
-    out[OUT_DET_TRIGGERED] = airbag_13Hz_Y.detectionTriggered1;
-    out[OUT_LONGSIT_MIN]    = airbag_13Hz_Y.longSitMinutes1;
-    out[OUT_LONGSIT_REMAIN] = airbag_13Hz_Y.longSitCycleRemain1;
-    out[OUT_LONGSIT_PROMPT] = airbag_13Hz_Y.longSitPrompt1;
-    out[OUT_LONGSIT_ACTIVE] = airbag_13Hz_Y.longSitMassageActive1;
-    out[OUT_SPINE_ACTIVE]   = airbag_13Hz_Y.spineProtectActive1;
-    out[OUT_SPINE_SIDE]     = airbag_13Hz_Y.spineProtectSide1;
-    out[OUT_BUMP_ACTIVE]    = airbag_13Hz_Y.bumpReliefActive1;
-    out[OUT_MOTION_ACTIVE]  = airbag_13Hz_Y.motionSicknessActive1;
-    out[OUT_HEALTH_CODE]    = airbag_13Hz_Y.healthReasonCode1;
-    out[OUT_IS_LIVING]      = airbag_13Hz_Y.isLiving1;
-    out[OUT_IS_STATIC]      = airbag_13Hz_Y.isStatic1;
+    out[OUT_IS_LIVING_RAW] = airbag_13Hz_v2_Y.isLivingRaw1;
+    out[OUT_DET_TRIGGERED] = airbag_13Hz_v2_Y.detectionTriggered1;
+    out[OUT_LONGSIT_MIN]    = airbag_13Hz_v2_Y.longSitMinutes1;
+    out[OUT_LONGSIT_REMAIN] = airbag_13Hz_v2_Y.longSitCycleRemain1;
+    out[OUT_LONGSIT_PROMPT] = airbag_13Hz_v2_Y.longSitPrompt1;
+    out[OUT_LONGSIT_ACTIVE] = airbag_13Hz_v2_Y.longSitMassageActive1;
+    out[OUT_SPINE_ACTIVE]   = airbag_13Hz_v2_Y.spineProtectActive1;
+    out[OUT_SPINE_SIDE]     = airbag_13Hz_v2_Y.spineProtectSide1;
+    out[OUT_BUMP_ACTIVE]    = airbag_13Hz_v2_Y.bumpReliefActive1;
+    out[OUT_MOTION_ACTIVE]  = airbag_13Hz_v2_Y.motionSicknessActive1;
+    out[OUT_HEALTH_CODE]    = airbag_13Hz_v2_Y.healthReasonCode1;
+    out[OUT_IS_LIVING]      = airbag_13Hz_v2_Y.isLiving1;
+    out[OUT_IS_STATIC]      = airbag_13Hz_v2_Y.isStatic1;
+    out[OUT_IS_CHILD]        = airbag_13Hz_v2_Y.isChild;
+    out[OUT_IS_ADULT]        = airbag_13Hz_v2_Y.isAdult;
+    out[OUT_CHILD_THRESHOLD] = airbag_13Hz_v2_Y.childThreshold_out;
 
     jfloatArray result = (*env)->NewFloatArray(env, OUT_LEN);
     (*env)->SetFloatArrayRegion(env, result, 0, OUT_LEN, out);

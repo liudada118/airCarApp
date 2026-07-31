@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import {LinearGradient} from 'expo-linear-gradient';
 import {Colors, FontSize, Spacing, BorderRadius} from '../theme';
-import {TopBar, SeatCushion, VoiceBar, ConnectionErrorModal, Toast} from '../components';
+import {TopBar, SeatCushion, VoiceBar, ConnectionErrorModal, ChildSafetyModal, Toast} from '../components';
 import IconFont from '../components/IconFont';
 import CarAirRN from '../components/CarAirRN';
 import SeatMatrix46, {PressureLegend} from '../components/SeatMatrix46';
@@ -628,6 +628,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   // 乘员识别：新 C 包直接输出 isLiving/isStatic，App 不再自攒窗口。
   // livingLatchedRef 只用于欢迎语去抖：记住上一帧 isLiving 是否为高，取 0→1 上升沿播一次。
   const livingLatchedRef = useRef<boolean>(false);
+  // 儿童安全弹窗去抖：记住上一帧 isChild，取 0→1 上升沿弹一次。
+  const childLatchedRef = useRef<boolean>(false);
   // sensorData 用 useRef 存储，3D 组件通过 data prop 读取，避免每帧 setState 触发重渲染
   const carAirRef = useRef<any>(null);
   // 清零防抖：记录最后一次清零的时间戳，防止离座/在座状态快速切换导致闪烁
@@ -644,6 +646,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   // 乘员识别:仅页面选中态(暂无功能，后续接数据)
   const [occupantType, setOccupantType] = useState<'person' | 'object' | null>(null);
+  // 落座的是不是儿童/宠物：true 时「乘员入座」卡副标题变「有儿童或宠物入座」并弹安全保护弹窗
+  const [occupantIsChild, setOccupantIsChild] = useState<boolean>(false);
+  const [showChildSafety, setShowChildSafety] = useState<boolean>(false);
   // 右下角语音提示条(彩球+文字)。目前纯 UI:visible 控制显隐,text 写死。
   // 【数据口子】以后有数据时:setVoiceBar({visible: true, text: 按数据生成的提示}) 即可弹出。
   const [voiceBar, setVoiceBar] = useState<{visible: boolean; text: string}>({
@@ -1276,6 +1281,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         detectionTriggered?: number;
         isLiving?: number;
         isStatic?: number;
+        isChild?: number;
+        isAdult?: number;
+        childThreshold?: number;
         longSitMinutes?: number;
         longSitCycleRemain?: number;
         longSitPrompt?: number;
@@ -1375,17 +1383,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         //   两者都为 0  → 识别中 / 离座，两张卡都不亮（无中间默认值）
         const living = (event.isLiving ?? 0) >= 0.5;
         const isStaticObj = (event.isStatic ?? 0) >= 0.5;
+        const child = (event.isChild ?? 0) >= 0.5;
         const nextOccupant: 'person' | 'object' | null = living
           ? 'person'
           : isStaticObj
           ? 'object'
           : null;
         setOccupantType(prev => (prev === nextOccupant ? prev : nextOccupant));
+        // 落座的是儿童/宠物：「乘员入座」照亮，但副标题变「有儿童或宠物入座」。
+        // isChild 与 isAdult 互斥；离座后算法归 0，副标题回落成人文案。
+        setOccupantIsChild(prev => (prev === child ? prev : child));
 
         // 欢迎语：仅在「活体」上升沿(0→1)播一次；静物占位/识别中不播。
         // 离座后算法把 isLiving 归 0，下次真人再落座能重新触发。
         if (living && !livingLatchedRef.current) triggerVoice('seat_welcome');
         livingLatchedRef.current = living;
+
+        // 儿童安全弹窗：isChild 上升沿(0→1)弹一次；离座/换成人后复位，下次再弹。
+        if (child && !childLatchedRef.current) setShowChildSafety(true);
+        childLatchedRef.current = child;
       },
     );
 
@@ -1711,7 +1727,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               active={occupantType === 'person'}
               icon={iconOccupantPerson}
               title="乘员入座"
-              subtitle="座椅上有乘员落座"
+              subtitle={occupantIsChild ? '有儿童或宠物入座' : '座椅上有乘员落座'}
             />
             <OccupantCard
               active={occupantType === 'object'}
@@ -2416,6 +2432,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           }, 100);
         }}
         retrying={connecting}
+      />
+
+      {/* 儿童/宠物安全保护弹窗（检测到儿童落座时弹出） */}
+      <ChildSafetyModal
+        visible={showChildSafety}
+        onDismiss={() => setShowChildSafety(false)}
       />
 
       {showConnectionError && connectionErrorMessage ? (
