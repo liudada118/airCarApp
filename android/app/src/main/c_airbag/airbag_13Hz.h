@@ -9,7 +9,7 @@
  *
  * Model version                  : 1.228
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Fri Jul 31 14:58:16 2026
+ * C/C++ source code generated on : Fri Jul 31 17:31:09 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -44,6 +44,7 @@ typedef struct {
   real_T frameCount;                   /* '<Root>/活体检测1' */
   real_T livingQueueLen;               /* '<Root>/活体检测1' */
   real_T childSumCount;                /* '<Root>/活体检测1' */
+  real_T childConfirmCnt;              /* '<Root>/活体检测1' */
   real32_T UnitDelay3_DSTATE[4];       /* '<Root>/Unit Delay3' */
   real32_T UnitDelay2_DSTATE[15];      /* '<Root>/Unit Delay2' */
   real32_T pBaseB[56];                 /* '<Root>/矩阵处理1' */
@@ -57,11 +58,6 @@ typedef struct {
   real32_T sadHistCushion[13];         /* '<Root>/活体检测1' */
   real32_T sadHistBackrest[13];        /* '<Root>/活体检测1' */
   real32_T latestConfidence;           /* '<Root>/活体检测1' */
-  real32_T noiseBaseline;              /* '<Root>/活体检测1' */
-  real32_T noiseDev;                   /* '<Root>/活体检测1' */
-  real32_T noiseWarmCount;             /* '<Root>/活体检测1' */
-  real32_T sessionFrames;              /* '<Root>/活体检测1' */
-  real32_T staticStreak;               /* '<Root>/活体检测1' */
   real32_T childSumHist[26];           /* '<Root>/活体检测1' */
   real32_T mode;                       /* '<Root>/气囊控制协议1' */
   real32_T elapsed_time;               /* '<Root>/气囊控制协议1' */
@@ -101,8 +97,6 @@ typedef struct {
   real32_T pBumpClearSec;              /* '<Root>/健康干预控制1' */
   real32_T pBumpLatched;               /* '<Root>/健康干预控制1' */
   real32_T pBumpActionTimer;           /* '<Root>/健康干预控制1' */
-  real32_T pBumpEventCount;            /* '<Root>/健康干预控制1' */
-  real32_T pBumpWindowAge;             /* '<Root>/健康干预控制1' */
   real32_T pHistoryValid;              /* '<Root>/健康干预控制1' */
   real32_T pForwardRefX;               /* '<Root>/健康干预控制1' */
   real32_T pForwardAge;                /* '<Root>/健康干预控制1' */
@@ -123,13 +117,13 @@ typedef struct {
   int32_T pFrameCount;                 /* '<Root>/健康检测1' */
   uint32_T sitFrameCount;              /* '<Root>/久坐按摩1' */
   uint32_T massageFrameCount;          /* '<Root>/久坐按摩1' */
+  int8_T childClassLatch;              /* '<Root>/活体检测1' */
   int8_T pState_i;                     /* '<Root>/入座处理1' */
   uint8_T phase;                       /* '<Root>/久坐按摩1' */
   boolean_T frameCount_not_empty;      /* '<Root>/活体检测1' */
   boolean_T livingQueue[3];            /* '<Root>/活体检测1' */
   boolean_T latestRaw;                 /* '<Root>/活体检测1' */
   boolean_T unlocked;                  /* '<Root>/活体检测1' */
-  boolean_T sessionLivingLatched;      /* '<Root>/活体检测1' */
   boolean_T pState_not_empty;          /* '<Root>/入座处理1' */
   boolean_T phase_not_empty;           /* '<Root>/久坐按摩1' */
   boolean_T livingLatched;             /* '<Root>/久坐按摩1' */
@@ -276,11 +270,7 @@ extern RT_MODEL_airbag_13Hz_v2_T *const airbag_13Hz_v2_M;
  * These blocks were eliminated from the model due to optimizations:
  *
  * Block '<Root>/Data Type Conversion14' : Eliminate redundant data type conversion
- * Block '<Root>/Data Type Conversion16' : Eliminate redundant data type conversion
- * Block '<Root>/Data Type Conversion17' : Eliminate redundant data type conversion
- * Block '<Root>/Data Type Conversion18' : Eliminate redundant data type conversion
  * Block '<Root>/Data Type Conversion19' : Eliminate redundant data type conversion
- * Block '<Root>/Data Type Conversion27' : Eliminate redundant data type conversion
  */
 
 /*-

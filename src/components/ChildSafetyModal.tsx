@@ -1,8 +1,10 @@
 import React from 'react';
-import {View, Text, Modal, TouchableOpacity, StyleSheet} from 'react-native';
-import Svg, {Path} from 'react-native-svg';
+import {View, Text, Image, Modal, TouchableOpacity, StyleSheet} from 'react-native';
 import {Colors, FontSize, Spacing} from '../theme';
 import ModalCard from './ModalCard';
+
+// 顶部徽标图标(用 ASCII 文件名规避 Metro 中文路径坑)
+const iconProtect = require('../assets/images/protect.png');
 
 /**
  * 儿童/宠物安全保护弹窗。
@@ -17,22 +19,7 @@ interface ChildSafetyModalProps {
 
 const ShieldBadge = () => (
   <View style={styles.badge}>
-    <Svg width={30} height={30} viewBox="0 0 24 24">
-      {/* 盾牌(白) */}
-      <Path
-        d="M12 2.5l7 2.6v5.4c0 4.7-3.1 8.3-7 9.5-3.9-1.2-7-4.8-7-9.5V5.1z"
-        fill={Colors.textWhite}
-      />
-      {/* 对勾(蓝) */}
-      <Path
-        d="M8.5 12l2.3 2.3 4.7-4.7"
-        stroke={Colors.primary}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </Svg>
+    <Image source={iconProtect} style={styles.badgeIcon} resizeMode="contain" />
   </View>
 );
 
@@ -69,11 +56,15 @@ const styles = StyleSheet.create({
   badge: {
     width: 56,
     height: 56,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
+    borderRadius: 28, // 圆圈(=宽高一半)
+    backgroundColor: '#DFEEFF', // 圆圈颜色
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.md,
+  },
+  badgeIcon: {
+    width: 32,
+    height: 32,
   },
   title: {
     fontSize: FontSize.xl,

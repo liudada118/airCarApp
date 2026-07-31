@@ -9,7 +9,7 @@
  *
  * Model version                  : 1.228
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Fri Jul 31 14:58:16 2026
+ * C/C++ source code generated on : Fri Jul 31 17:31:09 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -44,12 +44,8 @@ static real32_T airbag_13Hz_v2_sum(const real32_T x_data[], const int32_T
   *x_size);
 static real32_T airbag_13Hz_v2_mean(const real32_T x_data[], const int32_T
   *x_size);
-static int8_T airbag__updateLivingStatusQueue(const boolean_T queueValues_data[],
-  const int32_T queueValues_size[2], boolean_T inEnabledState, boolean_T
-  detectorEnabled, real32_T livingConfirmCount);
-static void airbag__classifyChildFromWeight(const real32_T cushionMatrix[48],
-  int8_T statusCode, real32_T childCushionThreshold, real32_T sumHist[26],
-  real_T *sumCount, real32_T *isChild, real32_T *isAdult);
+static int32_T airbag_13_combineVectorElements(const boolean_T x_data[], const
+  int32_T *x_size);
 static real32_T airbag_13Hz_v2_directionOf(real32_T b_value);
 static boolean_T airbag_13Hz_v_allFinitePositive(const real32_T values[8]);
 static boolean_T airbag_13Hz_v2_any(const boolean_T x[3]);
@@ -225,6 +221,24 @@ static void airba_calculatePressureFeatures(const real32_T matrixIn[56],
   }
 }
 
+real32_T rt_roundf_snf(real32_T u)
+{
+  real32_T y;
+  if (fabsf(u) < 8.388608E+6F) {
+    if (u >= 0.5F) {
+      y = floorf(u + 0.5F);
+    } else if (u > -0.5F) {
+      y = u * 0.0F;
+    } else {
+      y = ceilf(u - 0.5F);
+    }
+  } else {
+    y = u;
+  }
+
+  return y;
+}
+
 /* Function for MATLAB Function: '<Root>/活体检测1' */
 static real32_T airbag_13Hz_v2_sum(const real32_T x_data[], const int32_T
   *x_size)
@@ -265,111 +279,24 @@ static real32_T airbag_13Hz_v2_mean(const real32_T x_data[], const int32_T
   return accumulatedData / (real32_T)*x_size;
 }
 
-real32_T rt_roundf_snf(real32_T u)
+/* Function for MATLAB Function: '<Root>/活体检测1' */
+static int32_T airbag_13_combineVectorElements(const boolean_T x_data[], const
+  int32_T *x_size)
 {
-  real32_T y;
-  if (fabsf(u) < 8.388608E+6F) {
-    if (u >= 0.5F) {
-      y = floorf(u + 0.5F);
-    } else if (u > -0.5F) {
-      y = u * 0.0F;
-    } else {
-      y = ceilf(u - 0.5F);
-    }
+  int32_T k;
+  int32_T vlen;
+  int32_T y;
+  vlen = *x_size;
+  if (*x_size == 0) {
+    y = 0;
   } else {
-    y = u;
+    y = x_data[0];
+    for (k = 2; k <= vlen; k++) {
+      y += x_data[k - 1];
+    }
   }
 
   return y;
-}
-
-/* Function for MATLAB Function: '<Root>/活体检测1' */
-static int8_T airbag__updateLivingStatusQueue(const boolean_T queueValues_data[],
-  const int32_T queueValues_size[2], boolean_T inEnabledState, boolean_T
-  detectorEnabled, real32_T livingConfirmCount)
-{
-  int8_T statusCode;
-  if (!detectorEnabled) {
-    statusCode = -1;
-  } else if (!inEnabledState) {
-    statusCode = 0;
-  } else if (queueValues_size[1] < 3) {
-    statusCode = 1;
-  } else {
-    int32_T nz;
-    nz = (queueValues_data[0] + queueValues_data[1]) + queueValues_data[2];
-    if (nz >= livingConfirmCount) {
-      statusCode = 3;
-    } else if (nz <= 3.0F - livingConfirmCount) {
-      statusCode = 2;
-    } else {
-      statusCode = 1;
-    }
-  }
-
-  return statusCode;
-}
-
-/* Function for MATLAB Function: '<Root>/活体检测1' */
-static void airbag__classifyChildFromWeight(const real32_T cushionMatrix[48],
-  int8_T statusCode, real32_T childCushionThreshold, real32_T sumHist[26],
-  real_T *sumCount, real32_T *isChild, real32_T *isAdult)
-{
-  int32_T k;
-  *isChild = 0.0F;
-  *isAdult = 0.0F;
-  if (statusCode == 3) {
-    real_T r;
-    real32_T cushionSumNow;
-    cushionSumNow = cushionMatrix[0];
-    for (k = 0; k < 47; k++) {
-      cushionSumNow += cushionMatrix[k + 1];
-    }
-
-    cushionSumNow *= 1.30434787F;
-    *sumCount = fmin(*sumCount + 1.0, 26.0);
-    if (rtIsInf(*sumCount - 1.0)) {
-      r = (rtNaN);
-    } else {
-      r = *sumCount - 1.0;
-      if (*sumCount - 1.0 == 0.0) {
-        r = 0.0;
-      }
-    }
-
-    if (*sumCount >= 26.0) {
-      for (k = 0; k < 25; k++) {
-        sumHist[k] = sumHist[k + 1];
-      }
-
-      sumHist[25] = cushionSumNow;
-      cushionSumNow = sumHist[0];
-      for (k = 0; k < 25; k++) {
-        cushionSumNow += sumHist[k + 1];
-      }
-
-      cushionSumNow /= 26.0F;
-    } else {
-      int32_T vlen;
-      sumHist[(int32_T)(r + 1.0) - 1] = cushionSumNow;
-      vlen = (int32_T)*sumCount;
-      cushionSumNow = sumHist[0];
-      for (k = 2; k <= vlen; k++) {
-        cushionSumNow += sumHist[k - 1];
-      }
-
-      cushionSumNow /= (real32_T)*sumCount;
-    }
-
-    if (cushionSumNow <= childCushionThreshold) {
-      *isChild = 1.0F;
-    } else {
-      *isAdult = 1.0F;
-    }
-  } else {
-    memset(&sumHist[0], 0, 26U * sizeof(real32_T));
-    *sumCount = 0.0;
-  }
 }
 
 /* Function for MATLAB Function: '<Root>/品味系数1' */
@@ -514,6 +441,7 @@ static void airbag_13Hz__applyAdaptiveGears(real32_T frame[55], real32_T
 void airbag_13Hz_v2_step(void)
 {
   real_T r;
+  real_T vlen_tmp;
   int32_T LumbarlumbarGear;
   int32_T i;
   int32_T idx;
@@ -531,6 +459,7 @@ void airbag_13Hz_v2_step(void)
   real32_T backrestMatrix_data[56];
   real32_T e[56];
   real32_T cushionMatrix[48];
+  real32_T d_x_data[26];
   real32_T rtb_nvmWrite[15];
   real32_T tmp_data_1[13];
   real32_T rtb_status[9];
@@ -538,6 +467,7 @@ void airbag_13Hz_v2_step(void)
   real32_T addedEdgeLength;
   real32_T adjustCmd;
   real32_T adoptionFrequency;
+  real32_T avgPrev;
   real32_T b_pressure;
   real32_T b_weightedY;
   real32_T baseInflationSeconds;
@@ -545,7 +475,6 @@ void airbag_13Hz_v2_step(void)
   real32_T bumpRmsMax;
   real32_T deflationSeconds;
   real32_T dyNew;
-  real32_T normalizeScale;
   real32_T pathIncrement;
   real32_T rtb_avg_velocity;
   real32_T rtb_backrest_cop_y;
@@ -562,12 +491,13 @@ void airbag_13Hz_v2_step(void)
   int8_T tmp_data[56];
   int8_T tmp_data_0[56];
   int8_T rtb_massageGears[14];
-  int8_T d;
-  int8_T microState;
+  int8_T candidate;
+  int8_T pState;
   int8_T rtb_reasonCode;
   boolean_T b_validMask[56];
   boolean_T validMask[56];
   boolean_T queueValues_data[3];
+  boolean_T queueValues_data_0[3];
   boolean_T b_requestIdle_tmp;
   boolean_T gapActive;
   boolean_T isStill;
@@ -577,8 +507,7 @@ void airbag_13Hz_v2_step(void)
   boolean_T requestIdle;
   boolean_T rtb_isOccupied;
   boolean_T rtb_stateChanged;
-  boolean_T trigNow;
-  static const int8_T d_0[5] = { 3, 5, 3, 5, 6 };
+  static const int8_T d[5] = { 3, 5, 3, 5, 6 };
 
   static const int8_T c[5] = { 1, 1, 2, 2, 2 };
 
@@ -588,7 +517,7 @@ void airbag_13Hz_v2_step(void)
 
   static const int8_T f_0[4] = { 0, 1, 6, 7 };
 
-  static const int8_T d_1[5] = { 6, 6, 9, 9, 9 };
+  static const int8_T d_0[5] = { 6, 6, 9, 9, 9 };
 
   static const real32_T e_1[8] = { 1.5F, 0.7F, 0.7F, 1.3F, 0.48F, 0.7F, 0.64F,
     0.96F };
@@ -597,7 +526,6 @@ void airbag_13Hz_v2_step(void)
 
   static const int8_T h[5] = { 2, 2, 3, 3, 3 };
 
-  int32_T queueValues_size[2];
   boolean_T exitg1;
   boolean_T guard1;
   boolean_T guard2;
@@ -617,9 +545,9 @@ void airbag_13Hz_v2_step(void)
   backrestMatrix[3] = airbag_13Hz_v2_U.frame_data1[3];
   backrestMatrix[52] = airbag_13Hz_v2_U.frame_data1[7];
   for (i = 0; i < 6; i++) {
-    for (newWriteIndex = 0; newWriteIndex < 5; newWriteIndex++) {
-      backrestMatrix[newWriteIndex + 7 * (i + 1)] =
-        (&airbag_13Hz_v2_U.frame_data1[8])[6 * newWriteIndex + i];
+    for (rtb_massageEnable = 0; rtb_massageEnable < 5; rtb_massageEnable++) {
+      backrestMatrix[rtb_massageEnable + 7 * (i + 1)] =
+        (&airbag_13Hz_v2_U.frame_data1[8])[6 * rtb_massageEnable + i];
     }
   }
 
@@ -634,9 +562,9 @@ void airbag_13Hz_v2_step(void)
    *  Inport: '<Root>/frame_data1'
    */
   for (i = 0; i < 4; i++) {
-    nvmCmd = (i + 2) * 7;
-    backrestMatrix[nvmCmd + 5] = tmp[i];
-    backrestMatrix[nvmCmd + 6] = tmp[i + 4];
+    newWriteIndex = (i + 2) * 7;
+    backrestMatrix[newWriteIndex + 5] = tmp[i];
+    backrestMatrix[newWriteIndex + 6] = tmp[i + 4];
   }
 
   for (i = 0; i < 5; i++) {
@@ -645,27 +573,27 @@ void airbag_13Hz_v2_step(void)
   }
 
   for (i = 0; i < 6; i++) {
-    for (newWriteIndex = 0; newWriteIndex < 6; newWriteIndex++) {
-      cushionMatrix[newWriteIndex + 6 * (i + 1)] =
-        (&airbag_13Hz_v2_U.frame_data1[56])[6 * newWriteIndex + i];
+    for (rtb_massageEnable = 0; rtb_massageEnable < 6; rtb_massageEnable++) {
+      cushionMatrix[rtb_massageEnable + 6 * (i + 1)] =
+        (&airbag_13Hz_v2_U.frame_data1[56])[6 * rtb_massageEnable + i];
     }
   }
 
-  for (newWriteIndex = 0; newWriteIndex < 8; newWriteIndex++) {
-    xtmp = backrestMatrix[7 * newWriteIndex];
-    nvmCmd = 7 * newWriteIndex + 6;
-    backrestMatrix[7 * newWriteIndex] = backrestMatrix[nvmCmd];
-    backrestMatrix[nvmCmd] = xtmp;
-    rtb_massageEnable = 7 * newWriteIndex + 1;
+  for (nvmCmd = 0; nvmCmd < 8; nvmCmd++) {
+    xtmp = backrestMatrix[7 * nvmCmd];
+    newWriteIndex = 7 * nvmCmd + 6;
+    backrestMatrix[7 * nvmCmd] = backrestMatrix[newWriteIndex];
+    backrestMatrix[newWriteIndex] = xtmp;
+    rtb_massageEnable = 7 * nvmCmd + 1;
     xtmp = backrestMatrix[rtb_massageEnable];
-    nvmCmd = 7 * newWriteIndex + 5;
-    backrestMatrix[rtb_massageEnable] = backrestMatrix[nvmCmd];
-    backrestMatrix[nvmCmd] = xtmp;
-    rtb_massageEnable = 7 * newWriteIndex + 2;
+    newWriteIndex = 7 * nvmCmd + 5;
+    backrestMatrix[rtb_massageEnable] = backrestMatrix[newWriteIndex];
+    backrestMatrix[newWriteIndex] = xtmp;
+    rtb_massageEnable = 7 * nvmCmd + 2;
     xtmp = backrestMatrix[rtb_massageEnable];
-    nvmCmd = 7 * newWriteIndex + 4;
-    backrestMatrix[rtb_massageEnable] = backrestMatrix[nvmCmd];
-    backrestMatrix[nvmCmd] = xtmp;
+    newWriteIndex = 7 * nvmCmd + 4;
+    backrestMatrix[rtb_massageEnable] = backrestMatrix[newWriteIndex];
+    backrestMatrix[newWriteIndex] = xtmp;
   }
 
   for (newWriteIndex = 0; newWriteIndex < 4; newWriteIndex++) {
@@ -760,17 +688,18 @@ void airbag_13Hz_v2_step(void)
     airbag_13Hz_v2_Y.cushionData1[i + 42] = 0.0F;
   }
 
-  for (nvmCmd = 0; nvmCmd < 5; nvmCmd++) {
-    i = ((d_0[nvmCmd] - 1) * 6 + c[nvmCmd]) - 1;
+  for (newWriteIndex = 0; newWriteIndex < 5; newWriteIndex++) {
+    i = ((d[newWriteIndex] - 1) * 6 + c[newWriteIndex]) - 1;
     baseInflationSeconds = airbag_13Hz_v2_Y.cushionData1[i];
-    newWriteIndex = ((f[nvmCmd] - 1) * 6 + e_0[nvmCmd]) - 1;
-    xtmp = airbag_13Hz_v2_Y.cushionData1[newWriteIndex];
+    rtb_massageEnable = ((f[newWriteIndex] - 1) * 6 + e_0[newWriteIndex]) - 1;
+    xtmp = airbag_13Hz_v2_Y.cushionData1[rtb_massageEnable];
     if (baseInflationSeconds >= xtmp) {
       airbag_13Hz_v2_Y.cushionData1[i] = fminf(baseInflationSeconds, xtmp) *
         0.5F + fmaxf(baseInflationSeconds, xtmp) * 0.5F;
     } else {
-      airbag_13Hz_v2_Y.cushionData1[newWriteIndex] = fminf(baseInflationSeconds,
-        xtmp) * 0.5F + fmaxf(baseInflationSeconds, xtmp) * 0.5F;
+      airbag_13Hz_v2_Y.cushionData1[rtb_massageEnable] = fminf
+        (baseInflationSeconds, xtmp) * 0.5F + fmaxf(baseInflationSeconds, xtmp) *
+        0.5F;
     }
   }
 
@@ -811,17 +740,17 @@ void airbag_13Hz_v2_step(void)
 
   memset(&backrestMatrix[0], 0, 56U * sizeof(real32_T));
   for (i = 0; i < 8; i++) {
-    for (newWriteIndex = 0; newWriteIndex < 6; newWriteIndex++) {
-      backrestMatrix[newWriteIndex + 7 * i] = airbag_13Hz_v2_Y.cushionData1[6 *
-        i + newWriteIndex];
+    for (rtb_massageEnable = 0; rtb_massageEnable < 6; rtb_massageEnable++) {
+      backrestMatrix[rtb_massageEnable + 7 * i] = airbag_13Hz_v2_Y.cushionData1
+        [6 * i + rtb_massageEnable];
     }
   }
 
-  airba_calculatePressureFeatures(backrestMatrix, xtmp, &normalizeScale,
+  airba_calculatePressureFeatures(backrestMatrix, xtmp, &avgPrev,
     &airbag_13Hz_v2_Y.cushionSum1);
-  airba_calculatePressureFeatures(airbag_13Hz_v2_Y.backrestData1, xtmp,
-    &normalizeScale, &airbag_13Hz_v2_Y.backrestSum1);
-  microState = airbag_13Hz_v2_DW.pState_i;
+  airba_calculatePressureFeatures(airbag_13Hz_v2_Y.backrestData1, xtmp, &avgPrev,
+    &airbag_13Hz_v2_Y.backrestSum1);
+  pState = airbag_13Hz_v2_DW.pState_i;
   rtb_reasonCode = 0;
   switch (airbag_13Hz_v2_DW.pState_i) {
    case 0:
@@ -831,10 +760,10 @@ void airbag_13Hz_v2_step(void)
       airbag_13Hz_v2_DW.pBackrestLostCounter = 0;
       if (airbag_13Hz_v2_Y.backrestSum1 >= airbag_13Hz_v2_U.backrestThreshold1)
       {
-        microState = 2;
+        pState = 2;
         rtb_reasonCode = 2;
       } else {
-        microState = 1;
+        pState = 1;
         rtb_reasonCode = 1;
       }
     }
@@ -844,7 +773,7 @@ void airbag_13Hz_v2_step(void)
     if ((airbag_13Hz_v2_Y.cushionSum1 >= airbag_13Hz_v2_U.cushionThreshold1) &&
         (airbag_13Hz_v2_Y.backrestSum1 >= airbag_13Hz_v2_U.backrestThreshold1))
     {
-      microState = 2;
+      pState = 2;
       airbag_13Hz_v2_DW.pOffCounter = 0;
       airbag_13Hz_v2_DW.pBackrestLostCounter = 0;
       rtb_reasonCode = 3;
@@ -857,7 +786,7 @@ void airbag_13Hz_v2_step(void)
       }
 
       if (airbag_13Hz_v2_DW.pOffCounter >= 14) {
-        microState = 3;
+        pState = 3;
         airbag_13Hz_v2_DW.pOffCounter = 0;
         airbag_13Hz_v2_DW.pResetCounter = 0;
         rtb_reasonCode = 4;
@@ -876,7 +805,7 @@ void airbag_13Hz_v2_step(void)
       }
 
       if (airbag_13Hz_v2_DW.pBackrestLostCounter >= 13) {
-        microState = 1;
+        pState = 1;
         airbag_13Hz_v2_DW.pBackrestLostCounter = 0;
         airbag_13Hz_v2_DW.pOffCounter = 0;
         rtb_reasonCode = 5;
@@ -893,7 +822,7 @@ void airbag_13Hz_v2_step(void)
       }
 
       if (airbag_13Hz_v2_DW.pOffCounter >= 14) {
-        microState = 3;
+        pState = 3;
         airbag_13Hz_v2_DW.pOffCounter = 0;
         airbag_13Hz_v2_DW.pResetCounter = 0;
         rtb_reasonCode = 4;
@@ -910,14 +839,14 @@ void airbag_13Hz_v2_step(void)
       airbag_13Hz_v2_DW.pBackrestLostCounter = 0;
       if (airbag_13Hz_v2_Y.backrestSum1 >= airbag_13Hz_v2_U.backrestThreshold1)
       {
-        microState = 2;
+        pState = 2;
         rtb_reasonCode = 8;
       } else {
-        microState = 1;
+        pState = 1;
         rtb_reasonCode = 7;
       }
     } else if (airbag_13Hz_v2_DW.pResetCounter >= 130) {
-      microState = 0;
+      pState = 0;
       airbag_13Hz_v2_DW.pResetCounter = 0;
       rtb_reasonCode = 6;
     } else {
@@ -926,25 +855,25 @@ void airbag_13Hz_v2_step(void)
     break;
   }
 
-  rtb_stateChanged = (airbag_13Hz_v2_DW.pState_i != microState);
-  airbag_13Hz_v2_DW.pState_i = microState;
+  rtb_stateChanged = (airbag_13Hz_v2_DW.pState_i != pState);
+  airbag_13Hz_v2_DW.pState_i = pState;
   rtb_isOccupied = ((airbag_13Hz_v2_DW.pState_i == 1) ||
                     (airbag_13Hz_v2_DW.pState_i == 2));
 
   /* MATLAB Function: '<Root>/活体检测1' incorporates:
    *  Inport: '<Root>/childCushionThresholdIn'
    *  Inport: '<Root>/detectorEnabled1'
+   *  Inport: '<Root>/livingConfirmCountIn1'
    *  Inport: '<Root>/resetFlag1'
    *  Inport: '<Root>/sadNormalizeScaleIn1'
    *  Inport: '<Root>/sadThresholdIn1'
-   *  MATLAB Function: '<Root>/入座处理1'
    *  MATLAB Function: '<Root>/矩阵处理1'
    */
-  isStill = (airbag_13Hz_v2_U.detectorEnabled1 != 0.0F);
-  if (airbag_13Hz_v2_U.sadNormalizeScaleIn1 <= 0.0F) {
-    normalizeScale = 2.0F;
+  if (airbag_13Hz_v2_U.livingConfirmCountIn1 <= 0.0F) {
+    nvmCmd = 3;
   } else {
-    normalizeScale = airbag_13Hz_v2_U.sadNormalizeScaleIn1;
+    nvmCmd = (int32_T)fminf(3.0F, fmaxf(1.0F, rt_roundf_snf
+      (airbag_13Hz_v2_U.livingConfirmCountIn1)));
   }
 
   if (airbag_13Hz_v2_U.childCushionThresholdIn <= 0.0F) {
@@ -954,7 +883,8 @@ void airbag_13Hz_v2_step(void)
       airbag_13Hz_v2_U.childCushionThresholdIn;
   }
 
-  if (!airbag_13Hz_v2_DW.frameCount_not_empty) {
+  if ((!airbag_13Hz_v2_DW.frameCount_not_empty) || airbag_13Hz_v2_U.resetFlag1)
+  {
     memcpy(&airbag_13Hz_v2_DW.prevCushion[0], &airbag_13Hz_v2_Y.cushionData1[0],
            48U * sizeof(real32_T));
     memcpy(&airbag_13Hz_v2_DW.prevBackrest[0], &airbag_13Hz_v2_Y.backrestData1[0],
@@ -974,35 +904,10 @@ void airbag_13Hz_v2_step(void)
     airbag_13Hz_v2_DW.latestRaw = false;
     airbag_13Hz_v2_DW.latestConfidence = 0.0F;
     airbag_13Hz_v2_DW.unlocked = false;
-    airbag_13Hz_v2_DW.sessionLivingLatched = false;
-    airbag_13Hz_v2_DW.sessionFrames = 0.0F;
-    airbag_13Hz_v2_DW.staticStreak = 0.0F;
     memset(&airbag_13Hz_v2_DW.childSumHist[0], 0, 26U * sizeof(real32_T));
     airbag_13Hz_v2_DW.childSumCount = 0.0;
-  } else if (airbag_13Hz_v2_U.resetFlag1) {
-    memcpy(&airbag_13Hz_v2_DW.prevCushion[0], &airbag_13Hz_v2_Y.cushionData1[0],
-           48U * sizeof(real32_T));
-    memcpy(&airbag_13Hz_v2_DW.prevBackrest[0], &airbag_13Hz_v2_Y.backrestData1[0],
-           56U * sizeof(real32_T));
-    for (i = 0; i < 13; i++) {
-      airbag_13Hz_v2_DW.sadHistCushion[i] = 0.0F;
-      airbag_13Hz_v2_DW.sadHistBackrest[i] = 0.0F;
-    }
-
-    airbag_13Hz_v2_DW.sadCount = 0.0;
-    airbag_13Hz_v2_DW.frameCount = 0.0;
-    airbag_13Hz_v2_DW.livingQueue[0] = false;
-    airbag_13Hz_v2_DW.livingQueue[1] = false;
-    airbag_13Hz_v2_DW.livingQueue[2] = false;
-    airbag_13Hz_v2_DW.livingQueueLen = 0.0;
-    airbag_13Hz_v2_DW.latestRaw = false;
-    airbag_13Hz_v2_DW.latestConfidence = 0.0F;
-    airbag_13Hz_v2_DW.unlocked = false;
-    airbag_13Hz_v2_DW.sessionLivingLatched = false;
-    airbag_13Hz_v2_DW.sessionFrames = 0.0F;
-    airbag_13Hz_v2_DW.staticStreak = 0.0F;
-    memset(&airbag_13Hz_v2_DW.childSumHist[0], 0, 26U * sizeof(real32_T));
-    airbag_13Hz_v2_DW.childSumCount = 0.0;
+    airbag_13Hz_v2_DW.childClassLatch = 0;
+    airbag_13Hz_v2_DW.childConfirmCnt = 0.0;
   }
 
   airbag_13Hz_v2_DW.frameCount++;
@@ -1020,10 +925,10 @@ void airbag_13Hz_v2_step(void)
   }
 
   for (i = 0; i < 8; i++) {
-    for (newWriteIndex = 0; newWriteIndex < 6; newWriteIndex++) {
-      nvmCmd = 7 * i + newWriteIndex;
-      backrestMatrix[nvmCmd] = cushionMatrix[6 * i + newWriteIndex];
-      validMask[nvmCmd] = true;
+    for (rtb_massageEnable = 0; rtb_massageEnable < 6; rtb_massageEnable++) {
+      newWriteIndex = 7 * i + rtb_massageEnable;
+      backrestMatrix[newWriteIndex] = cushionMatrix[6 * i + rtb_massageEnable];
+      validMask[newWriteIndex] = true;
     }
   }
 
@@ -1038,9 +943,9 @@ void airbag_13Hz_v2_step(void)
   }
 
   for (i = 0; i < 4; i++) {
-    nvmCmd = 7 * f_0[i];
-    b_validMask[nvmCmd] = false;
-    b_validMask[nvmCmd + 1] = false;
+    newWriteIndex = 7 * f_0[i];
+    b_validMask[newWriteIndex] = false;
+    b_validMask[newWriteIndex + 1] = false;
   }
 
   b_validMask[2] = false;
@@ -1058,50 +963,50 @@ void airbag_13Hz_v2_step(void)
     }
   }
 
-  nvmCmd = 0;
+  newWriteIndex = 0;
   for (i = 0; i < 56; i++) {
     if (validMask[i]) {
-      nvmCmd++;
+      newWriteIndex++;
     }
   }
 
-  newWriteIndex = nvmCmd;
-  nvmCmd = 0;
+  rtb_massageEnable = newWriteIndex;
+  newWriteIndex = 0;
   for (i = 0; i < 56; i++) {
     if (validMask[i]) {
-      tmp_data[nvmCmd] = (int8_T)i;
-      nvmCmd++;
+      tmp_data[newWriteIndex] = (int8_T)i;
+      newWriteIndex++;
     }
   }
 
-  for (i = 0; i < newWriteIndex; i++) {
+  for (i = 0; i < rtb_massageEnable; i++) {
     backrestMatrix_data[i] = backrestMatrix[tmp_data[i]];
   }
 
   airbag_13Hz_v2_DW.sadHistCushion[(int32_T)(r + 1.0) - 1] = airbag_13Hz_v2_sum
-    (backrestMatrix_data, &newWriteIndex) / 46.0F;
-  nvmCmd = 0;
+    (backrestMatrix_data, &rtb_massageEnable) / 46.0F;
+  newWriteIndex = 0;
   for (i = 0; i < 56; i++) {
     if (b_validMask[i]) {
-      nvmCmd++;
+      newWriteIndex++;
     }
   }
 
-  newWriteIndex = nvmCmd;
-  nvmCmd = 0;
+  rtb_massageEnable = newWriteIndex;
+  newWriteIndex = 0;
   for (i = 0; i < 56; i++) {
     if (b_validMask[i]) {
-      tmp_data_0[nvmCmd] = (int8_T)i;
-      nvmCmd++;
+      tmp_data_0[newWriteIndex] = (int8_T)i;
+      newWriteIndex++;
     }
   }
 
-  for (i = 0; i < newWriteIndex; i++) {
+  for (i = 0; i < rtb_massageEnable; i++) {
     backrestMatrix_data[i] = e[tmp_data_0[i]];
   }
 
   airbag_13Hz_v2_DW.sadHistBackrest[(int32_T)(r + 1.0) - 1] = airbag_13Hz_v2_sum
-    (backrestMatrix_data, &newWriteIndex) / 46.0F;
+    (backrestMatrix_data, &rtb_massageEnable) / 46.0F;
   airbag_13Hz_v2_DW.sadCount = fmin(airbag_13Hz_v2_DW.sadCount + 1.0, 13.0);
   if (rtIsInf(airbag_13Hz_v2_DW.frameCount)) {
     r = (rtNaN);
@@ -1112,173 +1017,105 @@ void airbag_13Hz_v2_step(void)
     }
   }
 
-  trigNow = ((r == 0.0) && (airbag_13Hz_v2_DW.sadCount >= 13.0));
-  nvmCmd = (int32_T)airbag_13Hz_v2_DW.sadCount;
+  isStill = ((r == 0.0) && (airbag_13Hz_v2_DW.sadCount >= 13.0));
+  newWriteIndex = (int32_T)airbag_13Hz_v2_DW.sadCount;
   i = (int32_T)airbag_13Hz_v2_DW.sadCount;
-  if (nvmCmd - 1 >= 0) {
+  if (newWriteIndex - 1 >= 0) {
     memcpy(&tmp_data_1[0], &airbag_13Hz_v2_DW.sadHistCushion[0], (uint32_T)
-           nvmCmd * sizeof(real32_T));
+           newWriteIndex * sizeof(real32_T));
   }
 
   airbag_13Hz_v2_Y.sadCushion1 = airbag_13Hz_v2_mean(tmp_data_1, &i);
   i = (int32_T)airbag_13Hz_v2_DW.sadCount;
-  if (nvmCmd - 1 >= 0) {
+  if (newWriteIndex - 1 >= 0) {
     memcpy(&tmp_data_1[0], &airbag_13Hz_v2_DW.sadHistBackrest[0], (uint32_T)
-           nvmCmd * sizeof(real32_T));
+           newWriteIndex * sizeof(real32_T));
   }
 
   airbag_13Hz_v2_Y.sadBackrest1 = airbag_13Hz_v2_mean(tmp_data_1, &i);
   airbag_13Hz_v2_Y.sadEnergy1 = fmaxf(airbag_13Hz_v2_Y.sadCushion1,
     airbag_13Hz_v2_Y.sadBackrest1);
+  if (airbag_13Hz_v2_U.sadNormalizeScaleIn1 <= 0.0F) {
+    baseInflationSeconds = 2.0F;
+  } else {
+    baseInflationSeconds = airbag_13Hz_v2_U.sadNormalizeScaleIn1;
+  }
+
   airbag_13Hz_v2_Y.sadScore1 = fminf(1.0F, airbag_13Hz_v2_Y.sadEnergy1 /
-    normalizeScale);
-  if ((airbag_13Hz_v2_DW.pState_i == 0) && (airbag_13Hz_v2_DW.sadCount >= 13.0) &&
-      ((!(airbag_13Hz_v2_DW.noiseWarmCount >= 39.0F)) ||
-       (!(airbag_13Hz_v2_Y.sadEnergy1 > 6.0F * fmaxf(airbag_13Hz_v2_DW.noiseDev,
-          0.05F) + airbag_13Hz_v2_DW.noiseBaseline)))) {
-    if (airbag_13Hz_v2_DW.noiseWarmCount < 39.0F) {
-      xtmp = 0.0625F;
-      airbag_13Hz_v2_DW.noiseWarmCount++;
+    baseInflationSeconds);
+  if (isStill) {
+    if (airbag_13Hz_v2_U.sadThresholdIn1 <= 0.0F) {
+      baseInflationSeconds = 0.4F;
     } else {
-      xtmp = 0.0039F;
+      baseInflationSeconds = fminf(1.0F, airbag_13Hz_v2_U.sadThresholdIn1);
     }
 
-    airbag_13Hz_v2_DW.noiseBaseline += (airbag_13Hz_v2_Y.sadEnergy1 -
-      airbag_13Hz_v2_DW.noiseBaseline) * xtmp;
-    airbag_13Hz_v2_DW.noiseDev = fmaxf((fabsf(airbag_13Hz_v2_Y.sadEnergy1 -
-      airbag_13Hz_v2_DW.noiseBaseline) - airbag_13Hz_v2_DW.noiseDev) * xtmp +
-      airbag_13Hz_v2_DW.noiseDev, 0.05F);
-  }
+    airbag_13Hz_v2_DW.latestRaw = (airbag_13Hz_v2_Y.sadScore1 >=
+      baseInflationSeconds);
 
-  if (rtb_isOccupied) {
-    airbag_13Hz_v2_DW.sessionFrames = fminf(airbag_13Hz_v2_DW.sessionFrames +
-      1.0F, 1.0E+6F);
-  } else {
-    airbag_13Hz_v2_DW.sessionFrames = 0.0F;
-    airbag_13Hz_v2_DW.sessionLivingLatched = false;
-    airbag_13Hz_v2_DW.staticStreak = 0.0F;
-    airbag_13Hz_v2_DW.livingQueue[0] = false;
-    airbag_13Hz_v2_DW.livingQueue[1] = false;
-    airbag_13Hz_v2_DW.livingQueue[2] = false;
-    airbag_13Hz_v2_DW.livingQueueLen = 0.0;
-    airbag_13Hz_v2_DW.unlocked = false;
-  }
-
-  xtmp = fmaxf(airbag_13Hz_v2_DW.noiseDev, 0.05F);
-  if (airbag_13Hz_v2_U.sadThresholdIn1 <= 0.0F) {
-    baseInflationSeconds = 0.25F;
-  } else {
-    baseInflationSeconds = fminf(1.0F, airbag_13Hz_v2_U.sadThresholdIn1);
-  }
-
-  normalizeScale = fmaxf(baseInflationSeconds * normalizeScale, 3.0F * xtmp +
-    airbag_13Hz_v2_DW.noiseBaseline);
-
-  /* Outport: '<Root>/confidence1' incorporates:
-   *  MATLAB Function: '<Root>/活体检测1'
-   */
-  airbag_13Hz_v2_Y.confidence1 = airbag_13Hz_v2_DW.latestConfidence;
-
-  /* MATLAB Function: '<Root>/活体检测1' incorporates:
-   *  Inport: '<Root>/livingConfirmCountIn1'
-   */
-  if (trigNow) {
-    if (airbag_13Hz_v2_Y.sadEnergy1 >= normalizeScale) {
-      microState = 2;
-    } else {
-      microState = (int8_T)!(airbag_13Hz_v2_Y.sadEnergy1 <= fminf(1.5F * xtmp +
-        airbag_13Hz_v2_DW.noiseBaseline, normalizeScale - 0.05F));
-    }
-
-    airbag_13Hz_v2_DW.latestRaw = (microState == 2);
-
-    /* Outport: '<Root>/confidence1' */
+    /* Outport: '<Root>/confidence1' incorporates:
+     *  Inport: '<Root>/sadThresholdIn1'
+     */
     airbag_13Hz_v2_Y.confidence1 = airbag_13Hz_v2_Y.sadScore1;
     airbag_13Hz_v2_DW.latestConfidence = airbag_13Hz_v2_Y.sadScore1;
     if (rtb_isOccupied) {
-      if (microState != 1) {
-        if (airbag_13Hz_v2_DW.livingQueueLen < 3.0) {
-          airbag_13Hz_v2_DW.livingQueueLen++;
-        }
-
-        airbag_13Hz_v2_DW.livingQueue[0] = airbag_13Hz_v2_DW.livingQueue[1];
-        airbag_13Hz_v2_DW.livingQueue[1] = airbag_13Hz_v2_DW.livingQueue[2];
-        airbag_13Hz_v2_DW.livingQueue[2] = airbag_13Hz_v2_DW.latestRaw;
+      if (airbag_13Hz_v2_DW.livingQueueLen < 3.0) {
+        airbag_13Hz_v2_DW.livingQueueLen++;
       }
 
-      if (microState == 0) {
-        airbag_13Hz_v2_DW.staticStreak++;
-      } else {
-        airbag_13Hz_v2_DW.staticStreak = 0.0F;
-      }
+      airbag_13Hz_v2_DW.livingQueue[0] = airbag_13Hz_v2_DW.livingQueue[1];
+      airbag_13Hz_v2_DW.livingQueue[1] = airbag_13Hz_v2_DW.livingQueue[2];
+      airbag_13Hz_v2_DW.livingQueue[2] = airbag_13Hz_v2_DW.latestRaw;
     }
+  } else {
+    /* Outport: '<Root>/confidence1' */
+    airbag_13Hz_v2_Y.confidence1 = airbag_13Hz_v2_DW.latestConfidence;
   }
 
   if (airbag_13Hz_v2_DW.livingQueueLen < 3.0) {
     if ((3.0 - airbag_13Hz_v2_DW.livingQueueLen) + 1.0 > 3.0) {
+      rtb_massageEnable = 0;
       newWriteIndex = 0;
-      nvmCmd = 0;
     } else {
-      newWriteIndex = (int32_T)((3.0 - airbag_13Hz_v2_DW.livingQueueLen) + 1.0)
-        - 1;
-      nvmCmd = 3;
+      rtb_massageEnable = (int32_T)((3.0 - airbag_13Hz_v2_DW.livingQueueLen) +
+        1.0) - 1;
+      newWriteIndex = 3;
     }
 
-    queueValues_size[0] = 1;
-    nvmCmd -= newWriteIndex;
-    queueValues_size[1] = nvmCmd;
-    for (i = 0; i < nvmCmd; i++) {
-      queueValues_data[i] = airbag_13Hz_v2_DW.livingQueue[newWriteIndex + i];
+    newWriteIndex -= rtb_massageEnable;
+    for (i = 0; i < newWriteIndex; i++) {
+      queueValues_data[i] = airbag_13Hz_v2_DW.livingQueue[rtb_massageEnable + i];
     }
   } else {
-    queueValues_size[0] = 1;
-    queueValues_size[1] = 3;
+    newWriteIndex = 3;
     queueValues_data[0] = airbag_13Hz_v2_DW.livingQueue[0];
     queueValues_data[1] = airbag_13Hz_v2_DW.livingQueue[1];
     queueValues_data[2] = airbag_13Hz_v2_DW.livingQueue[2];
   }
 
-  if (airbag_13Hz_v2_U.livingConfirmCountIn1 <= 0.0F) {
-    i = 2;
+  if (!(airbag_13Hz_v2_U.detectorEnabled1 != 0.0F)) {
+    pState = -1;
+  } else if (!rtb_isOccupied) {
+    pState = 0;
+  } else if (newWriteIndex < 3) {
+    pState = 1;
   } else {
-    i = (int32_T)fminf(3.0F, fmaxf(1.0F, rt_roundf_snf
-      (airbag_13Hz_v2_U.livingConfirmCountIn1)));
-  }
-
-  microState = airbag__updateLivingStatusQueue(queueValues_data,
-    queueValues_size, rtb_isOccupied, isStill, (real32_T)i);
-  if ((microState != -1) && (microState != 0)) {
-    if (airbag_13Hz_v2_DW.sessionLivingLatched) {
-      if ((airbag_13Hz_v2_DW.sessionFrames <= 390.0F) && (microState == 2) &&
-          (airbag_13Hz_v2_DW.staticStreak >= 3.0F)) {
-        airbag_13Hz_v2_DW.sessionLivingLatched = false;
-        microState = 2;
-        airbag_13Hz_v2_DW.livingQueue[0] = false;
-        airbag_13Hz_v2_DW.livingQueue[1] = false;
-        airbag_13Hz_v2_DW.livingQueue[2] = false;
-        airbag_13Hz_v2_DW.livingQueueLen = 3.0;
-      } else {
-        microState = 3;
-      }
+    newWriteIndex = 3;
+    queueValues_data_0[0] = queueValues_data[0];
+    queueValues_data_0[1] = queueValues_data[1];
+    queueValues_data_0[2] = queueValues_data[2];
+    newWriteIndex = airbag_13_combineVectorElements(queueValues_data_0,
+      &newWriteIndex);
+    if ((real32_T)newWriteIndex >= nvmCmd) {
+      pState = 3;
+    } else if ((int32_T)(real32_T)newWriteIndex <= 3 - nvmCmd) {
+      pState = 2;
     } else {
-      switch (microState) {
-       case 3:
-        airbag_13Hz_v2_DW.sessionLivingLatched = true;
-        microState = 3;
-        break;
-
-       case 2:
-        microState = 2;
-        break;
-
-       default:
-        microState = 1;
-        break;
-      }
+      pState = 1;
     }
   }
 
-  switch (microState) {
+  switch (pState) {
    case 3:
     airbag_13Hz_v2_DW.unlocked = true;
     break;
@@ -1288,14 +1125,123 @@ void airbag_13Hz_v2_step(void)
     break;
   }
 
+  r = airbag_13Hz_v2_DW.childConfirmCnt;
+
+  /* Outport: '<Root>/isChild' incorporates:
+   *  MATLAB Function: '<Root>/活体检测1'
+   */
+  airbag_13Hz_v2_Y.isChild = 0.0F;
+
   /* Outport: '<Root>/isAdult' incorporates:
    *  MATLAB Function: '<Root>/活体检测1'
-   *  Outport: '<Root>/isChild'
    */
-  airbag__classifyChildFromWeight(airbag_13Hz_v2_Y.cushionData1, microState,
-    airbag_13Hz_v2_Y.childThreshold_out, airbag_13Hz_v2_DW.childSumHist,
-    &airbag_13Hz_v2_DW.childSumCount, &airbag_13Hz_v2_Y.isChild,
-    &airbag_13Hz_v2_Y.isAdult);
+  airbag_13Hz_v2_Y.isAdult = 0.0F;
+
+  /* MATLAB Function: '<Root>/活体检测1' */
+  if (pState == 3) {
+    xtmp = airbag_13Hz_v2_Y.cushionData1[0];
+    for (newWriteIndex = 0; newWriteIndex < 47; newWriteIndex++) {
+      xtmp += airbag_13Hz_v2_Y.cushionData1[newWriteIndex + 1];
+    }
+
+    xtmp *= 1.30434787F;
+    if (airbag_13Hz_v2_DW.childSumCount > 0.0) {
+      vlen_tmp = fmin(airbag_13Hz_v2_DW.childSumCount, 26.0);
+      nvmCmd = (int32_T)vlen_tmp;
+      avgPrev = airbag_13Hz_v2_DW.childSumHist[0];
+      for (newWriteIndex = 2; newWriteIndex <= nvmCmd; newWriteIndex++) {
+        avgPrev += airbag_13Hz_v2_DW.childSumHist[newWriteIndex - 1];
+      }
+
+      avgPrev /= (real32_T)vlen_tmp;
+    } else {
+      avgPrev = xtmp;
+    }
+
+    if ((!(airbag_13Hz_v2_DW.childSumCount > 0.0)) || (!(xtmp < avgPrev * 0.7F)))
+    {
+      airbag_13Hz_v2_DW.childSumCount = fmin(airbag_13Hz_v2_DW.childSumCount +
+        1.0, 26.0);
+      if (rtIsInf(airbag_13Hz_v2_DW.childSumCount - 1.0)) {
+        r = (rtNaN);
+      } else {
+        r = airbag_13Hz_v2_DW.childSumCount - 1.0;
+        if (airbag_13Hz_v2_DW.childSumCount - 1.0 == 0.0) {
+          r = 0.0;
+        }
+      }
+
+      if (airbag_13Hz_v2_DW.childSumCount >= 26.0) {
+        for (i = 0; i < 25; i++) {
+          airbag_13Hz_v2_DW.childSumHist[i] = airbag_13Hz_v2_DW.childSumHist[i +
+            1];
+        }
+
+        airbag_13Hz_v2_DW.childSumHist[25] = xtmp;
+        xtmp = airbag_13Hz_v2_DW.childSumHist[0];
+        for (nvmCmd = 0; nvmCmd < 25; nvmCmd++) {
+          xtmp += airbag_13Hz_v2_DW.childSumHist[nvmCmd + 1];
+        }
+
+        xtmp /= 26.0F;
+      } else {
+        airbag_13Hz_v2_DW.childSumHist[(int32_T)(r + 1.0) - 1] = xtmp;
+        newWriteIndex = (int32_T)airbag_13Hz_v2_DW.childSumCount;
+        if (newWriteIndex - 1 >= 0) {
+          memcpy(&d_x_data[0], &airbag_13Hz_v2_DW.childSumHist[0], (uint32_T)
+                 newWriteIndex * sizeof(real32_T));
+        }
+
+        avgPrev = airbag_13Hz_v2_DW.childSumHist[0];
+        for (nvmCmd = 2; nvmCmd <= newWriteIndex; nvmCmd++) {
+          avgPrev += d_x_data[nvmCmd - 1];
+        }
+
+        xtmp = avgPrev / (real32_T)airbag_13Hz_v2_DW.childSumCount;
+      }
+
+      if (xtmp <= airbag_13Hz_v2_Y.childThreshold_out) {
+        candidate = 2;
+      } else {
+        candidate = 1;
+      }
+
+      if (airbag_13Hz_v2_DW.childClassLatch == 0) {
+        r = airbag_13Hz_v2_DW.childConfirmCnt + 1.0;
+        if (airbag_13Hz_v2_DW.childConfirmCnt + 1.0 >= 26.0) {
+          airbag_13Hz_v2_DW.childClassLatch = candidate;
+          r = 0.0;
+        }
+      } else if (candidate != airbag_13Hz_v2_DW.childClassLatch) {
+        r = airbag_13Hz_v2_DW.childConfirmCnt + 1.0;
+        if (airbag_13Hz_v2_DW.childConfirmCnt + 1.0 >= 26.0) {
+          airbag_13Hz_v2_DW.childClassLatch = candidate;
+          r = 0.0;
+        }
+      } else {
+        r = 0.0;
+      }
+    }
+
+    switch (airbag_13Hz_v2_DW.childClassLatch) {
+     case 2:
+      /* Outport: '<Root>/isChild' */
+      airbag_13Hz_v2_Y.isChild = 1.0F;
+      break;
+
+     case 1:
+      /* Outport: '<Root>/isAdult' */
+      airbag_13Hz_v2_Y.isAdult = 1.0F;
+      break;
+    }
+  } else {
+    memset(&airbag_13Hz_v2_DW.childSumHist[0], 0, 26U * sizeof(real32_T));
+    airbag_13Hz_v2_DW.childSumCount = 0.0;
+    airbag_13Hz_v2_DW.childClassLatch = 0;
+    r = 0.0;
+  }
+
+  airbag_13Hz_v2_DW.childConfirmCnt = r;
 
   /* MATLAB Function: '<Root>/久坐按摩1' incorporates:
    *  Inport: '<Root>/manualMassageOn1'
@@ -1357,7 +1303,7 @@ void airbag_13Hz_v2_step(void)
     airbag_13Hz_v2_DW.livingLatched = false;
   }
 
-  airbag_13Hz_v2_DW.livingLatched = ((rtb_isOccupied && (microState == 3)) ||
+  airbag_13Hz_v2_DW.livingLatched = ((rtb_isOccupied && (pState == 3)) ||
     airbag_13Hz_v2_DW.livingLatched);
   newReason = !rtb_isOccupied;
   if (airbag_13Hz_v2_U.resetFlag1 || (airbag_13Hz_v2_DW.pState_i == 3) ||
@@ -1486,6 +1432,7 @@ void airbag_13Hz_v2_step(void)
   }
 
   /* MATLAB Function: '<Root>/品味系数1' incorporates:
+   *  DataTypeConversion: '<Root>/Data Type Conversion18'
    *  DataTypeConversion: '<Root>/Data Type Conversion20'
    *  DataTypeConversion: '<Root>/Data Type Conversion25'
    *  Inport: '<Root>/adoption_frequency1'
@@ -1500,7 +1447,7 @@ void airbag_13Hz_v2_step(void)
    */
   nvmCmd = 0;
   xtmp = rt_roundf_snf(airbag_13Hz_v2_U.frontCmd1[0]);
-  normalizeScale = rt_roundf_snf(airbag_13Hz_v2_U.frontCmd1[1]);
+  avgPrev = rt_roundf_snf(airbag_13Hz_v2_U.frontCmd1[1]);
   adjustCmd = airbag_13Hz_v2_directionOf(airbag_13Hz_v2_U.frontCmd1[2]);
   baseInflationSeconds = airbag_13Hz_v2_U.inflation_time2;
   if (rtIsInfF(airbag_13Hz_v2_U.inflation_time2) || rtIsNaNF
@@ -1585,8 +1532,9 @@ void airbag_13Hz_v2_step(void)
         baseInflationSeconds = 0.0F;
         airbag_13Hz_v2_DW.pSavedTimes[newWriteIndex] = 0.0F;
       } else {
-        d = d_1[newWriteIndex];
-        baseInflationSeconds = fmaxf(-(real32_T)d, fminf(d, baseInflationSeconds));
+        candidate = d_0[newWriteIndex];
+        baseInflationSeconds = fmaxf(-(real32_T)candidate, fminf(candidate,
+          baseInflationSeconds));
         airbag_13Hz_v2_DW.pSavedTimes[newWriteIndex] = baseInflationSeconds;
       }
 
@@ -1738,16 +1686,16 @@ void airbag_13Hz_v2_step(void)
   }
 
   if ((adjustCmd != 0.0F) && ((adjustCmd != airbag_13Hz_v2_DW.pPrevFrontCmd[2]) ||
-       (normalizeScale != airbag_13Hz_v2_DW.pPrevFrontCmd[1])) && requestIdle &&
+       (avgPrev != airbag_13Hz_v2_DW.pPrevFrontCmd[1])) && requestIdle &&
       (airbag_13Hz_v2_DW.pReplayIndex == 0) && (airbag_13Hz_v2_DW.pState == 1.0F)
       && living && (airbag_13Hz_v2_DW.pEntryDeflate <= 0.5F)) {
     queueValues_data[0] = (airbag_13Hz_v2_DW.pPending[0] > 0.5F);
     queueValues_data[1] = (airbag_13Hz_v2_DW.pPending[1] > 0.5F);
     queueValues_data[2] = (airbag_13Hz_v2_DW.pPending[2] > 0.5F);
     if (!airbag_13Hz_v2_any(queueValues_data)) {
-      if (normalizeScale < 2.14748365E+9F) {
-        if (normalizeScale >= -2.14748365E+9F) {
-          i = (int32_T)normalizeScale;
+      if (avgPrev < 2.14748365E+9F) {
+        if (avgPrev >= -2.14748365E+9F) {
+          i = (int32_T)avgPrev;
         } else {
           i = MIN_int32_T;
         }
@@ -1762,7 +1710,7 @@ void airbag_13Hz_v2_step(void)
         if (rtIsInfF(adoptionFrequency) || rtIsNaNF(adoptionFrequency)) {
           adoptionFrequency = 0.0F;
         } else {
-          rtb_backrest_cop_y = d_1[i - 1];
+          rtb_backrest_cop_y = d_0[i - 1];
           adoptionFrequency = fmaxf(-rtb_backrest_cop_y, fminf
             (rtb_backrest_cop_y, adoptionFrequency));
         }
@@ -1873,7 +1821,7 @@ void airbag_13Hz_v2_step(void)
 
   rtb_nvmWrite[14] = airbag_13Hz_v2_DW.pAdaptiveOff;
   airbag_13Hz_v2_DW.pPrevFrontCmd[0] = xtmp;
-  airbag_13Hz_v2_DW.pPrevFrontCmd[1] = normalizeScale;
+  airbag_13Hz_v2_DW.pPrevFrontCmd[1] = avgPrev;
   airbag_13Hz_v2_DW.pPrevFrontCmd[2] = adjustCmd;
   airbag_13Hz_v2_DW.pPrevNvmValid = airbag_13Hz_v2_DW.UnitDelay2_DSTATE[0];
   airbag_13Hz_v2_DW.pPrevReasonCode_j = rtb_reasonCode;
@@ -1921,23 +1869,23 @@ void airbag_13Hz_v2_step(void)
   /* MATLAB Function: '<Root>/侧翼状态判定1' incorporates:
    *  Inport: '<Root>/backTotalThreshold1'
    */
-  normalizeScale = airbag_13Hz_v2_Y.backrestData1[0];
+  avgPrev = airbag_13Hz_v2_Y.backrestData1[0];
   xtmp = airbag_13Hz_v2_Y.backrestData1[28];
   for (newWriteIndex = 0; newWriteIndex < 27; newWriteIndex++) {
     nvmCmd = (int32_T)((uint32_T)(newWriteIndex + 1) / 7U);
     rtb_action = (newWriteIndex + 1) % 7;
-    normalizeScale += airbag_13Hz_v2_Y.backrestData1[nvmCmd * 7 + rtb_action];
+    avgPrev += airbag_13Hz_v2_Y.backrestData1[nvmCmd * 7 + rtb_action];
     xtmp += airbag_13Hz_v2_Y.backrestData1[(nvmCmd + 4) * 7 + rtb_action];
   }
 
-  airbag_13Hz_v2_Y.leftPressure1 = normalizeScale * 1.30434787F;
+  airbag_13Hz_v2_Y.leftPressure1 = avgPrev * 1.30434787F;
   airbag_13Hz_v2_Y.rightPressure1 = xtmp * 1.30434787F;
-  normalizeScale = airbag_13Hz_v2_Y.backrestData1[0];
+  avgPrev = airbag_13Hz_v2_Y.backrestData1[0];
   for (newWriteIndex = 0; newWriteIndex < 55; newWriteIndex++) {
-    normalizeScale += airbag_13Hz_v2_Y.backrestData1[newWriteIndex + 1];
+    avgPrev += airbag_13Hz_v2_Y.backrestData1[newWriteIndex + 1];
   }
 
-  airbag_13Hz_v2_Y.backMeanTotal_wing1 = normalizeScale / 46.0F;
+  airbag_13Hz_v2_Y.backMeanTotal_wing1 = avgPrev / 46.0F;
   if ((airbag_13Hz_v2_Y.rightPressure1 > 0.0F) &&
       (airbag_13Hz_v2_Y.backMeanTotal_wing1 >
        airbag_13Hz_v2_U.backTotalThreshold1)) {
@@ -1961,35 +1909,35 @@ void airbag_13Hz_v2_step(void)
   /* MATLAB Function: '<Root>/腰托气囊控制逻辑1' incorporates:
    *  Inport: '<Root>/backTotalThreshold1'
    */
-  normalizeScale = airbag_13Hz_v2_Y.backrestData1[0];
+  avgPrev = airbag_13Hz_v2_Y.backrestData1[0];
   for (newWriteIndex = 0; newWriteIndex < 31; newWriteIndex++) {
-    normalizeScale += airbag_13Hz_v2_Y.backrestData1[((newWriteIndex + 1) >> 2) *
-      7 + (newWriteIndex + 1) % 4];
+    avgPrev += airbag_13Hz_v2_Y.backrestData1[((newWriteIndex + 1) >> 2) * 7 +
+      (newWriteIndex + 1) % 4];
   }
 
-  airbag_13Hz_v2_Y.upperMean1 = normalizeScale / 22.0F;
-  normalizeScale = airbag_13Hz_v2_Y.backrestData1[4];
+  airbag_13Hz_v2_Y.upperMean1 = avgPrev / 22.0F;
+  avgPrev = airbag_13Hz_v2_Y.backrestData1[4];
   for (newWriteIndex = 0; newWriteIndex < 23; newWriteIndex++) {
-    normalizeScale += airbag_13Hz_v2_Y.backrestData1[((int32_T)((uint32_T)
+    avgPrev += airbag_13Hz_v2_Y.backrestData1[((int32_T)((uint32_T)
       (newWriteIndex + 1) / 3U) * 7 + (newWriteIndex + 1) % 3) + 4];
   }
 
-  airbag_13Hz_v2_Y.lowerMean1 = normalizeScale / 24.0F;
+  airbag_13Hz_v2_Y.lowerMean1 = avgPrev / 24.0F;
   airbag_13Hz_v2_Y.backMeanTotal_lumbar1 = airbag_13Hz_v2_Y.upperMean1 +
     airbag_13Hz_v2_Y.lowerMean1;
   if (airbag_13Hz_v2_Y.lowerMean1 > 0.0F) {
-    normalizeScale = airbag_13Hz_v2_Y.upperMean1 / airbag_13Hz_v2_Y.lowerMean1;
+    avgPrev = airbag_13Hz_v2_Y.upperMean1 / airbag_13Hz_v2_Y.lowerMean1;
   } else {
-    normalizeScale = 0.0F;
+    avgPrev = 0.0F;
   }
 
   nvmCmd = (airbag_13Hz_v2_Y.backMeanTotal_lumbar1 >=
             airbag_13Hz_v2_U.backTotalThreshold1);
   if (nvmCmd == 0) {
     rtb_action = 0;
-  } else if (normalizeScale > airbag_13Hz_v2_Y.ratioInflate_out1) {
+  } else if (avgPrev > airbag_13Hz_v2_Y.ratioInflate_out1) {
     rtb_action = 1;
-  } else if (normalizeScale < airbag_13Hz_v2_Y.ratioDeflate_out1) {
+  } else if (avgPrev < airbag_13Hz_v2_Y.ratioDeflate_out1) {
     rtb_action = 2;
   } else {
     rtb_action = 0;
@@ -2341,9 +2289,9 @@ void airbag_13Hz_v2_step(void)
   b_weightedY = airbag_13Hz_v2_U.bumpTimeThresholdSec1;
   if (rtIsInfF(airbag_13Hz_v2_U.bumpTimeThresholdSec1) || rtIsNaNF
       (airbag_13Hz_v2_U.bumpTimeThresholdSec1)) {
-    b_weightedY = 60.0F;
+    b_weightedY = 10.0F;
   } else if (airbag_13Hz_v2_U.bumpTimeThresholdSec1 <= 0.0F) {
-    b_weightedY = 60.0F;
+    b_weightedY = 10.0F;
   }
 
   spineDeadband = airbag_13Hz_v2_U.spineBiasDeadband1;
@@ -2413,8 +2361,6 @@ void airbag_13Hz_v2_step(void)
     airbag_13Hz_v2_DW.pBumpClearSec = 0.0F;
     airbag_13Hz_v2_DW.pBumpLatched = 0.0F;
     airbag_13Hz_v2_DW.pBumpActionTimer = 0.0F;
-    airbag_13Hz_v2_DW.pBumpEventCount = 0.0F;
-    airbag_13Hz_v2_DW.pBumpWindowAge = 0.0F;
     airbag_13Hz_v2_DW.pHistoryValid = 0.0F;
     airbag_13Hz_v2_DW.pForwardRefX = 0.0F;
     airbag_13Hz_v2_DW.pForwardAge = 0.0F;
@@ -2484,12 +2430,6 @@ void airbag_13Hz_v2_step(void)
     }
 
     rtb_backrest_cop_y = fmaxf(rtb_delta_x, rtb_delta_y);
-    airbag_13Hz_v2_DW.pBumpWindowAge += 0.0769230798F;
-    if (airbag_13Hz_v2_DW.pBumpWindowAge >= b_weightedY) {
-      airbag_13Hz_v2_DW.pBumpEventCount = 0.0F;
-      airbag_13Hz_v2_DW.pBumpWindowAge = 0.0F;
-    }
-
     if (rtb_stateChanged && (rtb_isStable == 1) && ((!rtIsInfF(rtb_avg_velocity))
          && (!rtIsNaNF(rtb_avg_velocity)) && ((!rtIsInfF(rtb_rms_displacement)) &&
           (!rtIsNaNF(rtb_rms_displacement)) && ((!rtIsInfF(rtb_backrest_cop_y)) &&
@@ -2498,31 +2438,22 @@ void airbag_13Hz_v2_step(void)
             (rtb_backrest_cop_y <= bumpRangeMax)))))) {
       airbag_13Hz_v2_DW.pBumpClearSec = 0.0F;
       if (airbag_13Hz_v2_DW.pBumpLatched == 0.0F) {
-        if (airbag_13Hz_v2_DW.pBumpDetectSec <= 0.0F) {
-          airbag_13Hz_v2_DW.pBumpEventCount++;
-          airbag_13Hz_v2_DW.pBumpDetectSec = 1.0F;
-        }
-
-        if (airbag_13Hz_v2_DW.pBumpEventCount >= 10.0F) {
+        airbag_13Hz_v2_DW.pBumpDetectSec += 0.0769230798F;
+        if (airbag_13Hz_v2_DW.pBumpDetectSec >= b_weightedY) {
           airbag_13Hz_v2_DW.pBumpLatched = 1.0F;
           airbag_13Hz_v2_DW.pBumpActionTimer = 2.0F;
-          airbag_13Hz_v2_DW.pBumpEventCount = 0.0F;
-          airbag_13Hz_v2_DW.pBumpWindowAge = 0.0F;
         }
       }
     } else {
       airbag_13Hz_v2_DW.pBumpClearSec += 0.0769230798F;
-      if (airbag_13Hz_v2_DW.pBumpDetectSec > 0.0F) {
-        airbag_13Hz_v2_DW.pBumpDetectSec -= 0.0769230798F;
+      if (airbag_13Hz_v2_DW.pBumpLatched == 0.0F) {
+        airbag_13Hz_v2_DW.pBumpDetectSec -= 0.15384616F;
         if (airbag_13Hz_v2_DW.pBumpDetectSec < 0.0F) {
           airbag_13Hz_v2_DW.pBumpDetectSec = 0.0F;
         }
-      }
-
-      if ((airbag_13Hz_v2_DW.pBumpLatched == 1.0F) &&
-          (airbag_13Hz_v2_DW.pBumpClearSec >= 1.0F)) {
+      } else if (airbag_13Hz_v2_DW.pBumpClearSec >= 1.0F) {
         airbag_13Hz_v2_DW.pBumpLatched = 0.0F;
-        airbag_13Hz_v2_DW.pBumpClearSec = 0.0F;
+        airbag_13Hz_v2_DW.pBumpDetectSec = 0.0F;
       }
     }
 
@@ -2654,7 +2585,7 @@ void airbag_13Hz_v2_step(void)
     airbag_13Hz_v2_Y.spineBiasSeconds1 = airbag_13Hz_v2_DW.pSpineBiasSec;
 
     /* Outport: '<Root>/bumpDetectSeconds1' */
-    airbag_13Hz_v2_Y.bumpDetectSeconds1 = airbag_13Hz_v2_DW.pBumpEventCount;
+    airbag_13Hz_v2_Y.bumpDetectSeconds1 = airbag_13Hz_v2_DW.pBumpDetectSec;
 
     /* Outport: '<Root>/sickEventCount1' */
     airbag_13Hz_v2_Y.sickEventCount1 = airbag_13Hz_v2_DW.pSickEventCount;
@@ -3042,34 +2973,36 @@ void airbag_13Hz_v2_step(void)
   airbag_13Hz_v2_Y.reasonCode1 = rtb_reasonCode;
 
   /* Outport: '<Root>/isLivingRaw1' incorporates:
-   *  MATLAB Function: '<Root>/活体检测1'
+   *  DataTypeConversion: '<Root>/Data Type Conversion27'
    */
   airbag_13Hz_v2_Y.isLivingRaw1 = airbag_13Hz_v2_DW.latestRaw;
 
   /* Outport: '<Root>/detectionTriggered1' incorporates:
+   *  DataTypeConversion: '<Root>/Data Type Conversion16'
    *  MATLAB Function: '<Root>/活体检测1'
    */
-  airbag_13Hz_v2_Y.detectionTriggered1 = trigNow;
+  airbag_13Hz_v2_Y.detectionTriggered1 = isStill;
 
   /* Outport: '<Root>/queueLength1' incorporates:
+   *  DataTypeConversion: '<Root>/Data Type Conversion17'
    *  MATLAB Function: '<Root>/活体检测1'
    */
   airbag_13Hz_v2_Y.queueLength1 = (real32_T)airbag_13Hz_v2_DW.livingQueueLen;
 
   /* Outport: '<Root>/detectorEnabled_out1' incorporates:
-   *  MATLAB Function: '<Root>/活体检测1'
+   *  Inport: '<Root>/detectorEnabled1'
    */
-  airbag_13Hz_v2_Y.detectorEnabled_out1 = isStill;
+  airbag_13Hz_v2_Y.detectorEnabled_out1 = airbag_13Hz_v2_U.detectorEnabled1;
 
   /* Outport: '<Root>/isLiving1' incorporates:
    *  MATLAB Function: '<Root>/活体检测1'
    */
-  airbag_13Hz_v2_Y.isLiving1 = (real32_T)(microState == 3);
+  airbag_13Hz_v2_Y.isLiving1 = (real32_T)(pState == 3);
 
   /* Outport: '<Root>/isStatic1' incorporates:
    *  MATLAB Function: '<Root>/活体检测1'
    */
-  airbag_13Hz_v2_Y.isStatic1 = (real32_T)(microState == 2);
+  airbag_13Hz_v2_Y.isStatic1 = (real32_T)(pState == 2);
 
   /* Outport: '<Root>/isFullSeat1' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion21'
@@ -3107,7 +3040,7 @@ void airbag_13Hz_v2_step(void)
    *  MATLAB Function: '<Root>/腰托气囊控制逻辑1'
    *  MATLAB Function: '<Root>/腿托气囊控制逻辑1'
    */
-  airbag_13Hz_v2_DW.UnitDelay3_DSTATE[0] = normalizeScale;
+  airbag_13Hz_v2_DW.UnitDelay3_DSTATE[0] = avgPrev;
   airbag_13Hz_v2_DW.UnitDelay3_DSTATE[1] = xtmp;
   airbag_13Hz_v2_DW.UnitDelay3_DSTATE[2] = adjustCmd;
   airbag_13Hz_v2_DW.UnitDelay3_DSTATE[3] = baseInflationSeconds;
@@ -3120,10 +3053,6 @@ void airbag_13Hz_v2_initialize(void)
     int32_T i;
     static const real32_T tmp[8] = { 1.5F, 0.7F, 0.7F, 1.3F, 0.48F, 0.7F, 0.64F,
       0.96F };
-
-    /* SystemInitialize for MATLAB Function: '<Root>/活体检测1' */
-    airbag_13Hz_v2_DW.noiseBaseline = 0.33F;
-    airbag_13Hz_v2_DW.noiseDev = 0.1F;
 
     /* SystemInitialize for MATLAB Function: '<Root>/品味系数1' */
     for (i = 0; i < 8; i++) {
