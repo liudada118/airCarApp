@@ -58,5 +58,7 @@ object AirbagNative {
     const val IDX_BUMP_ACTIVE = 171     // bumpReliefActive（颠簸缓解激活 0/1）
     const val IDX_MOTION_ACTIVE = 172   // motionSicknessActive（晕车提醒激活 0/1）
     const val IDX_HEALTH_CODE = 173     // healthReasonCode（健康位掩码 0~7）
-    const val OUT_LEN = 174
+    const val IDX_IS_LIVING = 174       // isLiving（乘员入座/活体 0/1）
+    const val IDX_IS_STATIC = 175       // isStatic（静物占位 0/1）；两者都 0 = 识别中/离座
+    const val OUT_LEN = 176
 }

@@ -975,6 +975,8 @@ class SerialModule(
         map.putDouble("backrestSum", out[AirbagNative.IDX_BACKREST_SUM].toDouble())
         map.putDouble("isLivingRaw", out[AirbagNative.IDX_IS_LIVING_RAW].toDouble())
         map.putDouble("detectionTriggered", out[AirbagNative.IDX_DET_TRIGGERED].toDouble())
+        map.putDouble("isLiving", out[AirbagNative.IDX_IS_LIVING].toDouble())
+        map.putDouble("isStatic", out[AirbagNative.IDX_IS_STATIC].toDouble())
         map.putDouble("longSitMinutes", out[AirbagNative.IDX_LONGSIT_MIN].toDouble())
         map.putDouble("longSitCycleRemain", out[AirbagNative.IDX_LONGSIT_REMAIN].toDouble())
         map.putDouble("longSitPrompt", out[AirbagNative.IDX_LONGSIT_PROMPT].toDouble())

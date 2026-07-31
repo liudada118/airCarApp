@@ -625,10 +625,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   // C 算法(92帧)链路：用 reasonCode 驱动在座/离座时，记住上一次状态
   // （reasonCode=0/4 表示「保持上一个状态」，需要沿用）
   const airbag13SeatRef = useRef<SeatStatus>('away');
-  // 乘员识别（活体/静物）状态机（算法方规范）：仅 detectionTriggered=1 时记录一次
-  // isLivingRaw，最近连续 3 次均为 1 → 判「活人」并锁存到离座；在座且完成≥3 次检测
-  // 仍未连续 3 次为 1 → 「静物占位」；离座时清空识别记录。
-  const livingWindowRef = useRef<number[]>([]);
+  // 乘员识别：新 C 包直接输出 isLiving/isStatic，App 不再自攒窗口。
+  // livingLatchedRef 只用于欢迎语去抖：记住上一帧 isLiving 是否为高，取 0→1 上升沿播一次。
   const livingLatchedRef = useRef<boolean>(false);
   // sensorData 用 useRef 存储，3D 组件通过 data prop 读取，避免每帧 setState 触发重渲染
   const carAirRef = useRef<any>(null);
@@ -1246,6 +1244,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         isFullSeat?: number;
         isLivingRaw?: number;
         detectionTriggered?: number;
+        isLiving?: number;
+        isStatic?: number;
         longSitMinutes?: number;
         longSitCycleRemain?: number;
         longSitPrompt?: number;
@@ -1327,38 +1327,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           onSeatStatusChange?.(nextSeat);
         }
 
-        // ── 乘员识别：活体/静物 状态机（算法方规范）──
-        // 离座：清空识别记录，两张卡都不亮
-        if (nextSeat !== 'seated') {
-          if (livingWindowRef.current.length || livingLatchedRef.current) {
-            livingWindowRef.current = [];
-            livingLatchedRef.current = false;
-          }
-          setOccupantType(prev => (prev === null ? prev : null));
-        } else {
-          // 在座：仅 detectionTriggered=1 时记录一次 isLivingRaw，只留最近 3 次
-          if ((event.detectionTriggered ?? 0) >= 0.5) {
-            const w = livingWindowRef.current;
-            w.push((event.isLivingRaw ?? 0) >= 0.5 ? 1 : 0);
-            if (w.length > 3) w.splice(0, w.length - 3);
-            // 最近连续 3 次均为 1 → 判「活人」，锁存到离座
-            if (w.length === 3 && w.every(v => v === 1)) {
-              // 上升沿(刚从未锁存变为活人)→ 播欢迎语。静物占位永不进这里,故不会播。
-              if (!livingLatchedRef.current) triggerVoice('seat_welcome');
-              livingLatchedRef.current = true;
-            }
-          }
-          // 锁存活人 → 有人落座；已完成≥3 次检测仍未连续 3 次为 1 → 静物占位；否则识别中(不亮)
-          let next: 'person' | 'object' | null;
-          if (livingLatchedRef.current) {
-            next = 'person';
-          } else if (livingWindowRef.current.length >= 3) {
-            next = 'object';
-          } else {
-            next = null; // 乘员识别中
-          }
-          setOccupantType(prev => (prev === next ? prev : next));
-        }
+        // ── 乘员识别：直接用算法输出的两个字段 isLiving / isStatic ──
+        // 新 C 包已在算法内做完活体/静物判定，App 不再自己攒窗口：
+        //   isLiving=1  → 「乘员入座」亮
+        //   isStatic=1  → 「静物占位」亮
+        //   两者都为 0  → 识别中 / 离座，两张卡都不亮（无中间默认值）
+        const living = (event.isLiving ?? 0) >= 0.5;
+        const isStaticObj = (event.isStatic ?? 0) >= 0.5;
+        const nextOccupant: 'person' | 'object' | null = living
+          ? 'person'
+          : isStaticObj
+          ? 'object'
+          : null;
+        setOccupantType(prev => (prev === nextOccupant ? prev : nextOccupant));
+
+        // 欢迎语：仅在「活体」上升沿(0→1)播一次；静物占位/识别中不播。
+        // 离座后算法把 isLiving 归 0，下次真人再落座能重新触发。
+        if (living && !livingLatchedRef.current) triggerVoice('seat_welcome');
+        livingLatchedRef.current = living;
       },
     );
 
