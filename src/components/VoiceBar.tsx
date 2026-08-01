@@ -2,6 +2,7 @@ import React, {useEffect, useRef} from 'react';
 import {
   Animated,
   Easing,
+  Pressable,
   StyleSheet,
   View,
   StyleProp,
@@ -141,6 +142,8 @@ const Caption: React.FC<{text: string; animate: boolean}> = ({text, animate}) =>
 interface VoiceBarProps {
   visible: boolean;
   text: string;
+  /** 点中间彩球触发：收起/关闭当前这条语音（卡死时的手动兜底）。 */
+  onClose?: () => void;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -149,7 +152,7 @@ interface VoiceBarProps {
  * 动画:球先弹出(spring),再从球里滑出文字条(宽度展开 + 淡入)。
  * 字幕:text 一变就立刻换成新句(上一句不淡出),新句淡入(念到哪显示哪,由调用方按播放进度换 text)。
  */
-const VoiceBar: React.FC<VoiceBarProps> = ({visible, text, style}) => {
+const VoiceBar: React.FC<VoiceBarProps> = ({visible, text, onClose, style}) => {
   const orb = useRef(new Animated.Value(0)).current; // 0 隐藏 / 1 显示(球缩放)
   const bar = useRef(new Animated.Value(0)).current; // 0 收起 / 1 展开(条宽度)
   const shownVisibleRef = useRef(visible); // 上一次渲染时条是否已经展开
@@ -183,9 +186,12 @@ const VoiceBar: React.FC<VoiceBarProps> = ({visible, text, style}) => {
   const barShift = bar.interpolate({inputRange: [0, 1], outputRange: [24, 0]}); // 从右(球侧)滑出
 
   return (
-    <View style={[styles.wrap, style]} pointerEvents="none">
+    // box-none:容器本身不拦触摸,只有彩球那颗 Pressable 能点,其余区域照常穿透。
+    <View style={[styles.wrap, style]} pointerEvents="box-none">
       {/* 文字条:淡入 + 从球那侧横移出来;宽度由内容决定,右锚定(内层 marginRight 塞到球下) */}
-      <Animated.View style={[styles.barClip, {opacity: barOpacity, transform: [{translateX: barShift}]}]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.barClip, {opacity: barOpacity, transform: [{translateX: barShift}]}]}>
         <View style={styles.barInner}>
           <LinearGradient
             colors={['rgba(48,56,92,0.92)', 'rgba(82,58,120,0.92)']}
@@ -197,10 +203,17 @@ const VoiceBar: React.FC<VoiceBarProps> = ({visible, text, style}) => {
           </LinearGradient>
         </View>
       </Animated.View>
-      {/* 彩球(压在条的右端上面,看起来条从球里出来) */}
-      <Animated.View style={{transform: [{scale: orb}]}}>
-        <Orb />
-      </Animated.View>
+      {/* 彩球(压在条的右端上面,看起来条从球里出来);点它=关闭当前这条语音 */}
+      <Pressable
+        onPress={onClose}
+        disabled={!onClose || !visible}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel="关闭语音">
+        <Animated.View style={{transform: [{scale: orb}]}}>
+          <Orb />
+        </Animated.View>
+      </Pressable>
     </View>
   );
 };

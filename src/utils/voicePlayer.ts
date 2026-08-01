@@ -135,6 +135,29 @@ let currentSub: {remove: () => void} | null = null;
 let currentPlayer: AudioPlayer | null = null;
 
 /**
+ * 立即停止并释放当前正在播放的语音（用户手动点球关闭 / 卡死兜底）。
+ * 只停声音、释放播放器，不触发 onFinish（收起/放下一条由调用方自己控制）。
+ */
+export function stopVoice(): void {
+  if (currentSub) {
+    try {
+      currentSub.remove();
+    } catch {}
+    currentSub = null;
+  }
+  if (currentPlayer) {
+    // 先 pause() 立刻停声，再 remove() 释放——只 remove() 不保证马上静音（声音会继续播完）。
+    try {
+      currentPlayer.pause();
+    } catch {}
+    try {
+      currentPlayer.remove();
+    } catch {}
+    currentPlayer = null;
+  }
+}
+
+/**
  * 播放一条语音；若正在播别的，先停掉再播这条（最新触发覆盖旧的）。
  * @param onFinish 播完回调（可选，用于收起语音条）。
  * @param onProgress 播放进度回调（可选，约每 100ms 一次，用于让语音条字幕跟着念）。

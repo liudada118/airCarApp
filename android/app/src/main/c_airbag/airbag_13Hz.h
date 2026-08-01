@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.233
+ * Model version                  : 1.234
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Sat Aug  1 11:21:49 2026
+ * C/C++ source code generated on : Sat Aug  1 12:04:35 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -43,7 +43,6 @@ typedef struct {
   real_T sadCount;                     /* '<Root>/活体检测1' */
   real_T frameCount;                   /* '<Root>/活体检测1' */
   real_T livingQueueLen;               /* '<Root>/活体检测1' */
-  real_T childSumCount;                /* '<Root>/活体检测1' */
   real32_T UnitDelay3_DSTATE[4];       /* '<Root>/Unit Delay3' */
   real32_T UnitDelay2_DSTATE[15];      /* '<Root>/Unit Delay2' */
   real32_T pBaseB[56];                 /* '<Root>/矩阵处理1' */
@@ -57,7 +56,11 @@ typedef struct {
   real32_T sadHistCushion[13];         /* '<Root>/活体检测1' */
   real32_T sadHistBackrest[13];        /* '<Root>/活体检测1' */
   real32_T latestConfidence;           /* '<Root>/活体检测1' */
-  real32_T childSumHist[26];           /* '<Root>/活体检测1' */
+  real32_T noiseBaseline;              /* '<Root>/活体检测1' */
+  real32_T noiseDev;                   /* '<Root>/活体检测1' */
+  real32_T noiseWarmCount;             /* '<Root>/活体检测1' */
+  real32_T sessionFrames;              /* '<Root>/活体检测1' */
+  real32_T staticStreak;               /* '<Root>/活体检测1' */
   real32_T mode;                       /* '<Root>/气囊控制协议1' */
   real32_T elapsed_time;               /* '<Root>/气囊控制协议1' */
   real32_T pPrevReasonCode;            /* '<Root>/气囊控制协议1' */
@@ -124,6 +127,7 @@ typedef struct {
   boolean_T livingQueue[3];            /* '<Root>/活体检测1' */
   boolean_T latestRaw;                 /* '<Root>/活体检测1' */
   boolean_T unlocked;                  /* '<Root>/活体检测1' */
+  boolean_T sessionLivingLatched;      /* '<Root>/活体检测1' */
   boolean_T pState_not_empty;          /* '<Root>/入座处理1' */
   boolean_T phase_not_empty;           /* '<Root>/久坐按摩1' */
   boolean_T livingLatched;             /* '<Root>/久坐按摩1' */
@@ -271,7 +275,11 @@ extern RT_MODEL_airbag_13Hz_T *const airbag_13Hz_M;
  * These blocks were eliminated from the model due to optimizations:
  *
  * Block '<Root>/Data Type Conversion14' : Eliminate redundant data type conversion
+ * Block '<Root>/Data Type Conversion16' : Eliminate redundant data type conversion
+ * Block '<Root>/Data Type Conversion17' : Eliminate redundant data type conversion
+ * Block '<Root>/Data Type Conversion18' : Eliminate redundant data type conversion
  * Block '<Root>/Data Type Conversion19' : Eliminate redundant data type conversion
+ * Block '<Root>/Data Type Conversion27' : Eliminate redundant data type conversion
  */
 
 /*-

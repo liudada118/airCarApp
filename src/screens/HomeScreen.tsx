@@ -27,6 +27,7 @@ import AirbagHeatmap from '../components/AirbagHeatmap';
 import {parseAirbagFullFrame, AirbagFullFrame} from '../utils/airbagFullFrame';
 import {
   playVoice,
+  stopVoice,
   VOICE_SEGMENTS,
   segmentIndexAt,
   estimateDurationMs,
@@ -743,6 +744,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const voicePlayingRef = useRef(false);
   const voiceMountedRef = useRef(true);
   const playNextVoiceRef = useRef<() => void>(() => {});
+  // 当前这条语音的「结束」函数（点球手动关闭时调用，只结束自己这条，不影响下一条）
+  const voiceFinishRef = useRef<(() => void) | null>(null);
   // 字幕：当前显示第几段(-1=还没开始)，以及无音频时推假进度的定时器
   const voiceSegIdxRef = useRef(-1);
   const voiceSegTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -774,6 +777,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     const finishCurrent = () => {
       if (finished) return;
       finished = true;
+      voiceFinishRef.current = null;
       if (voiceHideTimerRef.current) {
         clearTimeout(voiceHideTimerRef.current);
         voiceHideTimerRef.current = null;
@@ -795,12 +799,36 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         }
       }, 700);
     };
+    // 暴露给「点球关闭」：只结束当前这条（收起或接着放队列里的下一条）。
+    voiceFinishRef.current = finishCurrent;
 
     if (VOICE_AUDIO_ENABLED) {
-      // 正常使用音频完成事件推进队列；60 秒仅用于播放器异常时防止队列永久卡住。
-      voiceHideTimerRef.current = setTimeout(finishCurrent, 60000);
+      // 字幕推进不依赖音频加载成功：先按估算时长起一个兜底定时器把字幕往后走，
+      // 避免音频异步加载卡住时字幕一直停在第一句（duration 迟迟不 >0，进度回调不触发）。
+      // 真实播放进度一到就接管（清掉兜底），用真实进度更准。
+      const durMs = estimateDurationMs(key);
+      const fakeStart = Date.now();
+      let gotRealProgress = false;
+      voiceSegTimerRef.current = setInterval(() => {
+        if (!voiceMountedRef.current || finished || gotRealProgress) return;
+        showVoiceSegment(key, (Date.now() - fakeStart) / durMs);
+      }, 120);
+      // 安全收起：音频若一直没加载/没进度，按估算时长 + 缓冲收起，不再干等 60s。
+      voiceHideTimerRef.current = setTimeout(finishCurrent, durMs + 4000);
       playVoice(key, finishCurrent, progress => {
         if (!voiceMountedRef.current || finished) return;
+        if (!gotRealProgress) {
+          // 真实进度接管：停掉兜底字幕定时器；收起兜底放宽到 60s，交给 didJustFinish 正常收起。
+          gotRealProgress = true;
+          if (voiceSegTimerRef.current) {
+            clearInterval(voiceSegTimerRef.current);
+            voiceSegTimerRef.current = null;
+          }
+          if (voiceHideTimerRef.current) {
+            clearTimeout(voiceHideTimerRef.current);
+            voiceHideTimerRef.current = setTimeout(finishCurrent, 60000);
+          }
+        }
         showVoiceSegment(key, progress);
       });
     } else {
@@ -818,6 +846,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const triggerVoice = useCallback((key: VoiceKey) => {
     voiceQueueRef.current.push(key);
     playNextVoiceRef.current();
+  }, []);
+
+  // 点中间彩球：立刻停掉当前这条语音并收起（卡死时的手动兜底）。
+  // 只结束「自己这条」——finishCurrent 会接着放队列里的下一条，不影响后续播报。
+  const handleVoiceClose = useCallback(() => {
+    stopVoice(); // 先停声音、释放播放器
+    const finish = voiceFinishRef.current;
+    if (finish) finish(); // 再走正常结束流程（收起或接下一条）
   }, []);
   // 上升沿(0→1)检测用的上一帧值：健康三项
   const prevSpineRef = useRef(0);
@@ -2511,7 +2547,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       /> */}
 
       {/* ─── 右下角:语音提示条(彩球+文字),纯 UI ─── */}
-      <VoiceBar visible={voiceBar.visible} text={voiceBar.text} style={styles.voiceBarWrap} />
+      <VoiceBar visible={voiceBar.visible} text={voiceBar.text} onClose={handleVoiceClose} style={styles.voiceBarWrap} />
 
       {/* ─── 右下角：板子数据帧按钮 ─── */}
       <TouchableOpacity
