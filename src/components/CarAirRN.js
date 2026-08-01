@@ -114,7 +114,7 @@ function cloudColor(palette, max, x) {
 const MODEL_ASSET = require('../assets/3D/111.glb');
 const DEFAULT_SETTINGS = {
   gauss: 3.0,        // 用户实机调定
-  color: 450,        // 色阶映射范围(用户实机调定)
+  color: 425,        // 色阶映射范围(用户实机调定)
   height: 0.6,
   coherent: 2.0,     // 第二层平滑(插值后):越小越跟手(9→2 加快响应)
   rawSmooth: 1.5,    // 第一层平滑(插值前):越小越跟手(3→1.5 加快响应)
