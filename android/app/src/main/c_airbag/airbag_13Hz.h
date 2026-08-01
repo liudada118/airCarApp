@@ -3,13 +3,13 @@
  * course requirements at degree granting institutions only.  Not for
  * government, commercial, or other organizational use.
  *
- * File: airbag_13Hz_v2.h
+ * File: airbag_13Hz.h
  *
- * Code generated for Simulink model 'airbag_13Hz_v2'.
+ * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.228
+ * Model version                  : 1.226
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Fri Jul 31 17:31:09 2026
+ * C/C++ source code generated on : Fri Jul 31 10:34:52 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -17,14 +17,14 @@
  * Validation result: Not run
  */
 
-#ifndef airbag_13Hz_v2_h_
-#define airbag_13Hz_v2_h_
-#ifndef airbag_13Hz_v2_COMMON_INCLUDES_
-#define airbag_13Hz_v2_COMMON_INCLUDES_
+#ifndef airbag_13Hz_h_
+#define airbag_13Hz_h_
+#ifndef airbag_13Hz_COMMON_INCLUDES_
+#define airbag_13Hz_COMMON_INCLUDES_
 #include "rtwtypes.h"
 #include "rt_nonfinite.h"
 #include "math.h"
-#endif                                 /* airbag_13Hz_v2_COMMON_INCLUDES_ */
+#endif                                 /* airbag_13Hz_COMMON_INCLUDES_ */
 
 #include "airbag_13Hz_types.h"
 #include "rtGetNaN.h"
@@ -43,8 +43,6 @@ typedef struct {
   real_T sadCount;                     /* '<Root>/活体检测1' */
   real_T frameCount;                   /* '<Root>/活体检测1' */
   real_T livingQueueLen;               /* '<Root>/活体检测1' */
-  real_T childSumCount;                /* '<Root>/活体检测1' */
-  real_T childConfirmCnt;              /* '<Root>/活体检测1' */
   real32_T UnitDelay3_DSTATE[4];       /* '<Root>/Unit Delay3' */
   real32_T UnitDelay2_DSTATE[15];      /* '<Root>/Unit Delay2' */
   real32_T pBaseB[56];                 /* '<Root>/矩阵处理1' */
@@ -58,7 +56,13 @@ typedef struct {
   real32_T sadHistCushion[13];         /* '<Root>/活体检测1' */
   real32_T sadHistBackrest[13];        /* '<Root>/活体检测1' */
   real32_T latestConfidence;           /* '<Root>/活体检测1' */
-  real32_T childSumHist[26];           /* '<Root>/活体检测1' */
+  real32_T noiseBaseline;              /* '<Root>/活体检测1' */
+  real32_T noiseDev;                   /* '<Root>/活体检测1' */
+  real32_T noiseWarmCount;             /* '<Root>/活体检测1' */
+  real32_T sessionFrames;              /* '<Root>/活体检测1' */
+  real32_T staticStreak;               /* '<Root>/活体检测1' */
+  real32_T noEvidenceFrames;           /* '<Root>/活体检测1' */
+  real32_T longTermSad;                /* '<Root>/活体检测1' */
   real32_T mode;                       /* '<Root>/气囊控制协议1' */
   real32_T elapsed_time;               /* '<Root>/气囊控制协议1' */
   real32_T pPrevReasonCode;            /* '<Root>/气囊控制协议1' */
@@ -117,19 +121,20 @@ typedef struct {
   int32_T pFrameCount;                 /* '<Root>/健康检测1' */
   uint32_T sitFrameCount;              /* '<Root>/久坐按摩1' */
   uint32_T massageFrameCount;          /* '<Root>/久坐按摩1' */
-  int8_T childClassLatch;              /* '<Root>/活体检测1' */
   int8_T pState_i;                     /* '<Root>/入座处理1' */
   uint8_T phase;                       /* '<Root>/久坐按摩1' */
   boolean_T frameCount_not_empty;      /* '<Root>/活体检测1' */
   boolean_T livingQueue[3];            /* '<Root>/活体检测1' */
   boolean_T latestRaw;                 /* '<Root>/活体检测1' */
   boolean_T unlocked;                  /* '<Root>/活体检测1' */
+  boolean_T sessionLivingLatched;      /* '<Root>/活体检测1' */
+  boolean_T longTermInit;              /* '<Root>/活体检测1' */
   boolean_T pState_not_empty;          /* '<Root>/入座处理1' */
   boolean_T phase_not_empty;           /* '<Root>/久坐按摩1' */
   boolean_T livingLatched;             /* '<Root>/久坐按摩1' */
   boolean_T prevOccupied;              /* '<Root>/久坐按摩1' */
   boolean_T prevManualCmd;             /* '<Root>/久坐按摩1' */
-} DW_airbag_13Hz_v2_T;
+} DW_airbag_13Hz_T;
 
 /* External inputs (root inport signals with default storage) */
 typedef struct {
@@ -174,8 +179,7 @@ typedef struct {
   real32_T bumpTimeThresholdSec1;      /* '<Root>/ bumpTimeThresholdSec1' */
   real32_T spineTimeThresholdSec1;     /* '<Root>/ spineTimeThresholdSec1' */
   real32_T pointThreshold1;            /* '<Root>/pointThreshold1' */
-  real32_T childCushionThresholdIn;    /* '<Root>/childCushionThresholdIn' */
-} ExtU_airbag_13Hz_v2_T;
+} ExtU_airbag_13Hz_T;
 
 /* External outputs (root outports fed by signals with default storage) */
 typedef struct {
@@ -239,38 +243,39 @@ typedef struct {
   real32_T sickEventCount1;            /* '<Root>/sickEventCount1' */
   real32_T isLiving1;                  /* '<Root>/isLiving1' */
   real32_T isStatic1;                  /* '<Root>/isStatic1' */
-  real32_T isChild;                    /* '<Root>/isChild' */
-  real32_T isAdult;                    /* '<Root>/isAdult' */
-  real32_T childThreshold_out;         /* '<Root>/childThreshold_out' */
-} ExtY_airbag_13Hz_v2_T;
+} ExtY_airbag_13Hz_T;
 
 /* Real-time Model Data Structure */
-struct tag_RTM_airbag_13Hz_v2_T {
+struct tag_RTM_airbag_13Hz_T {
   const char_T * volatile errorStatus;
 };
 
 /* Block states (default storage) */
-extern DW_airbag_13Hz_v2_T airbag_13Hz_v2_DW;
+extern DW_airbag_13Hz_T airbag_13Hz_DW;
 
 /* External inputs (root inport signals with default storage) */
-extern ExtU_airbag_13Hz_v2_T airbag_13Hz_v2_U;
+extern ExtU_airbag_13Hz_T airbag_13Hz_U;
 
 /* External outputs (root outports fed by signals with default storage) */
-extern ExtY_airbag_13Hz_v2_T airbag_13Hz_v2_Y;
+extern ExtY_airbag_13Hz_T airbag_13Hz_Y;
 
 /* Model entry point functions */
-extern void airbag_13Hz_v2_initialize(void);
-extern void airbag_13Hz_v2_step(void);
-extern void airbag_13Hz_v2_terminate(void);
+extern void airbag_13Hz_initialize(void);
+extern void airbag_13Hz_step(void);
+extern void airbag_13Hz_terminate(void);
 
 /* Real-time Model object */
-extern RT_MODEL_airbag_13Hz_v2_T *const airbag_13Hz_v2_M;
+extern RT_MODEL_airbag_13Hz_T *const airbag_13Hz_M;
 
 /*-
  * These blocks were eliminated from the model due to optimizations:
  *
  * Block '<Root>/Data Type Conversion14' : Eliminate redundant data type conversion
+ * Block '<Root>/Data Type Conversion16' : Eliminate redundant data type conversion
+ * Block '<Root>/Data Type Conversion17' : Eliminate redundant data type conversion
+ * Block '<Root>/Data Type Conversion18' : Eliminate redundant data type conversion
  * Block '<Root>/Data Type Conversion19' : Eliminate redundant data type conversion
+ * Block '<Root>/Data Type Conversion27' : Eliminate redundant data type conversion
  */
 
 /*-
@@ -287,21 +292,21 @@ extern RT_MODEL_airbag_13Hz_v2_T *const airbag_13Hz_v2_M;
  *
  * Here is the system hierarchy for this model
  *
- * '<Root>' : 'airbag_13Hz_v2'
- * '<S1>'   : 'airbag_13Hz_v2/久坐按摩1'
- * '<S2>'   : 'airbag_13Hz_v2/侧翼状态判定1'
- * '<S3>'   : 'airbag_13Hz_v2/健康干预控制1'
- * '<S4>'   : 'airbag_13Hz_v2/健康检测1'
- * '<S5>'   : 'airbag_13Hz_v2/入座处理1'
- * '<S6>'   : 'airbag_13Hz_v2/品味系数1'
- * '<S7>'   : 'airbag_13Hz_v2/断电保存品味数据 1'
- * '<S8>'   : 'airbag_13Hz_v2/气囊控制协议1'
- * '<S9>'   : 'airbag_13Hz_v2/活体检测1'
- * '<S10>'  : 'airbag_13Hz_v2/矩阵处理1'
- * '<S11>'  : 'airbag_13Hz_v2/腰托气囊控制逻辑1'
- * '<S12>'  : 'airbag_13Hz_v2/腿托气囊控制逻辑1'
+ * '<Root>' : 'airbag_13Hz'
+ * '<S1>'   : 'airbag_13Hz/久坐按摩1'
+ * '<S2>'   : 'airbag_13Hz/侧翼状态判定1'
+ * '<S3>'   : 'airbag_13Hz/健康干预控制1'
+ * '<S4>'   : 'airbag_13Hz/健康检测1'
+ * '<S5>'   : 'airbag_13Hz/入座处理1'
+ * '<S6>'   : 'airbag_13Hz/品味系数1'
+ * '<S7>'   : 'airbag_13Hz/断电保存品味数据 1'
+ * '<S8>'   : 'airbag_13Hz/气囊控制协议1'
+ * '<S9>'   : 'airbag_13Hz/活体检测1'
+ * '<S10>'  : 'airbag_13Hz/矩阵处理1'
+ * '<S11>'  : 'airbag_13Hz/腰托气囊控制逻辑1'
+ * '<S12>'  : 'airbag_13Hz/腿托气囊控制逻辑1'
  */
-#endif                                 /* airbag_13Hz_v2_h_ */
+#endif                                 /* airbag_13Hz_h_ */
 
 /*
  * File trailer for generated code.

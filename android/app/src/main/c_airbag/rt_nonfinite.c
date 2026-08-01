@@ -5,11 +5,11 @@
  *
  * File: rt_nonfinite.c
  *
- * Code generated for Simulink model 'airbag_13Hz_v2'.
+ * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.228
+ * Model version                  : 1.226
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Fri Jul 31 17:31:09 2026
+ * C/C++ source code generated on : Fri Jul 31 10:34:52 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
