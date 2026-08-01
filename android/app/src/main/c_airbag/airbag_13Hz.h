@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.234
+ * Model version                  : 1.237
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Sat Aug  1 12:04:35 2026
+ * C/C++ source code generated on : Sat Aug  1 15:33:25 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -64,6 +64,7 @@ typedef struct {
   real32_T mode;                       /* '<Root>/气囊控制协议1' */
   real32_T elapsed_time;               /* '<Root>/气囊控制协议1' */
   real32_T pPrevReasonCode;            /* '<Root>/气囊控制协议1' */
+  real32_T pPrevGears[24];             /* '<Root>/气囊控制协议1' */
   real32_T pState;                     /* '<Root>/品味系数1' */
   real32_T pValid;                     /* '<Root>/品味系数1' */
   real32_T pSavedTimes[5];             /* '<Root>/品味系数1' */

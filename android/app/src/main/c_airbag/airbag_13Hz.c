@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.234
+ * Model version                  : 1.237
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Sat Aug  1 12:04:35 2026
+ * C/C++ source code generated on : Sat Aug  1 15:33:25 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -42,9 +42,8 @@ static void airba_calculatePressureFeatures(const real32_T matrixIn[56],
   real32_T threshold, real32_T *originalSum, real32_T *filteredSum);
 static real32_T airbag_13Hz_sum(const real32_T x_data[], const int32_T *x_size);
 static real32_T airbag_13Hz_mean(const real32_T x_data[], const int32_T *x_size);
-static int8_T airbag__updateLivingStatusQueue(const boolean_T queueValues_data[],
-  const int32_T queueValues_size[2], boolean_T inEnabledState, boolean_T
-  detectorEnabled, real32_T livingConfirmCount);
+static int32_T airbag_13_combineVectorElements(const boolean_T x_data[], const
+  int32_T *x_size);
 static real32_T airbag_13Hz_directionOf(real32_T b_value);
 static boolean_T airbag_13Hz_allFinitePositive(const real32_T values[8]);
 static boolean_T airbag_13Hz_any(const boolean_T x[3]);
@@ -257,6 +256,26 @@ static real32_T airbag_13Hz_mean(const real32_T x_data[], const int32_T *x_size)
   return accumulatedData / (real32_T)*x_size;
 }
 
+/* Function for MATLAB Function: '<Root>/活体检测1' */
+static int32_T airbag_13_combineVectorElements(const boolean_T x_data[], const
+  int32_T *x_size)
+{
+  int32_T k;
+  int32_T vlen;
+  int32_T y;
+  vlen = *x_size;
+  if (*x_size == 0) {
+    y = 0;
+  } else {
+    y = x_data[0];
+    for (k = 2; k <= vlen; k++) {
+      y += x_data[k - 1];
+    }
+  }
+
+  return y;
+}
+
 real32_T rt_roundf_snf(real32_T u)
 {
   real32_T y;
@@ -273,33 +292,6 @@ real32_T rt_roundf_snf(real32_T u)
   }
 
   return y;
-}
-
-/* Function for MATLAB Function: '<Root>/活体检测1' */
-static int8_T airbag__updateLivingStatusQueue(const boolean_T queueValues_data[],
-  const int32_T queueValues_size[2], boolean_T inEnabledState, boolean_T
-  detectorEnabled, real32_T livingConfirmCount)
-{
-  int8_T statusCode;
-  if (!detectorEnabled) {
-    statusCode = -1;
-  } else if (!inEnabledState) {
-    statusCode = 0;
-  } else if (queueValues_size[1] < 3) {
-    statusCode = 1;
-  } else {
-    int32_T nz;
-    nz = (queueValues_data[0] + queueValues_data[1]) + queueValues_data[2];
-    if (nz >= livingConfirmCount) {
-      statusCode = 3;
-    } else if (nz <= 3.0F - livingConfirmCount) {
-      statusCode = 2;
-    } else {
-      statusCode = 1;
-    }
-  }
-
-  return statusCode;
 }
 
 /* Function for MATLAB Function: '<Root>/品味系数1' */
@@ -427,11 +419,11 @@ static void airbag_13Hz_applyAdaptiveGears(real32_T frame[55], real32_T
       frame[idx] = lumbarGear;
     } else {
       switch (airbagId + 1) {
-       case 10:
+       case 9:
         frame[idx] = leftLegGear;
         break;
 
-       case 9:
+       case 10:
         frame[idx] = rightLegGear;
         break;
       }
@@ -448,7 +440,6 @@ void airbag_13Hz_step(void)
   int32_T idx;
   int32_T newWriteIndex;
   int32_T nvmCmd;
-  int32_T rtb_action;
   int32_T rtb_healthSideWingLeftAction;
   int32_T rtb_healthSideWingRightAction;
   int32_T rtb_hipInflateRequest;
@@ -457,6 +448,7 @@ void airbag_13Hz_step(void)
   int32_T rtb_leftAction_h;
   int32_T rtb_massageEnable;
   int32_T rtb_rightAction;
+  int32_T xpageoffset;
   real32_T backrestMatrix[56];
   real32_T backrestMatrix_data[56];
   real32_T e[56];
@@ -499,6 +491,7 @@ void airbag_13Hz_step(void)
   boolean_T b_validMask[56];
   boolean_T validMask[56];
   boolean_T queueValues_data[3];
+  boolean_T queueValues_data_0[3];
   boolean_T b_requestIdle_tmp;
   boolean_T gapActive;
   boolean_T isStill;
@@ -508,7 +501,6 @@ void airbag_13Hz_step(void)
   boolean_T requestIdle;
   boolean_T rtb_isOccupied;
   boolean_T rtb_stateChanged;
-  boolean_T trigNow;
   static const int8_T d_0[5] = { 3, 5, 3, 5, 6 };
 
   static const int8_T c[5] = { 1, 1, 2, 2, 2 };
@@ -528,7 +520,6 @@ void airbag_13Hz_step(void)
 
   static const int8_T h[5] = { 2, 2, 3, 3, 3 };
 
-  int32_T queueValues_size[2];
   boolean_T exitg1;
   boolean_T guard1;
   boolean_T guard2;
@@ -864,14 +855,12 @@ void airbag_13Hz_step(void)
     2));
 
   /* MATLAB Function: '<Root>/活体检测1' incorporates:
-   *  Inport: '<Root>/detectorEnabled1'
    *  Inport: '<Root>/resetFlag1'
    *  Inport: '<Root>/sadNormalizeScaleIn1'
    *  Inport: '<Root>/sadThresholdIn1'
    *  MATLAB Function: '<Root>/入座处理1'
    *  MATLAB Function: '<Root>/矩阵处理1'
    */
-  isStill = (airbag_13Hz_U.detectorEnabled1 != 0.0F);
   if (airbag_13Hz_U.sadNormalizeScaleIn1 <= 0.0F) {
     normalizeScale = 2.0F;
   } else {
@@ -1033,7 +1022,7 @@ void airbag_13Hz_step(void)
     }
   }
 
-  trigNow = ((r == 0.0) && (airbag_13Hz_DW.sadCount >= 13.0));
+  isStill = ((r == 0.0) && (airbag_13Hz_DW.sadCount >= 13.0));
   nvmCmd = (int32_T)airbag_13Hz_DW.sadCount;
   i = (int32_T)airbag_13Hz_DW.sadCount;
   if (nvmCmd - 1 >= 0) {
@@ -1101,9 +1090,11 @@ void airbag_13Hz_step(void)
   airbag_13Hz_Y.confidence1 = airbag_13Hz_DW.latestConfidence;
 
   /* MATLAB Function: '<Root>/活体检测1' incorporates:
-   *  Inport: '<Root>/livingConfirmCountIn1'
+   *  MATLAB Function: '<Root>/久坐按摩1'
+   *  MATLAB Function: '<Root>/健康干预控制1'
+   *  MATLAB Function: '<Root>/健康检测1'
    */
-  if (trigNow) {
+  if (isStill) {
     if (airbag_13Hz_Y.sadEnergy1 >= normalizeScale) {
       microState = 2;
     } else {
@@ -1145,30 +1136,36 @@ void airbag_13Hz_step(void)
       nvmCmd = 3;
     }
 
-    queueValues_size[0] = 1;
     nvmCmd -= rtb_hipInflateRequest;
-    queueValues_size[1] = nvmCmd;
     for (i = 0; i < nvmCmd; i++) {
       queueValues_data[i] = airbag_13Hz_DW.livingQueue[rtb_hipInflateRequest + i];
     }
   } else {
-    queueValues_size[0] = 1;
-    queueValues_size[1] = 3;
+    nvmCmd = 3;
     queueValues_data[0] = airbag_13Hz_DW.livingQueue[0];
     queueValues_data[1] = airbag_13Hz_DW.livingQueue[1];
     queueValues_data[2] = airbag_13Hz_DW.livingQueue[2];
   }
 
-  if (airbag_13Hz_U.livingConfirmCountIn1 <= 0.0F) {
-    i = 2;
+  newReason = !rtb_isOccupied;
+  if (newReason) {
+    microState = 0;
   } else {
-    i = (int32_T)fminf(3.0F, fmaxf(1.0F, rt_roundf_snf
-      (airbag_13Hz_U.livingConfirmCountIn1)));
-  }
+    if (nvmCmd < 3) {
+      microState = 1;
+    } else {
+      nvmCmd = 3;
+      queueValues_data_0[0] = queueValues_data[0];
+      queueValues_data_0[1] = queueValues_data[1];
+      queueValues_data_0[2] = queueValues_data[2];
+      if (airbag_13_combineVectorElements(queueValues_data_0, &nvmCmd) >= 2.0F)
+      {
+        microState = 3;
+      } else {
+        microState = 2;
+      }
+    }
 
-  microState = airbag__updateLivingStatusQueue(queueValues_data,
-    queueValues_size, rtb_isOccupied, isStill, (real32_T)i);
-  if ((microState != -1) && (microState != 0)) {
     if (airbag_13Hz_DW.sessionLivingLatched) {
       if ((airbag_13Hz_DW.sessionFrames <= 390.0F) && (microState == 2) &&
           (airbag_13Hz_DW.staticStreak >= 3.0F)) {
@@ -1257,8 +1254,6 @@ void airbag_13Hz_step(void)
   /* MATLAB Function: '<Root>/久坐按摩1' incorporates:
    *  Inport: '<Root>/longSitMassageStop1'
    *  Inport: '<Root>/resetFlag1'
-   *  MATLAB Function: '<Root>/健康干预控制1'
-   *  MATLAB Function: '<Root>/健康检测1'
    *  MATLAB Function: '<Root>/入座处理1'
    *  MATLAB Function: '<Root>/活体检测1'
    */
@@ -1275,7 +1270,6 @@ void airbag_13Hz_step(void)
 
   airbag_13Hz_DW.livingLatched = ((rtb_isOccupied && (microState == 3)) ||
     airbag_13Hz_DW.livingLatched);
-  newReason = !rtb_isOccupied;
   if (airbag_13Hz_U.resetFlag1 || (airbag_13Hz_DW.pState_i == 3) || newReason) {
     if (airbag_13Hz_DW.phase == 1) {
       for (i = 0; i < 14; i++) {
@@ -1907,24 +1901,24 @@ void airbag_13Hz_step(void)
   xtmp = airbag_13Hz_Y.backrestData1[28];
   for (newWriteIndex = 0; newWriteIndex < 20; newWriteIndex++) {
     nvmCmd = (int32_T)((uint32_T)(newWriteIndex + 1) / 7U);
-    rtb_action = (newWriteIndex + 1) % 7;
-    normalizeScale += airbag_13Hz_Y.backrestData1[(nvmCmd + 1) * 7 + rtb_action];
-    xtmp += airbag_13Hz_Y.backrestData1[(nvmCmd + 4) * 7 + rtb_action];
+    idx = (newWriteIndex + 1) % 7;
+    normalizeScale += airbag_13Hz_Y.backrestData1[(nvmCmd + 1) * 7 + idx];
+    xtmp += airbag_13Hz_Y.backrestData1[(nvmCmd + 4) * 7 + idx];
   }
 
   airbag_13Hz_Y.leftPressure1 = normalizeScale * 1.57894742F;
   airbag_13Hz_Y.rightPressure1 = xtmp * 1.57894742F;
-  for (rtb_action = 0; rtb_action < 6; rtb_action++) {
-    idx = rtb_action * 7;
-    xtmp = airbag_13Hz_Y.backrestData1[((int32_T)((uint32_T)idx / 7U) + 1) * 7 +
-      idx % 7];
+  for (idx = 0; idx < 6; idx++) {
+    xpageoffset = idx * 7;
+    xtmp = airbag_13Hz_Y.backrestData1[((int32_T)((uint32_T)xpageoffset / 7U) +
+      1) * 7 + xpageoffset % 7];
     for (newWriteIndex = 0; newWriteIndex < 6; newWriteIndex++) {
-      nvmCmd = (idx + newWriteIndex) + 1;
+      nvmCmd = (xpageoffset + newWriteIndex) + 1;
       xtmp += airbag_13Hz_Y.backrestData1[((int32_T)((uint32_T)nvmCmd / 7U) + 1)
         * 7 + nvmCmd % 7];
     }
 
-    c_y[rtb_action] = xtmp;
+    c_y[idx] = xtmp;
   }
 
   normalizeScale = c_y[0];
@@ -1943,13 +1937,13 @@ void airbag_13Hz_step(void)
 
   if (xtmp > airbag_13Hz_Y.ratioDeflateLeft_out1) {
     rtb_leftAction_h = 1;
-    idx = 2;
+    xpageoffset = 2;
   } else if (xtmp < airbag_13Hz_Y.ratioInflateLeft_out1) {
     rtb_leftAction_h = 2;
-    idx = 1;
+    xpageoffset = 1;
   } else {
     rtb_leftAction_h = 0;
-    idx = 0;
+    xpageoffset = 0;
   }
 
   /* MATLAB Function: '<Root>/腰托气囊控制逻辑1' incorporates:
@@ -1980,13 +1974,13 @@ void airbag_13Hz_step(void)
   nvmCmd = (airbag_13Hz_Y.backMeanTotal_lumbar1 >=
             airbag_13Hz_U.backTotalThreshold1);
   if (nvmCmd == 0) {
-    rtb_action = 0;
+    idx = 0;
   } else if (normalizeScale > airbag_13Hz_Y.ratioInflate_out1) {
-    rtb_action = 1;
+    idx = 1;
   } else if (normalizeScale < airbag_13Hz_Y.ratioDeflate_out1) {
-    rtb_action = 2;
+    idx = 2;
   } else {
-    rtb_action = 0;
+    idx = 0;
   }
 
   /* MATLAB Function: '<Root>/腿托气囊控制逻辑1' */
@@ -2756,22 +2750,22 @@ void airbag_13Hz_step(void)
   }
 
   rtb_isStable = 0;
-  if (idx == 1) {
+  if (xpageoffset == 1) {
     rtb_isStable = 3;
-  } else if (idx == 2) {
+  } else if (xpageoffset == 2) {
     rtb_isStable = 4;
   }
 
   LumbarlumbarGear = 0;
-  if (rtb_action == 1) {
+  if (idx == 1) {
     LumbarlumbarGear = 3;
-  } else if (rtb_action == 2) {
+  } else if (idx == 2) {
     LumbarlumbarGear = 4;
   }
 
-  rtb_action = 0;
+  xpageoffset = 0;
   if (rtb_healthSideWingLeftAction == 1) {
-    rtb_action = 3;
+    xpageoffset = 3;
   }
 
   rtb_leftAction_h = 0;
@@ -2779,17 +2773,7 @@ void airbag_13Hz_step(void)
     rtb_leftAction_h = 3;
   }
 
-  /* Outport: '<Root>/frame1' incorporates:
-   *  MATLAB Function: '<Root>/气囊控制协议1'
-   */
   memset(&airbag_13Hz_Y.frame1[0], 0, 55U * sizeof(real32_T));
-
-  /* MATLAB Function: '<Root>/气囊控制协议1' incorporates:
-   *  DataTypeConversion: '<Root>/Data Type Conversion25'
-   *  MATLAB Function: '<Root>/品味系数1'
-   *  MATLAB Function: '<Root>/活体检测1'
-   *  Outport: '<Root>/frame1'
-   */
   airbag_13Hz_Y.frame1[0] = 31.0F;
   switch ((int32_T)airbag_13Hz_DW.mode) {
    case 1:
@@ -2903,8 +2887,8 @@ void airbag_13Hz_step(void)
   newReason = (living && ((airbag_13Hz_DW.mode == 2.0F) || (airbag_13Hz_DW.mode ==
     3.0F)));
   if (newReason) {
-    if (rtb_action != 0) {
-      airbag_13Hz_Y.frame1[8] = (real32_T)rtb_action;
+    if (xpageoffset != 0) {
+      airbag_13Hz_Y.frame1[8] = (real32_T)xpageoffset;
     }
 
     if (rtb_leftAction_h != 0) {
@@ -2919,23 +2903,22 @@ void airbag_13Hz_step(void)
       rtb_massageEnable = 4;
     }
 
-    for (rtb_action = 0; rtb_action < 10; rtb_action++) {
+    for (idx = 0; idx < 10; idx++) {
       if (deflationSeconds == 1.0F) {
-        newReason = ((rtb_action == 0) || (rtb_action + 1 == 2));
+        newReason = ((idx == 0) || (idx + 1 == 2));
       } else if (deflationSeconds == 2.0F) {
-        newReason = ((rtb_action + 1 == 3) || (rtb_action + 1 == 4));
+        newReason = ((idx + 1 == 3) || (idx + 1 == 4));
       } else if (deflationSeconds == 3.0F) {
-        newReason = ((rtb_action + 1 == 5) || (rtb_action + 1 == 6));
+        newReason = ((idx + 1 == 5) || (idx + 1 == 6));
       } else if (deflationSeconds == 4.0F) {
-        newReason = ((rtb_action + 1 == 7) || (rtb_action + 1 == 8));
+        newReason = ((idx + 1 == 7) || (idx + 1 == 8));
       } else {
-        newReason = ((deflationSeconds == 5.0F) && ((rtb_action + 1 == 9) ||
-          (rtb_action + 1 == 10)));
+        newReason = ((deflationSeconds == 5.0F) && ((idx + 1 == 9) || (idx + 1 ==
+          10)));
       }
 
       if ((deflationSeconds == 0.0F) || newReason) {
-        airbag_13Hz_Y.frame1[(rtb_action << 1) + 2] = (real32_T)
-          rtb_massageEnable;
+        airbag_13Hz_Y.frame1[(idx << 1) + 2] = (real32_T)rtb_massageEnable;
       }
     }
   }
@@ -2969,6 +2952,18 @@ void airbag_13Hz_step(void)
       }
       break;
     }
+  }
+
+  for (rtb_hipInflateRequest = 0; rtb_hipInflateRequest < 24;
+       rtb_hipInflateRequest++) {
+    idx = (rtb_hipInflateRequest << 1) + 2;
+    deflationSeconds = airbag_13Hz_DW.pPrevGears[rtb_hipInflateRequest];
+    if (((deflationSeconds == 3.0F) || (deflationSeconds == 4.0F)) &&
+        (airbag_13Hz_Y.frame1[idx] != deflationSeconds)) {
+      airbag_13Hz_Y.frame1[idx] = 0.0F;
+    }
+
+    airbag_13Hz_DW.pPrevGears[rtb_hipInflateRequest] = airbag_13Hz_Y.frame1[idx];
   }
 
   airbag_13Hz_Y.frame1[49] = 0.0F;
@@ -3029,7 +3024,7 @@ void airbag_13Hz_step(void)
   /* Outport: '<Root>/detectionTriggered1' incorporates:
    *  MATLAB Function: '<Root>/活体检测1'
    */
-  airbag_13Hz_Y.detectionTriggered1 = trigNow;
+  airbag_13Hz_Y.detectionTriggered1 = isStill;
 
   /* Outport: '<Root>/queueLength1' incorporates:
    *  MATLAB Function: '<Root>/活体检测1'
@@ -3039,7 +3034,7 @@ void airbag_13Hz_step(void)
   /* Outport: '<Root>/detectorEnabled_out1' incorporates:
    *  MATLAB Function: '<Root>/活体检测1'
    */
-  airbag_13Hz_Y.detectorEnabled_out1 = isStill;
+  airbag_13Hz_Y.detectorEnabled_out1 = 1.0F;
 
   /* Outport: '<Root>/isLiving1' incorporates:
    *  MATLAB Function: '<Root>/活体检测1'
