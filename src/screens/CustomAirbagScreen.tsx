@@ -285,10 +285,10 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
     type: 'success' as 'success' | 'info' | 'error',
   });
   const [cmdLogs, setCmdLogs] = useState<CmdLog[]>([]);
-  const [showLog, setShowLog] = useState(false);
-  // 正视座椅:点 开/关、发光 开/关(接在座状态:在座亮/离座灭;测试按钮仍可手动覆盖)
+  const [showLog] = useState(false); // 日志面板已移除入口,恒关闭(保留结构以便需要时再接)
+  // 正视座椅:点 开/关(接在座状态:在座亮/离座灭);发光恒关
   const [dotsOn, setDotsOn] = useState(false);
-  const [glowOn, setGlowOn] = useState(false);
+  const [glowOn] = useState(false);
   // 逐部位闪烁信号:点某部位气囊 +/- 时,让对应部位闪一下
   const [flash, setFlash] = useState<{parts: any[]; seq: number} | null>(null);
   const flashSeqRef = useRef(0);
@@ -762,35 +762,6 @@ const CustomAirbagScreen: React.FC<CustomAirbagScreenProps> = ({
             )}
           </View>
           <View style={styles.titleRight}>
-            {/* 点/光 开关(测试用;以后接数据) */}
-            <TouchableOpacity
-              style={[styles.logToggle, dotsOn && styles.logToggleActive]}
-              onPress={() => setDotsOn(v => !v)}
-              activeOpacity={0.7}>
-              <Text style={[styles.logToggleText, dotsOn && styles.logToggleTextActive]}>
-                {dotsOn ? '点关闭' : '点开启'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.logToggle, glowOn && styles.logToggleActive]}
-              onPress={() => setGlowOn(v => !v)}
-              activeOpacity={0.7}>
-              <Text style={[styles.logToggleText, glowOn && styles.logToggleTextActive]}>
-                {glowOn ? '光关闭' : '光开启'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.logToggle, showLog && styles.logToggleActive]}
-              onPress={() => setShowLog(!showLog)}
-              activeOpacity={0.7}>
-              <Text
-                style={[
-                  styles.logToggleText,
-                  showLog && styles.logToggleTextActive,
-                ]}>
-                {showLog ? '隐藏日志' : '显示日志'}
-              </Text>
-            </TouchableOpacity>
             <TouchableOpacity
               style={styles.closeButton}
               onPress={handleClose}
@@ -1182,24 +1153,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.6)',
-  },
-  logToggle: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.borderGray,
-  },
-  logToggleActive: {
-    borderColor: Colors.primary,
-    backgroundColor: 'rgba(0,122,255,0.1)',
-  },
-  logToggleText: {
-    fontSize: FontSize.sm,
-    color: Colors.textGray,
-  },
-  logToggleTextActive: {
-    color: Colors.primary,
   },
   closeButton: {
     // 去掉外圈:只保留点击区域,不画圆环边框

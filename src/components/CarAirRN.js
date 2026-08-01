@@ -138,7 +138,7 @@ const IDLE_RENDER_FRAMES = 3;
 const DEFAULT_POINT_FIT_LAYOUT = {
   // 用户实机调定并固化(坐垫/靠背贴合座椅)
   center: {position: [13, -65, -29], rotation: [3.28, 0, 0], sx: 5.7, sy: 4.6, sz: 3},
-  centersit: {position: [15, 2, 24], rotation: [2.07, 0, 0], sx: 5.7, sy: 0.7, sz: 4.9},
+  centersit: {position: [15, 2, 24], rotation: [2.07, 0, 0], sx: 4.9, sy: 0.7, sz: 6.2},
   leftsit: {position: [-28, -9, -30], rotation: [1.35, 0, -0.50], sx: 3.3, sy: 3.3, sz: 3.3},
   rightsit: {position: [64, -7, -10], rotation: [1.35, 0, 0.50], sx: 3.3, sy: 3.3, sz: 3.3},
 };
