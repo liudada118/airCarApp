@@ -1788,27 +1788,45 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               offLabel="结束按摩"
             />
             {/* 久坐状态 */}
-            <View style={styles.massageStatusRow}>
+            {/* <View style={styles.massageStatusRow}>
               <View style={[styles.massageDot, massageView.active && styles.massageDotOn]} />
               <Text style={styles.massageStatusText}>
                 {massageView.active
                   ? '按摩运行中'
                   : `已连续入座 ${Math.floor(massageView.minutes)} 分钟`}
               </Text>
-            </View>
-            {!massageView.active && massageView.remainSec > 0 ? (
+            </View> */}
+            {/* {!massageView.active && massageView.remainSec > 0 ? (
               <Text style={styles.massageSubText}>
                 距下次自动约 {(massageView.remainSec / 60).toFixed(1)} 分钟
               </Text>
-            ) : null}
+            ) : null} */}
           </View>
 
           {/* 悬浮按钮组 - 右上角（点击Logo切换显示） */}
           {showDebugPanel && (
           <View style={styles.floatingBtnGroupWrapper}>
             <View style={styles.floatingBtnGroup}>
+              {/* 试听语音:依次播 5 条语音(走真实播放路径:播 MP3 + 弹语音条,播完自动收起) */}
               <TouchableOpacity
                 style={styles.matrixToggleBtn}
+                onPress={() => {
+                  const keys: VoiceKey[] = [
+                    'seat_welcome',
+                    'massage_on',
+                    'spine_protect',
+                    'bump_relief',
+                    'motion_sickness',
+                  ];
+                  const k = keys[voiceTestIdxRef.current % keys.length];
+                  voiceTestIdxRef.current += 1;
+                  triggerVoice(k);
+                }}
+                activeOpacity={0.7}>
+                <Text style={styles.matrixToggleBtnText}>试听语音</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.matrixToggleBtn, {marginLeft: 6}]}
                 onPress={() => { setShowMatrix(true); showMatrixRef.current = true; }}
                 activeOpacity={0.7}>
                 <Text style={styles.matrixToggleBtnText}>矩阵</Text>
@@ -2548,41 +2566,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
       {/* ─── 右下角:语音提示条(彩球+文字),纯 UI ─── */}
       <VoiceBar visible={voiceBar.visible} text={voiceBar.text} onClose={handleVoiceClose} style={styles.voiceBarWrap} />
-
-      {/* ─── 右下角：板子数据帧按钮 ─── */}
-      <TouchableOpacity
-        style={styles.airbagDataFab}
-        onPress={() => setShowAirbagData(true)}
-        activeOpacity={0.8}>
-        <Text style={styles.airbagDataFabText}>板子数据</Text>
-      </TouchableOpacity>
-
-      {/* 测试按钮:依次试听 5 条语音(走真实播放路径:播 MP3 + 弹语音条,播完自动收起) */}
-      <TouchableOpacity
-        style={styles.voiceTestFab}
-        onPress={() => {
-          const keys: VoiceKey[] = [
-            'seat_welcome',
-            'massage_on',
-            'spine_protect',
-            'bump_relief',
-            'motion_sickness',
-          ];
-          const k = keys[voiceTestIdxRef.current % keys.length];
-          voiceTestIdxRef.current += 1;
-          triggerVoice(k);
-        }}
-        activeOpacity={0.8}>
-        <Text style={styles.airbagDataFabText}>试听语音</Text>
-      </TouchableOpacity>
-
-      {/* 测试按钮:座椅点 开启(蓝)/关闭(白) 切换(以后换成按数据) */}
-      <TouchableOpacity
-        style={styles.dotsTestFab}
-        onPress={() => setDotsOn(prev => !prev)}
-        activeOpacity={0.8}>
-        <Text style={styles.airbagDataFabText}>{dotsOn ? '点关闭' : '点开启'}</Text>
-      </TouchableOpacity>
 
       {/* 板子数据帧弹窗（1376B / 343×float32） */}
       <AirbagFullFrameModal
@@ -3427,53 +3410,12 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     lineHeight: 12,
   },
-  // ─── 右下角 板子数据 按钮 ───
-  airbagDataFab: {
-    position: 'absolute',
-    right: Spacing.xl,
-    bottom: Spacing.xl,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.round,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    zIndex: 20,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  airbagDataFabText: {
-    color: Colors.textWhite,
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-  },
-  // ─── 语音提示条 + 测试按钮 ───
+  // ─── 语音提示条 ───
   voiceBarWrap: {
     position: 'absolute',
     right: Spacing.xl,
-    bottom: 80,          // 在"板子数据"按钮上方
+    bottom: 80,          // 右下角,略微抬高避开屏幕边缘
     zIndex: 25,
-  },
-  voiceTestFab: {
-    position: 'absolute',
-    right: 130,          // "板子数据"左边
-    bottom: Spacing.xl,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: BorderRadius.round,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    zIndex: 20,
-  },
-  dotsTestFab: {
-    position: 'absolute',
-    right: 224,          // 弹球测试再往左
-    bottom: Spacing.xl,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: BorderRadius.round,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    zIndex: 20,
   },
   glowTestFab: {
     position: 'absolute',

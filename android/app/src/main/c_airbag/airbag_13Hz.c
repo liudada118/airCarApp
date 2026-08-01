@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.237
+ * Model version                  : 1.239
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Sat Aug  1 15:33:25 2026
+ * C/C++ source code generated on : Sat Aug  1 16:19:38 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -1118,10 +1118,14 @@ void airbag_13Hz_step(void)
         airbag_13Hz_DW.livingQueue[2] = airbag_13Hz_DW.latestRaw;
       }
 
-      if (microState == 0) {
+      switch (microState) {
+       case 0:
         airbag_13Hz_DW.staticStreak++;
-      } else {
+        break;
+
+       case 2:
         airbag_13Hz_DW.staticStreak = 0.0F;
+        break;
       }
     }
   }
@@ -1167,8 +1171,7 @@ void airbag_13Hz_step(void)
     }
 
     if (airbag_13Hz_DW.sessionLivingLatched) {
-      if ((airbag_13Hz_DW.sessionFrames <= 390.0F) && (microState == 2) &&
-          (airbag_13Hz_DW.staticStreak >= 3.0F)) {
+      if ((microState == 2) && (airbag_13Hz_DW.staticStreak >= 3.0F)) {
         airbag_13Hz_DW.sessionLivingLatched = false;
         microState = 2;
         airbag_13Hz_DW.livingQueue[0] = false;
@@ -2344,26 +2347,26 @@ void airbag_13Hz_step(void)
   b_pressure = airbag_13Hz_U.sickForwardMinMm1;
   if (rtIsInfF(airbag_13Hz_U.sickForwardMinMm1) || rtIsNaNF
       (airbag_13Hz_U.sickForwardMinMm1)) {
-    b_pressure = 2.0F;
+    b_pressure = 1.5F;
   } else if (airbag_13Hz_U.sickForwardMinMm1 <= 0.0F) {
-    b_pressure = 2.0F;
+    b_pressure = 1.5F;
   }
 
   dyNew = airbag_13Hz_U.sickBackDropRatio1;
   if (rtIsInfF(airbag_13Hz_U.sickBackDropRatio1) || rtIsNaNF
       (airbag_13Hz_U.sickBackDropRatio1)) {
-    dyNew = 0.7F;
+    dyNew = 0.8F;
   } else if ((airbag_13Hz_U.sickBackDropRatio1 <= 0.0F) ||
              (airbag_13Hz_U.sickBackDropRatio1 >= 1.0F)) {
-    dyNew = 0.7F;
+    dyNew = 0.8F;
   }
 
   addedEdgeLength = airbag_13Hz_U.sickPairWindowSec1;
   if (rtIsInfF(airbag_13Hz_U.sickPairWindowSec1) || rtIsNaNF
       (airbag_13Hz_U.sickPairWindowSec1)) {
-    addedEdgeLength = 3.0F;
+    addedEdgeLength = 5.0F;
   } else if (airbag_13Hz_U.sickPairWindowSec1 <= 0.0F) {
-    addedEdgeLength = 3.0F;
+    addedEdgeLength = 5.0F;
   }
 
   pathIncrement = airbag_13Hz_U.bumpMinVelocity1;
@@ -2527,7 +2530,7 @@ void airbag_13Hz_step(void)
       airbag_13Hz_DW.pBackPeakAge = 0.0F;
     } else {
       airbag_13Hz_DW.pBackPeakAge += 0.0769230798F;
-      if (airbag_13Hz_DW.pBackPeakAge >= 1.5F) {
+      if (airbag_13Hz_DW.pBackPeakAge >= 2.5F) {
         if (newReason) {
           if (adoptionFrequency > 0.0F) {
             airbag_13Hz_DW.pBackPeakSum = adoptionFrequency;
@@ -2550,7 +2553,7 @@ void airbag_13Hz_step(void)
     }
 
     if ((airbag_13Hz_DW.pBackPeakSum >= 100.0F) && (newReason &&
-         ((adoptionFrequency <= 50.0F) || (airbag_13Hz_Y.backrestDropRatio1 <=
+         ((adoptionFrequency <= 80.0F) || (airbag_13Hz_Y.backrestDropRatio1 <=
            dyNew)))) {
       airbag_13Hz_DW.pBackDropWindow = addedEdgeLength;
     }
@@ -2559,14 +2562,14 @@ void airbag_13Hz_step(void)
         (airbag_13Hz_Y.cushionForwardMoveMm1 >= b_pressure) &&
         (airbag_13Hz_DW.pSickEventGap <= 0.0F)) {
       airbag_13Hz_DW.pSickEventCount++;
-      airbag_13Hz_DW.pSickEventGap = 3.0F;
+      airbag_13Hz_DW.pSickEventGap = 2.0F;
       airbag_13Hz_DW.pSickCountAge = 0.0F;
       airbag_13Hz_DW.pBackDropWindow = 0.0F;
       airbag_13Hz_DW.pForwardRefX = rtb_cop_x;
       airbag_13Hz_DW.pForwardAge = 0.0F;
       airbag_13Hz_DW.pBackPeakSum = adoptionFrequency;
       airbag_13Hz_DW.pBackPeakAge = 0.0F;
-      if (airbag_13Hz_DW.pSickEventCount >= 3.0F) {
+      if (airbag_13Hz_DW.pSickEventCount >= 2.0F) {
         airbag_13Hz_DW.pSickPromptTimer = 10.0F;
         airbag_13Hz_DW.pSickEventCount = 0.0F;
       }
@@ -2580,7 +2583,7 @@ void airbag_13Hz_step(void)
       }
     }
 
-    if (airbag_13Hz_DW.pForwardAge >= 3.0F) {
+    if (airbag_13Hz_DW.pForwardAge >= 5.0F) {
       airbag_13Hz_DW.pForwardRefX = rtb_cop_x;
       airbag_13Hz_DW.pForwardAge = 0.0F;
     }
@@ -3106,15 +3109,6 @@ void airbag_13Hz_initialize(void)
     }
 
     /* End of SystemInitialize for MATLAB Function: '<Root>/Æ·Î¶ÏµÊý1' */
-
-    /* ConstCode for Outport: '<Root>/isChild' */
-    airbag_13Hz_Y.isChild = 0.0F;
-
-    /* ConstCode for Outport: '<Root>/isAdult' */
-    airbag_13Hz_Y.isAdult = 0.0F;
-
-    /* ConstCode for Outport: '<Root>/childThreshold_out' */
-    airbag_13Hz_Y.childThreshold_out = 0.0F;
   }
 }
 

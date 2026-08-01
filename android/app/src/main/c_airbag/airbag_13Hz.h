@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.237
+ * Model version                  : 1.239
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Sat Aug  1 15:33:25 2026
+ * C/C++ source code generated on : Sat Aug  1 16:19:38 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -180,7 +180,6 @@ typedef struct {
   real32_T bumpTimeThresholdSec1;      /* '<Root>/ bumpTimeThresholdSec1' */
   real32_T spineTimeThresholdSec1;     /* '<Root>/ spineTimeThresholdSec1' */
   real32_T pointThreshold1;            /* '<Root>/pointThreshold1' */
-  real32_T childCushionThresholdIn;    /* '<Root>/childCushionThresholdIn' */
 } ExtU_airbag_13Hz_T;
 
 /* External outputs (root outports fed by signals with default storage) */
@@ -245,9 +244,6 @@ typedef struct {
   real32_T sickEventCount1;            /* '<Root>/sickEventCount1' */
   real32_T isLiving1;                  /* '<Root>/isLiving1' */
   real32_T isStatic1;                  /* '<Root>/isStatic1' */
-  real32_T isChild;                    /* '<Root>/isChild' */
-  real32_T isAdult;                    /* '<Root>/isAdult' */
-  real32_T childThreshold_out;         /* '<Root>/childThreshold_out' */
 } ExtY_airbag_13Hz_T;
 
 /* Real-time Model Data Structure */
