@@ -1,0 +1,127 @@
+// ============================================================================
+//  座椅产品 Device Profile（设备描述文件）
+//  ----------------------------------------------------------------------------
+//  这是「数据」不是「代码」：公共引擎读它来配置自己。换产品 = 换这份文件。
+//  值全部来自现有座椅项目（散落在 Kotlin/C/JS 里的硬编码，这里集中管理）。
+//  标 “按实际填” 的是需要你按真实固件核对的项。
+// ============================================================================
+{
+  "id": "car-seat",                 // 产品唯一标识
+  "name": "汽车座椅气囊 v2",
+  "version": "1.0.0",
+
+  // ── ① 传输层：怎么连设备 ────────────────────────────────────────────────
+  //   对应代码：SerialManager / SerialReadThread / SerialEnumModule
+  "transport": {
+    "type": "serial",               // serial | bluetooth | tcp（换传输方式只改这里）
+    "usb": { "chip": "CH340" },
+    "baudRateCandidates": [1000000, 3000000], // 波特率候选（脑图：自动扫描识别）
+    "autoScan": true,               // 连接时自动扫波特率
+    "reconnect": { "retries": 5, "backoffMs": [50, 100, 200, 500, 1000] } // 断线重试
+  },
+
+  // ── ② 协议层：字节怎么切成帧 ────────────────────────────────────────────
+  //   对应代码：ByteRingBuffer（找帧尾）+ FrameParser（按长度分帧）
+  "protocol": {
+    "frameTail": "AA 55 03 99",     // 帧尾（分隔符）。旧变体：AA 00 55 00 03 00 99 00
+    "frames": [
+      {
+        "name": "sensor",           // 传感器数据帧
+        "length": 144,              // 字节数（= 点数，uint8/点）  ← 按实际填
+        "dtype": "uint8",
+        "points": 144,
+        "route": "algorithm"        // 这种帧喂给算法层
+      },
+      {
+        "name": "mode",             // 模式帧（自动/手动切换）
+        "length": 51,
+        "route": "event:onSerialMode"
+      }
+      // 其它长度 = 非标帧 → event:onNonStandardFrame（回传调试）
+    ],
+    "checksum": null                // 有校验就在这声明（现无）
+  },
+
+  // ── ③ 点位几何：这些点在座椅上怎么排 ────────────────────────────────────
+  //   对应代码：mockSerialData 里的分区说明 / 各热力图组件的排布
+  "geometry": {
+    "regions": [
+      {
+        "name": "backrest",         // 靠背 [0-71]
+        "layout": [
+          { "part": "leftPad",  "range": [0, 5] },     // 左侧小矩形 6 点
+          { "part": "rightPad", "range": [6, 11] },    // 右侧小矩形 6 点
+          { "part": "matrix",   "range": [12, 71], "rows": 10, "cols": 6 } // 大矩阵 10x6
+        ]
+      },
+      {
+        "name": "cushion",          // 坐垫 [72-143]
+        "layout": [
+          { "part": "leftPad",  "range": [72, 77] },
+          { "part": "rightPad", "range": [78, 83] },
+          { "part": "matrix",   "range": [84, 143], "rows": 10, "cols": 6 }
+        ]
+      }
+    ],
+    "mirror": false                 // 左右是否镜像
+  },
+
+  // ── ④ 点位映射/标定：物理线序 → 逻辑点位 ────────────────────────────────
+  //   （你之前“点位顺序待单点按压确认”的坑，标定结果存这里）
+  "mapping": {
+    "calibrationFile": "seat.calibration.json", // 单点按压学出来的映射表
+    "badPoints": []                              // 已知坏点索引，渲染时插值跳过
+  },
+
+  // ── ⑤ 算法层：用哪个算法、跑在哪 ────────────────────────────────────────
+  //   对应代码：AirbagNative.kt → libairbag.so（airbag_13Hz）
+  "algorithm": {
+    "plugin": "airbag_13Hz",
+    "runtime": "native-so",         // native-so | wasm | js | cloud
+    "inputPoints": 92,              // 算法输入点数（按实际固件）  ← 按实际填
+    "outputLength": 179,            // 输出数组长度（OUT_LEN=179）
+    "childRecognition": false       // 当前已关闭儿童识别
+  },
+
+  // ── ⑥ 阈值：算法可运行时调的标定参数 ───────────────────────────────────
+  //   对应代码：SerialModule 里读改 airbag_13Hz_U，改完存 SharedPreferences
+  //   三档：default(出厂默认) / runtime(可运行时改) / readonly
+  "thresholds": {
+    "sitThresholdmin": { "value": 800,  "editable": true },  // 在座判定门槛（示例值）
+    "coherent":        { "value": 0.15, "editable": true },  // 越小越跟手
+    "rawSmooth":       { "value": 0.20, "editable": true }
+  },
+
+  // ── ⑦ 气囊控制：写指令怎么拼 ────────────────────────────────────────────
+  //   对应代码：SerialModule.sendAirbagCommand / startAutoWrite
+  "actuator": {
+    "airbagCount": 24,              // 24 个气囊，每个 2 字节(id + 档位)
+    "writeFrameLength": 55,
+    "writeRateHz": 15,              // autoWrite 频率
+    "gearStop": "0x00",             // 全停保压档
+    "zones": {                      // 区域 → 气囊 id（按实际填）
+      "lumbar":    [1, 2, 3],
+      "sideLeft":  [4, 5],
+      "sideRight": [6, 7],
+      "hip":       [8, 9, 10]
+    }
+  },
+
+  // ── ⑧ 可视化默认：前端默认怎么显示 ──────────────────────────────────────
+  //   对应代码：CarAirRN(色阶) / 各热力图组件
+  "viz": {
+    "default": "heatCloud",
+    "colorScale": 425,              // 你改的默认色阶
+    "available": ["heatCloud", "bodyOverlay", "bars3d", "contour", "gauge"]
+  },
+
+  // ── ⑨ 启用的产品功能 ───────────────────────────────────────────────────
+  "features": [
+    "occupancy",      // 在座/离座
+    "bodyType",       // 体型识别（轻盈/均衡/稳健）
+    "massage",        // 按摩
+    "adaptiveAirbag", // 气囊自适应
+    "comfortScore",   // 舒适度评分（新）
+    "voice"           // 小可语音
+  ]
+}

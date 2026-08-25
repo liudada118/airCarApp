@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>座椅压力可视化 · Demo 画廊</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(1200px 800px at 30% -10%, #1b2440 0%, #0b0f1c 55%, #070a12 100%);
+    color: #e8ecf6; overflow: hidden;
+  }
+  .app { display: flex; height: 100vh; }
+
+  /* ── 左侧栏 ── */
+  .side {
+    width: 220px; flex: 0 0 220px; padding: 20px 16px;
+    background: rgba(255,255,255,0.03);
+    border-right: 1px solid rgba(255,255,255,0.06);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .brand { font-size: 15px; font-weight: 700; letter-spacing: .5px; margin-bottom: 4px; }
+  .brand small { display:block; color:#8b93a7; font-weight:400; font-size:11px; margin-top:3px; }
+  .mode {
+    text-align: left; border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02); color: #cbd3e6;
+    padding: 11px 13px; border-radius: 11px; cursor: pointer;
+    font-size: 13px; transition: all .18s; display:flex; align-items:center; gap:9px;
+  }
+  .mode:hover { background: rgba(255,255,255,0.06); }
+  .mode.active {
+    background: linear-gradient(135deg,#4f7dff,#8b5cf6);
+    border-color: transparent; color:#fff; box-shadow: 0 6px 18px rgba(79,125,255,.35);
+  }
+  .mode .ic { font-size: 15px; }
+  .tip { margin-top:auto; font-size:11px; color:#6b7488; line-height:1.6; }
+
+  /* ── 主区 ── */
+  .main { flex: 1; position: relative; display:flex; align-items:center; justify-content:center; }
+  canvas { display:block; }
+  .title {
+    position:absolute; top:22px; left:26px; z-index:5;
+  }
+  .title h1 { font-size:20px; font-weight:700; }
+  .title p { font-size:12px; color:#8b93a7; margin-top:4px; max-width:420px; line-height:1.5; }
+
+  /* ── 右上仪表 ── */
+  .stats {
+    position:absolute; top:20px; right:22px; z-index:5;
+    display:flex; flex-direction:column; gap:10px; width:210px;
+  }
+  .card {
+    background: rgba(16,22,40,0.72); backdrop-filter: blur(8px);
+    border:1px solid rgba(255,255,255,0.07); border-radius:14px; padding:12px 14px;
+  }
+  .card .lab { font-size:11px; color:#8b93a7; }
+  .card .val { font-size:24px; font-weight:700; margin-top:2px; }
+  .card .val span { font-size:12px; color:#8b93a7; font-weight:400; }
+  .score .val { background:linear-gradient(90deg,#39d98a,#4f7dff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .balbar { height:8px; border-radius:5px; background:rgba(255,255,255,0.08); margin-top:8px; position:relative; overflow:hidden; }
+  .balbar i { position:absolute; top:0; bottom:0; width:2px; background:#fff; left:50%; z-index:2; }
+  .balbar b { position:absolute; top:0; bottom:0; background:linear-gradient(90deg,#4f7dff,#8b5cf6); display:block; }
+  .lr { display:flex; justify-content:space-between; font-size:10px; color:#8b93a7; margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="side">
+    <div class="brand">座椅压力可视化<small>Pressure Viz · Demo 画廊</small></div>
+    <button class="mode active" data-m="cloud"><span class="ic">🌡️</span>平滑热力云图</button>
+    <button class="mode" data-m="contour"><span class="ic">🗺️</span>等高线图</button>
+    <button class="mode" data-m="terrain"><span class="ic">⛰️</span>3D 压力地形</button>
+    <button class="mode" data-m="bars"><span class="ic">📊</span>3D 柱状矩阵</button>
+    <button class="mode" data-m="body"><span class="ic">🧍</span>人体轮廓叠加</button>
+    <button class="mode" data-m="particles"><span class="ic">✨</span>粒子流场</button>
+    <div class="tip">模拟数据：一位乘员就座，含呼吸起伏与重心缓慢左右移动。<br>左右平衡 / 重心 / 舒适度均为实时从压力场推算。</div>
+  </div>
+
+  <div class="main">
+    <div class="title"><h1 id="t-name">平滑热力云图</h1><p id="t-desc"></p></div>
+    <div class="stats">
+      <div class="card"><div class="lab">总载荷 Load</div><div class="val" id="s-load">0<span> kPa·u</span></div></div>
+      <div class="card"><div class="lab">重心 COP 偏移</div><div class="val" id="s-cop">中 <span>· 居中</span></div></div>
+      <div class="card">
+        <div class="lab">左右平衡 L / R</div>
+        <div class="balbar"><b id="bal-fill"></b><i></i></div>
+        <div class="lr"><span id="bal-l">50%</span><span id="bal-r">50%</span></div>
+      </div>
+      <div class="card score"><div class="lab">舒适度 Comfort</div><div class="val"><span id="s-score">–</span><span> / 100</span></div></div>
+    </div>
+    <canvas id="cv"></canvas>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  1. 模拟传感器压力场  (低分辨率栅格，就座模式 + 呼吸 + 重心漂移)
+// ══════════════════════════════════════════════════════════════
+const GW = 12, GH = 16;            // 传感器阵列分辨率 (宽 x 高)。y=0 靠背侧, y=1 座椅前沿
+const field = new Float32Array(GW * GH);
+
+function gauss(x, y, cx, cy, sx, sy) {
+  const dx = (x - cx) / sx, dy = (y - cy) / sy;
+  return Math.exp(-(dx*dx + dy*dy) / 2);
+}
+
+function genField(t) {
+  const breath = 1 + 0.05 * Math.sin(t * 1.6);          // 呼吸
+  const shift  = 0.5 + 0.14 * Math.sin(t * 0.45);        // 重心缓慢左右移
+  const cL = shift - 0.17, cR = shift + 0.17;
+  const ampR = 0.80 + 0.16 * Math.sin(t * 0.32 + 1);     // 右臀承重周期变化 → 制造不平衡
+  for (let j = 0; j < GH; j++) {
+    for (let i = 0; i < GW; i++) {
+      const x = i / (GW - 1), y = j / (GH - 1);
+      let v = 0;
+      // 两侧坐骨（臀部）主承重
+      v += 1.00 * breath * gauss(x, y, cL, 0.40, 0.11, 0.13);
+      v += ampR * breath * gauss(x, y, cR, 0.40, 0.11, 0.13);
+      // 大腿：向前沿延伸的柔和条带
+      v += 0.50 * gauss(x, y, cL, 0.72, 0.08, 0.20);
+      v += 0.50 * gauss(x, y, cR, 0.72, 0.08, 0.20);
+      // 靠背根部轻微接触
+      v += 0.22 * gauss(x, y, shift, 0.06, 0.22, 0.07);
+      v += (Math.sin(i*12.9 + j*7.3 + t*3) * 0.5 + 0.5) * 0.02; // 细微噪声
+      field[j*GW + i] = Math.min(1, v / 1.12);
+    }
+  }
+}
+
+// 双线性插值取任意 (0..1, 0..1) 处的值
+function sample(u, v) {
+  const gx = u * (GW - 1), gy = v * (GH - 1);
+  const x0 = Math.floor(gx), y0 = Math.floor(gy);
+  const x1 = Math.min(x0+1, GW-1), y1 = Math.min(y0+1, GH-1);
+  const fx = gx - x0, fy = gy - y0;
+  const a = field[y0*GW+x0], b = field[y0*GW+x1];
+  const c = field[y1*GW+x0], d = field[y1*GW+x1];
+  return (a*(1-fx)+b*fx)*(1-fy) + (c*(1-fx)+d*fx)*fy;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  2. 调色板 (蓝→青→绿→黄→橙→红)
+// ══════════════════════════════════════════════════════════════
+const STOPS = [
+  [0.00,  30, 40,120],
+  [0.18,  30,120,255],
+  [0.38,  20,215,190],
+  [0.55, 130,225, 70],
+  [0.72, 250,215, 45],
+  [0.86, 255,130, 35],
+  [1.00, 232, 40, 48],
+];
+function palette(v) {
+  v = Math.max(0, Math.min(1, v));
+  for (let k = 1; k < STOPS.length; k++) {
+    if (v <= STOPS[k][0]) {
+      const a = STOPS[k-1], b = STOPS[k];
+      const f = (v - a[0]) / (b[0] - a[0]);
+      return [a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f, a[3]+(b[3]-a[3])*f];
+    }
+  }
+  return [232,40,48];
+}
+
+// ══════════════════════════════════════════════════════════════
+//  3. 画布 & 布局
+// ══════════════════════════════════════════════════════════════
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W, H, DPR = window.devicePixelRatio || 1;
+function resize() {
+  const r = cv.parentElement.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W * DPR; cv.height = H * DPR;
+  cv.style.width = W+'px'; cv.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize);
+
+// 座垫在画面里的绘制矩形（竖向、居中）
+function seatRect() {
+  const availH = H - 120, availW = W - 460;
+  const aspect = GW / GH;
+  let h = Math.min(availH, 560), w = h * aspect;
+  if (w > availW) { w = availW; h = w / aspect; }
+  return { x: (W - w)/2, y: (H - h)/2 + 10, w, h };
+}
+
+// ══════════════════════════════════════════════════════════════
+//  4. 六种渲染
+// ══════════════════════════════════════════════════════════════
+const off = document.createElement('canvas'); off.width = GW; off.height = GH;
+const offc = off.getContext('2d');
+
+function roundRectPath(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+// 4.1 平滑热力云图
+function drawCloud(R) {
+  const img = offc.createImageData(GW, GH);
+  for (let j=0;j<GH;j++) for (let i=0;i<GW;i++){
+    const v = field[j*GW+i]; const c = palette(v);
+    const idx=(j*GW+i)*4;
+    img.data[idx]=c[0]; img.data[idx+1]=c[1]; img.data[idx+2]=c[2];
+    img.data[idx+3]= v<0.05 ? 0 : Math.min(255, 60+v*230);
+  }
+  offc.putImageData(img,0,0);
+  ctx.save();
+  roundRectPath(R.x,R.y,R.w,R.h,26); ctx.clip();
+  ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect(R.x,R.y,R.w,R.h);
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  ctx.filter='blur(2px)';
+  ctx.drawImage(off, R.x, R.y, R.w, R.h);
+  ctx.filter='none';
+  ctx.restore();
+  strokeSeat(R);
+}
+
+// 4.2 等高线
+function drawContour(R) {
+  const NX=100, NY=Math.round(100*R.h/R.w);
+  const img=ctx.createImageData(NX,NY);
+  const bands=8;
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const v=sample(x/(NX-1), y/(NY-1));
+    const band=Math.floor(v*bands)/bands;
+    const c=palette(band+0.06);
+    const near = Math.abs(v*bands - Math.round(v*bands))<0.06; // 等值线
+    const idx=(y*NX+x)*4;
+    if(v<0.05){img.data[idx+3]=0;continue;}
+    img.data[idx]=near?255:c[0]; img.data[idx+1]=near?255:c[1];
+    img.data[idx+2]=near?255:c[2]; img.data[idx+3]=near?255:210;
+  }
+  const tmp=document.createElement('canvas');tmp.width=NX;tmp.height=NY;
+  tmp.getContext('2d').putImageData(img,0,0);
+  ctx.save(); roundRectPath(R.x,R.y,R.w,R.h,26); ctx.clip();
+  ctx.fillStyle='rgba(255,255,255,0.02)';ctx.fillRect(R.x,R.y,R.w,R.h);
+  ctx.imageSmoothingEnabled=true; ctx.drawImage(tmp,R.x,R.y,R.w,R.h);
+  ctx.restore(); strokeSeat(R);
+}
+
+// iso 投影：把栅格 (i,j,height) 投到屏幕
+function isoProject(R, i, j, hgt) {
+  const u = i/(GW-1)-0.5, w = j/(GH-1)-0.5;
+  const scale = Math.min(R.w, R.h*0.72)*0.95;
+  const cx = W/2 - 30, cy = H/2 + 40;
+  const sx = (u - w) * scale * 0.72;
+  const sy = (u + w) * scale * 0.36 - hgt;
+  return [cx + sx, cy + sy];
+}
+
+// 4.3 3D 地形（曲面）
+function drawTerrain(R) {
+  const hMax = 190;
+  const quads=[];
+  for(let j=0;j<GH-1;j++)for(let i=0;i<GW-1;i++){
+    const v=(field[j*GW+i]+field[j*GW+i+1]+field[(j+1)*GW+i]+field[(j+1)*GW+i+1])/4;
+    quads.push({i,j,v});
+  }
+  quads.sort((a,b)=>(a.i+a.j)-(b.i+b.j));
+  for(const q of quads){
+    const {i,j}=q;
+    const p00=isoProject(R,i,j,field[j*GW+i]*hMax);
+    const p10=isoProject(R,i+1,j,field[j*GW+i+1]*hMax);
+    const p11=isoProject(R,i+1,j+1,field[(j+1)*GW+i+1]*hMax);
+    const p01=isoProject(R,i,j+1,field[(j+1)*GW+i]*hMax);
+    const c=palette(q.v);
+    const shade=0.55+0.45*q.v;
+    ctx.beginPath();ctx.moveTo(...p00);ctx.lineTo(...p10);ctx.lineTo(...p11);ctx.lineTo(...p01);ctx.closePath();
+    ctx.fillStyle=`rgba(${c[0]*shade|0},${c[1]*shade|0},${c[2]*shade|0},0.96)`;
+    ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=0.6;ctx.stroke();
+  }
+}
+
+// 4.4 3D 柱状矩阵
+function drawBars(R) {
+  const hMax=170, cells=[];
+  for(let j=0;j<GH;j++)for(let i=0;i<GW;i++) cells.push({i,j,v:field[j*GW+i]});
+  cells.sort((a,b)=>(a.i+a.j)-(b.i+b.j));
+  const bw=0.42;
+  for(const c of cells){
+    if(c.v<0.06) continue;
+    const {i,j,v}=c; const col=palette(v); const h=v*hMax;
+    const top=[isoProject(R,i-bw,j-bw,h),isoProject(R,i+bw,j-bw,h),isoProject(R,i+bw,j+bw,h),isoProject(R,i-bw,j+bw,h)];
+    const bTop=[isoProject(R,i-bw,j-bw,0),isoProject(R,i+bw,j-bw,0),isoProject(R,i+bw,j+bw,0),isoProject(R,i-bw,j+bw,0)];
+    // 右侧面
+    poly([top[1],top[2],bTop[2],bTop[1]], col, 0.55);
+    // 前侧面
+    poly([top[2],top[3],bTop[3],bTop[2]], col, 0.4);
+    // 顶面
+    poly(top, col, 1.05);
+  }
+}
+function poly(pts, col, k){
+  ctx.beginPath();ctx.moveTo(...pts[0]);for(let i=1;i<pts.length;i++)ctx.lineTo(...pts[i]);ctx.closePath();
+  ctx.fillStyle=`rgba(${Math.min(255,col[0]*k)|0},${Math.min(255,col[1]*k)|0},${Math.min(255,col[2]*k)|0},0.97)`;ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=0.5;ctx.stroke();
+}
+
+// 4.5 人体轮廓叠加
+function drawBody(R) {
+  drawCloud(R);
+  ctx.save(); roundRectPath(R.x,R.y,R.w,R.h,26); ctx.clip();
+  // 人体坐姿剪影（俯视臀+大腿轮廓，半透明白描边）
+  const cx=R.x+R.w/2, top=R.y+R.h*0.12;
+  ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.lineWidth=2; ctx.setLineDash([6,5]);
+  ctx.beginPath();
+  ctx.ellipse(cx, R.y+R.h*0.36, R.w*0.34, R.h*0.20, 0, 0, Math.PI*2); // 臀
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // 大腿两条
+  for(const s of [-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(cx+s*R.w*0.10, R.y+R.h*0.45);
+    ctx.quadraticCurveTo(cx+s*R.w*0.20, R.y+R.h*0.75, cx+s*R.w*0.14, R.y+R.h*0.98);
+    ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1.4; ctx.stroke();
+  }
+  // COP 重心点
+  const cop=stats.cop;
+  const px=R.x+cop.u*R.w, py=R.y+cop.v*R.h;
+  ctx.beginPath();ctx.arc(px,py,9,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.95)';ctx.fill();
+  ctx.beginPath();ctx.arc(px,py,16,0,Math.PI*2);
+  ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='11px sans-serif';ctx.fillText('重心',px+20,py+4);
+  // 中线
+  ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.setLineDash([4,6]);
+  ctx.beginPath();ctx.moveTo(cx,R.y);ctx.lineTo(cx,R.y+R.h);ctx.stroke();ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// 4.6 粒子流场
+let particles=[];
+function initParticles(){particles=[];for(let k=0;k<1400;k++)particles.push({u:Math.random(),v:Math.random(),life:Math.random()});}
+function drawParticles(R){
+  ctx.save(); roundRectPath(R.x,R.y,R.w,R.h,26); ctx.clip();
+  ctx.fillStyle='rgba(7,10,18,0.28)'; ctx.fillRect(R.x,R.y,R.w,R.h); // 拖尾
+  for(const p of particles){
+    const v=sample(p.u,p.v);
+    // 低压区粒子随机游走并被“吸”向高压
+    const step=0.004+0.02*v;
+    p.u += (Math.random()-0.5)*step; p.v += (Math.random()-0.5)*step;
+    p.life-=0.01;
+    if(p.life<=0 || v<0.04){ // 按压力分布重新播撒（拒绝采样）
+      let tries=0;do{p.u=Math.random();p.v=Math.random();tries++;}while(sample(p.u,p.v)<Math.random()&&tries<8);
+      p.life=0.5+Math.random()*0.6;
+    }
+    p.u=Math.max(0,Math.min(1,p.u));p.v=Math.max(0,Math.min(1,p.v));
+    const c=palette(v);
+    const px=R.x+p.u*R.w, py=R.y+p.v*R.h;
+    const rad=1+v*2.4;
+    ctx.beginPath();ctx.arc(px,py,rad,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${c[0]|0},${c[1]|0},${c[2]|0},${0.35+v*0.6})`;ctx.fill();
+  }
+  ctx.restore(); strokeSeat(R);
+}
+
+function strokeSeat(R){
+  ctx.save();
+  roundRectPath(R.x,R.y,R.w,R.h,26);
+  ctx.strokeStyle='rgba(255,255,255,0.14)';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  5. 派生指标（COP / 平衡 / 载荷 / 舒适度）
+// ══════════════════════════════════════════════════════════════
+const stats = { cop:{u:0.5,v:0.5}, L:0.5, R:0.5, load:0, score:80 };
+function computeStats(){
+  let sum=0,su=0,sv=0,L=0,Rr=0,mx=0;
+  for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
+    const val=field[j*GW+i]; const u=i/(GW-1), v=j/(GH-1);
+    sum+=val; su+=val*u; sv+=val*v;
+    if(u<0.5)L+=val; else Rr+=val;
+    if(val>mx)mx=val;
+  }
+  sum=sum||1;
+  stats.cop={u:su/sum, v:sv/sum};
+  stats.L=L/(L+Rr); stats.R=Rr/(L+Rr); stats.load=sum;
+  const sym=1-Math.abs(L-Rr)/(L+Rr);                 // 左右对称度
+  const mean=sum/(GW*GH); const conc=mx/(mean+1e-6);  // 压力集中度
+  const spread=Math.min(1, mean*3.2);                 // 分布铺开程度
+  let sc = 40 + 42*sym + 22*spread - 3.0*Math.max(0,conc-4);
+  stats.score = Math.round(Math.max(0,Math.min(100, sc)));
+}
+function updateStatsUI(){
+  document.getElementById('s-load').innerHTML = Math.round(stats.load*7)+'<span> kPa·u</span>';
+  const dx = stats.cop.u-0.5;
+  const dir = Math.abs(dx)<0.03?'居中':(dx<0?'偏左':'偏右');
+  document.getElementById('s-cop').innerHTML = (Math.abs(dx)<0.03?'中':(dx<0?'左':'右'))+' <span>· '+dir+'</span>';
+  const lp=Math.round(stats.L*100);
+  document.getElementById('bal-l').textContent=lp+'%';
+  document.getElementById('bal-r').textContent=(100-lp)+'%';
+  const fill=document.getElementById('bal-fill');
+  fill.style.left='0'; fill.style.width=lp+'%';
+  document.getElementById('s-score').textContent=stats.score;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  6. 主循环
+// ══════════════════════════════════════════════════════════════
+const DESCS={
+  cloud:'双线性插值 + 高斯模糊，把离散压力点渲染成连续热力场——最直观的“哪儿受力重”。',
+  contour:'按压力值分层填色 + 等值线，像地形等高线，方便定位压力“峰/脊”。',
+  terrain:'压力值当高度做成等距 3D 曲面，起伏一眼看出承重集中区。',
+  bars:'每个传感点一根 3D 柱，高度=压力，适合看单点强度与阵列分布。',
+  body:'热力叠加人体坐姿剪影 + 实时重心(COP) + 左右中线，判断偏坐 / 坐姿。',
+  particles:'粒子按压力分布密度播撒并流动，压力越大越亮越密，动态“活”的压力场。',
+};
+const NAMES={cloud:'平滑热力云图',contour:'等高线图',terrain:'3D 压力地形',bars:'3D 柱状矩阵',body:'人体轮廓叠加',particles:'粒子流场'};
+let mode='cloud';
+
+document.querySelectorAll('.mode').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.mode').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); mode=b.dataset.m;
+    document.getElementById('t-name').textContent=NAMES[mode];
+    document.getElementById('t-desc').textContent=DESCS[mode];
+    if(mode==='particles') initParticles();
+  });
+});
+document.getElementById('t-desc').textContent=DESCS.cloud;
+
+let t=0;
+function loop(){
+  t+=0.016;
+  genField(t);
+  computeStats();
+  ctx.clearRect(0,0,W,H);
+  const R=seatRect();
+  if(mode==='cloud')drawCloud(R);
+  else if(mode==='contour')drawContour(R);
+  else if(mode==='terrain')drawTerrain(R);
+  else if(mode==='bars')drawBars(R);
+  else if(mode==='body')drawBody(R);
+  else if(mode==='particles')drawParticles(R);
+  updateStatsUI();
+  requestAnimationFrame(loop);
+}
+resize(); initParticles(); loop();
+</script>
+</body>
+</html>
