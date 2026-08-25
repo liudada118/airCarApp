@@ -37,6 +37,16 @@ ExtY_airbag_13Hz_T airbag_13Hz_Y;
 static RT_MODEL_airbag_13Hz_T airbag_13Hz_M_;
 RT_MODEL_airbag_13Hz_T *const airbag_13Hz_M = &airbag_13Hz_M_;
 
+/* â˜…æ‰‹æ”¹ï¼ˆé Simulink ç”Ÿæˆï¼‰ï¼šæ— é¢„å‹åŠ›çƒ­åŠ›å›¾ç”¨çš„ã€ŒåŸå§‹çŸ©é˜µã€å¿«ç…§ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ç®—æ³•æœ¬ä½“ä¼šåœ¨ç¨³å®š 2 ç§’åè®°å½•é¢„å‹åŠ›åŸºçº¿ pBaseB/pBaseCï¼Œä¹‹åè¾“å‡ºçš„
+ * backrestData1/cushionData1 éƒ½æ˜¯ã€Œå½“å‰å€¼ - åŸºçº¿ã€ã€‚è°ƒè¯•é¢æ¿éœ€è¦ä¸€ä»½æ²¡å‡åŸºçº¿çš„
+ * ç»å¯¹å‹åŠ›ï¼Œæ‰€ä»¥åœ¨å‡åŸºçº¿ä¹‹å‰æŠŠçŸ©é˜µåŸæ ·æ‹·ä¸€ä»½å‡ºæ¥ç»™ JNI è¯»ã€‚
+ * ç‚¹ä½æ’å¸ƒä¸çƒ­åŠ›å›¾å®Œå…¨ä¸€è‡´ï¼ˆåŒæ ·æ˜¯é‡æ’/é•œåƒ/250 é¥±å’Œæ›¿æ¢ä¹‹åçš„çŸ©é˜µï¼Œåˆ—ä¼˜å…ˆï¼‰ã€‚
+ * æ³¨æ„ï¼šè‹¥å“ªå¤©ç”¨ Simulink é‡æ–°ç”Ÿæˆæœ¬æ–‡ä»¶ï¼Œè¿™ä¸¤ä¸ªå…¨å±€å’Œ step() é‡Œé‚£ä¸¤è¡Œ memcpy
+ *      ä¼šä¸€èµ·ä¸¢å¤±ï¼Œé“¾æ¥ libairbag.so æ—¶ä¼šç›´æ¥æŠ¥æœªå®šä¹‰ç¬¦å·ï¼ˆä¸ä¼šé™é»˜å‡ºé”™ï¼‰ã€‚ */
+real32_T airbag_rawBackrest[56];
+real32_T airbag_rawCushion[48];
+
 /* Forward declaration for local functions */
 static void airba_calculatePressureFeatures(const real32_T matrixIn[56],
   real32_T threshold, real32_T *originalSum, real32_T *filteredSum);
@@ -53,7 +63,7 @@ static void airbag_13Hz_applyAdaptiveGears(real32_T frame[55], real32_T
   leftWingGear, real32_T rightWingGear, real32_T lumbarGear, real32_T
   leftLegGear, real32_T rightLegGear);
 
-/* Function for MATLAB Function: '<Root>/Èë×ù´¦Àí1' */
+/* Function for MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' */
 static void airba_calculatePressureFeatures(const real32_T matrixIn[56],
   real32_T threshold, real32_T *originalSum, real32_T *filteredSum)
 {
@@ -218,7 +228,7 @@ static void airba_calculatePressureFeatures(const real32_T matrixIn[56],
   }
 }
 
-/* Function for MATLAB Function: '<Root>/»îÌå¼ì²â1' */
+/* Function for MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' */
 static real32_T airbag_13Hz_sum(const real32_T x_data[], const int32_T *x_size)
 {
   int32_T k;
@@ -237,7 +247,7 @@ static real32_T airbag_13Hz_sum(const real32_T x_data[], const int32_T *x_size)
   return y;
 }
 
-/* Function for MATLAB Function: '<Root>/»îÌå¼ì²â1' */
+/* Function for MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' */
 static real32_T airbag_13Hz_mean(const real32_T x_data[], const int32_T *x_size)
 {
   int32_T k;
@@ -256,7 +266,7 @@ static real32_T airbag_13Hz_mean(const real32_T x_data[], const int32_T *x_size)
   return accumulatedData / (real32_T)*x_size;
 }
 
-/* Function for MATLAB Function: '<Root>/»îÌå¼ì²â1' */
+/* Function for MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' */
 static int8_T airbag__updateLivingStatusQueue(const boolean_T queueValues_data[],
   const int32_T queueValues_size[2], boolean_T inEnabledState)
 {
@@ -293,7 +303,7 @@ real32_T rt_roundf_snf(real32_T u)
   return y;
 }
 
-/* Function for MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1' */
+/* Function for MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1' */
 static real32_T airbag_13Hz_directionOf(real32_T b_value)
 {
   real32_T direction;
@@ -310,7 +320,7 @@ static real32_T airbag_13Hz_directionOf(real32_T b_value)
   return direction;
 }
 
-/* Function for MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1' */
+/* Function for MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1' */
 static boolean_T airbag_13Hz_allFinitePositive(const real32_T values[8])
 {
   int32_T k;
@@ -334,7 +344,7 @@ static boolean_T airbag_13Hz_allFinitePositive(const real32_T values[8])
   return valid;
 }
 
-/* Function for MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1' */
+/* Function for MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1' */
 static boolean_T airbag_13Hz_any(const boolean_T x[3])
 {
   int32_T k;
@@ -355,7 +365,7 @@ static boolean_T airbag_13Hz_any(const boolean_T x[3])
   return y;
 }
 
-/* Function for MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1' */
+/* Function for MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1' */
 static void airbag_13Hz_makeThresholds(real32_T lumbarRatio, real32_T wingRatio,
   real32_T leftLegRatio, real32_T rightLegRatio, real32_T thresholds[8])
 {
@@ -401,7 +411,7 @@ static void airbag_13Hz_makeThresholds(real32_T lumbarRatio, real32_T wingRatio,
   thresholds[7] = rightCenter + 0.3F;
 }
 
-/* Function for MATLAB Function: '<Root>/ÆøÄÒ¿ØÖÆĞ­Òé1' */
+/* Function for MATLAB Function: '<Root>/ï¿½ï¿½ï¿½Ò¿ï¿½ï¿½ï¿½Ğ­ï¿½ï¿½1' */
 static void airbag_13Hz_applyAdaptiveGears(real32_T frame[55], real32_T
   leftWingGear, real32_T rightWingGear, real32_T lumbarGear, real32_T
   leftLegGear, real32_T rightLegGear)
@@ -525,7 +535,7 @@ void airbag_13Hz_step(void)
   boolean_T guard2;
   boolean_T tmp_1;
 
-  /* MATLAB Function: '<Root>/¾ØÕó´¦Àí1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' incorporates:
    *  Inport: '<Root>/frame_data1'
    */
   memset(&backrestMatrix[0], 0, 56U * sizeof(real32_T));
@@ -546,13 +556,13 @@ void airbag_13Hz_step(void)
   }
 
   for (i = 0; i < 8; i++) {
-    /* MATLAB Function: '<Root>/¾ØÕó´¦Àí1' incorporates:
+    /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' incorporates:
      *  Inport: '<Root>/frame_data1'
      */
     tmp[i] = airbag_13Hz_U.frame_data1[i + 38];
   }
 
-  /* MATLAB Function: '<Root>/¾ØÕó´¦Àí1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' incorporates:
    *  Inport: '<Root>/frame_data1'
    */
   for (i = 0; i < 4; i++) {
@@ -628,6 +638,10 @@ void airbag_13Hz_step(void)
       cushionMatrix[newWriteIndex] = airbag_13Hz_DW.pPrevC[newWriteIndex];
     }
   }
+
+  /* â˜…æ‰‹æ”¹ï¼šå‡é¢„å‹åŠ›åŸºçº¿ä¹‹å‰ï¼ŒæŠŠåŸå§‹çŸ©é˜µå¿«ç…§ç»™ã€Œæ— é¢„å‹åŠ›çƒ­åŠ›å›¾ã€é¢æ¿ */
+  memcpy(&airbag_rawBackrest[0], &backrestMatrix[0], 56U * sizeof(real32_T));
+  memcpy(&airbag_rawCushion[0], &cushionMatrix[0], 48U * sizeof(real32_T));
 
   if (airbag_13Hz_DW.pDone <= 0.5F) {
     isStill = true;
@@ -713,12 +727,12 @@ void airbag_13Hz_step(void)
     }
   }
 
-  /* MATLAB Function: '<Root>/Èë×ù´¦Àí1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' incorporates:
    *  Inport: '<Root>/ cushionThreshold1'
    *  Inport: '<Root>/backrestThreshold1'
    *  Inport: '<Root>/pointThreshold1'
    *  Inport: '<Root>/resetFlag1'
-   *  MATLAB Function: '<Root>/¾ØÕó´¦Àí1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   xtmp = airbag_13Hz_U.pointThreshold1;
   if (rtIsInfF(airbag_13Hz_U.pointThreshold1) || rtIsNaNF
@@ -854,12 +868,12 @@ void airbag_13Hz_step(void)
   rtb_isOccupied = ((airbag_13Hz_DW.pState_i == 1) || (airbag_13Hz_DW.pState_i ==
     2));
 
-  /* MATLAB Function: '<Root>/»îÌå¼ì²â1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' incorporates:
    *  Inport: '<Root>/resetFlag1'
    *  Inport: '<Root>/sadNormalizeScaleIn1'
    *  Inport: '<Root>/sadThresholdIn1'
-   *  MATLAB Function: '<Root>/Èë×ù´¦Àí1'
-   *  MATLAB Function: '<Root>/¾ØÕó´¦Àí1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   if (airbag_13Hz_U.sadNormalizeScaleIn1 <= 0.0F) {
     normalizeScale = 2.0F;
@@ -1088,11 +1102,11 @@ void airbag_13Hz_step(void)
     airbag_13Hz_DW.noiseBaseline);
 
   /* Outport: '<Root>/confidence1' incorporates:
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.confidence1 = airbag_13Hz_DW.latestConfidence;
 
-  /* MATLAB Function: '<Root>/»îÌå¼ì²â1' */
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' */
   if (isStill) {
     if (airbag_13Hz_Y.sadEnergy1 >= normalizeScale) {
       microState = 2;
@@ -1199,7 +1213,7 @@ void airbag_13Hz_step(void)
     break;
   }
 
-  /* MATLAB Function: '<Root>/¾Ã×ø°´Ä¦1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¦1' incorporates:
    *  Inport: '<Root>/manualMassageOn1'
    *  Inport: '<Root>/sitThresholdmin1'
    */
@@ -1225,32 +1239,32 @@ void airbag_13Hz_step(void)
   }
 
   /* Outport: '<Root>/longSitMinutes1' incorporates:
-   *  MATLAB Function: '<Root>/¾Ã×ø°´Ä¦1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¦1'
    */
   airbag_13Hz_Y.longSitMinutes1 = 0.0F;
 
   /* Outport: '<Root>/longSitMassageActive1' incorporates:
-   *  MATLAB Function: '<Root>/¾Ã×ø°´Ä¦1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¦1'
    */
   airbag_13Hz_Y.longSitMassageActive1 = 0.0F;
 
   /* Outport: '<Root>/longSitCycleRemain1' incorporates:
-   *  MATLAB Function: '<Root>/¾Ã×ø°´Ä¦1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¦1'
    */
   airbag_13Hz_Y.longSitCycleRemain1 = 0.0F;
 
   /* Outport: '<Root>/longSitPrompt1' incorporates:
-   *  MATLAB Function: '<Root>/¾Ã×ø°´Ä¦1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¦1'
    */
   airbag_13Hz_Y.longSitPrompt1 = 0.0F;
 
-  /* MATLAB Function: '<Root>/¾Ã×ø°´Ä¦1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¦1' incorporates:
    *  Inport: '<Root>/longSitMassageStop1'
    *  Inport: '<Root>/resetFlag1'
-   *  MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1'
-   *  MATLAB Function: '<Root>/½¡¿µ¼ì²â1'
-   *  MATLAB Function: '<Root>/Èë×ù´¦Àí1'
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   rtb_hipInflateRequest = 0;
   if (rtb_isOccupied && (!airbag_13Hz_DW.prevOccupied)) {
@@ -1464,15 +1478,15 @@ void airbag_13Hz_step(void)
     }
   }
 
-  /* MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1' incorporates:
+  /* MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion20'
    *  DataTypeConversion: '<Root>/Data Type Conversion25'
    *  Inport: '<Root>/adoption_frequency1'
    *  Inport: '<Root>/deflation_time1'
    *  Inport: '<Root>/frontCmd1'
    *  Inport: '<Root>/inflation_time2'
-   *  MATLAB Function: '<Root>/ÆøÄÒ¿ØÖÆĞ­Òé1'
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½Ò¿ï¿½ï¿½ï¿½Ğ­ï¿½ï¿½1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    *  SignalConversion generated from: '<S6>/ SFunction '
    *  UnitDelay: '<Root>/Unit Delay2'
    *  UnitDelay: '<Root>/Unit Delay3'
@@ -1862,7 +1876,7 @@ void airbag_13Hz_step(void)
    *  Inport: '<Root>/ratioInflateLeft1'
    *  Inport: '<Root>/rightDeflateThreshold1'
    *  Inport: '<Root>/rightInflateThreshold1'
-   *  MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1'
+   *  MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1'
    */
   if (rtb_status[1] > 0.5F) {
     airbag_13Hz_Y.ratioInflate_out1 = airbag_13Hz_DW.pThresholds[0];
@@ -1890,7 +1904,7 @@ void airbag_13Hz_step(void)
 
   /* End of Switch: '<Root>/Switch1' */
 
-  /* MATLAB Function: '<Root>/²àÒí×´Ì¬ÅĞ¶¨1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½Ğ¶ï¿½1' incorporates:
    *  Inport: '<Root>/backTotalThreshold1'
    */
   normalizeScale = airbag_13Hz_Y.backrestData1[7];
@@ -1942,7 +1956,7 @@ void airbag_13Hz_step(void)
     xpageoffset = 0;
   }
 
-  /* MATLAB Function: '<Root>/ÑüÍĞÆøÄÒ¿ØÖÆÂß¼­1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¿ï¿½ï¿½ï¿½ï¿½ß¼ï¿½1' incorporates:
    *  Inport: '<Root>/backTotalThreshold1'
    */
   normalizeScale = airbag_13Hz_Y.backrestData1[0];
@@ -1979,7 +1993,7 @@ void airbag_13Hz_step(void)
     idx = 0;
   }
 
-  /* MATLAB Function: '<Root>/ÍÈÍĞÆøÄÒ¿ØÖÆÂß¼­1' */
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¿ï¿½ï¿½ï¿½ï¿½ß¼ï¿½1' */
   adjustCmd = airbag_13Hz_Y.cushionData1[3];
   for (newWriteIndex = 0; newWriteIndex < 11; newWriteIndex++) {
     adjustCmd += airbag_13Hz_Y.cushionData1[((int32_T)((uint32_T)(newWriteIndex
@@ -2037,7 +2051,7 @@ void airbag_13Hz_step(void)
     rtb_rightAction = 0;
   }
 
-  /* MATLAB Function: '<Root>/½¡¿µ¼ì²â1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' incorporates:
    *  Inport: '<Root>/resetFlag1'
    */
   rtb_cop_x = 0.0F;
@@ -2255,50 +2269,50 @@ void airbag_13Hz_step(void)
   }
 
   /* Outport: '<Root>/spineProtectActive1' incorporates:
-   *  MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.spineProtectActive1 = 0.0F;
 
   /* Outport: '<Root>/spineProtectSide1' incorporates:
-   *  MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.spineProtectSide1 = 0.0F;
 
   /* Outport: '<Root>/bumpReliefActive1' incorporates:
-   *  MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.bumpReliefActive1 = 0.0F;
 
   /* Outport: '<Root>/motionSicknessActive1' incorporates:
-   *  MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.motionSicknessActive1 = 0.0F;
 
-  /* MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1' */
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1' */
   rtb_healthSideWingLeftAction = 0;
   rtb_healthSideWingRightAction = 0;
   newWriteIndex = 0;
 
   /* Outport: '<Root>/spineBiasSeconds1' incorporates:
-   *  MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.spineBiasSeconds1 = 0.0F;
 
   /* Outport: '<Root>/bumpDetectSeconds1' incorporates:
-   *  MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.bumpDetectSeconds1 = 0.0F;
 
-  /* MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1' */
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1' */
   airbag_13Hz_Y.cushionForwardMoveMm1 = 0.0F;
   airbag_13Hz_Y.backrestDropRatio1 = 1.0F;
 
   /* Outport: '<Root>/sickEventCount1' incorporates:
-   *  MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.sickEventCount1 = 0.0F;
 
-  /* MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion15'
    *  Inport: '<Root>/ bumpMaxRangeMm1'
    *  Inport: '<Root>/ bumpMaxRms1'
@@ -2660,7 +2674,7 @@ void airbag_13Hz_step(void)
     }
   }
 
-  /* MATLAB Function: '<Root>/ÆøÄÒ¿ØÖÆĞ­Òé1' incorporates:
+  /* MATLAB Function: '<Root>/ï¿½ï¿½ï¿½Ò¿ï¿½ï¿½ï¿½Ğ­ï¿½ï¿½1' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion20'
    *  DataTypeConversion: '<Root>/Data Type Conversion25'
    *  Inport: '<Root>/adoption_frequency1'
@@ -2671,8 +2685,8 @@ void airbag_13Hz_step(void)
    *  Inport: '<Root>/welcomeLegTime1'
    *  Inport: '<Root>/welcomeLumbarTime1'
    *  Inport: '<Root>/welcomeSideWingTime1'
-   *  MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1'
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   rtb_cop_x = airbag_13Hz_U.welcomeSideWingTime1;
   rtb_backrest_cop_y = airbag_13Hz_U.welcomeLumbarTime1;
@@ -2970,8 +2984,8 @@ void airbag_13Hz_step(void)
   airbag_13Hz_Y.frame1[54] = 153.0F;
   airbag_13Hz_DW.pPrevReasonCode = rtb_reasonCode;
 
-  /* MATLAB Function: '<Root>/¶Ïµç±£´æÆ·Î¶Êı¾İ 1' incorporates:
-   *  MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1'
+  /* MATLAB Function: '<Root>/ï¿½Ïµç±£ï¿½ï¿½Æ·Î¶ï¿½ï¿½ï¿½ï¿½ 1' incorporates:
+   *  MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1'
    *  UnitDelay: '<Root>/Unit Delay2'
    */
   if (rtb_nvmWrite[0] == 1.0F) {
@@ -2989,15 +3003,15 @@ void airbag_13Hz_step(void)
       (airbag_13Hz_DW.pAdaptiveOff > 0.5F);
   }
 
-  /* End of MATLAB Function: '<Root>/¶Ïµç±£´æÆ·Î¶Êı¾İ 1' */
+  /* End of MATLAB Function: '<Root>/ï¿½Ïµç±£ï¿½ï¿½Æ·Î¶ï¿½ï¿½ï¿½ï¿½ 1' */
 
   /* Outport: '<Root>/healthReasonCode1' incorporates:
-   *  MATLAB Function: '<Root>/½¡¿µ¸ÉÔ¤¿ØÖÆ1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.healthReasonCode1 = (real32_T)newWriteIndex;
 
   /* Outport: '<Root>/thresholdPassed1' incorporates:
-   *  MATLAB Function: '<Root>/ÑüÍĞÆøÄÒ¿ØÖÆÂß¼­1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¿ï¿½ï¿½ï¿½ï¿½ß¼ï¿½1'
    */
   airbag_13Hz_Y.thresholdPassed1 = (real32_T)nvmCmd;
 
@@ -3008,61 +3022,61 @@ void airbag_13Hz_step(void)
 
   /* Outport: '<Root>/reasonCode1' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion25'
-   *  MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1'
+   *  MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1'
    */
   airbag_13Hz_Y.reasonCode1 = rtb_reasonCode;
 
   /* Outport: '<Root>/isLivingRaw1' incorporates:
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.isLivingRaw1 = airbag_13Hz_DW.latestRaw;
 
   /* Outport: '<Root>/detectionTriggered1' incorporates:
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.detectionTriggered1 = isStill;
 
   /* Outport: '<Root>/queueLength1' incorporates:
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.queueLength1 = (real32_T)airbag_13Hz_DW.livingQueueLen;
 
   /* Outport: '<Root>/detectorEnabled_out1' incorporates:
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.detectorEnabled_out1 = 1.0F;
 
   /* Outport: '<Root>/isLiving1' incorporates:
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.isLiving1 = (real32_T)(microState == 3);
 
   /* Outport: '<Root>/isStatic1' incorporates:
-   *  MATLAB Function: '<Root>/»îÌå¼ì²â1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.isStatic1 = (real32_T)(microState == 2);
 
   /* Outport: '<Root>/isFullSeat1' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion21'
-   *  MATLAB Function: '<Root>/Èë×ù´¦Àí1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.isFullSeat1 = (real32_T)(airbag_13Hz_DW.pState_i == 2);
 
   /* Outport: '<Root>/offCounter1' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion22'
-   *  MATLAB Function: '<Root>/Èë×ù´¦Àí1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.offCounter1 = (real32_T)airbag_13Hz_DW.pOffCounter;
 
   /* Outport: '<Root>/resetCounter1' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion23'
-   *  MATLAB Function: '<Root>/Èë×ù´¦Àí1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.resetCounter1 = (real32_T)airbag_13Hz_DW.pResetCounter;
 
   /* Outport: '<Root>/backrestLostCounter1' incorporates:
    *  DataTypeConversion: '<Root>/Data Type Conversion24'
-   *  MATLAB Function: '<Root>/Èë×ù´¦Àí1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1'
    */
   airbag_13Hz_Y.backrestLostCounter1 = (real32_T)
     airbag_13Hz_DW.pBackrestLostCounter;
@@ -3074,9 +3088,9 @@ void airbag_13Hz_step(void)
          sizeof(real32_T));
 
   /* Update for UnitDelay: '<Root>/Unit Delay3' incorporates:
-   *  MATLAB Function: '<Root>/²àÒí×´Ì¬ÅĞ¶¨1'
-   *  MATLAB Function: '<Root>/ÑüÍĞÆøÄÒ¿ØÖÆÂß¼­1'
-   *  MATLAB Function: '<Root>/ÍÈÍĞÆøÄÒ¿ØÖÆÂß¼­1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½Ğ¶ï¿½1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¿ï¿½ï¿½ï¿½ï¿½ß¼ï¿½1'
+   *  MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¿ï¿½ï¿½ï¿½ï¿½ß¼ï¿½1'
    */
   airbag_13Hz_DW.UnitDelay3_DSTATE[0] = normalizeScale;
   airbag_13Hz_DW.UnitDelay3_DSTATE[1] = xtmp;
@@ -3092,16 +3106,16 @@ void airbag_13Hz_initialize(void)
     static const real32_T tmp[8] = { 1.3F, 0.9F, 0.7F, 1.3F, 0.35F, 0.85F, 0.5F,
       1.1F };
 
-    /* SystemInitialize for MATLAB Function: '<Root>/»îÌå¼ì²â1' */
+    /* SystemInitialize for MATLAB Function: '<Root>/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½1' */
     airbag_13Hz_DW.noiseBaseline = 0.33F;
     airbag_13Hz_DW.noiseDev = 0.1F;
 
-    /* SystemInitialize for MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1' */
+    /* SystemInitialize for MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1' */
     for (i = 0; i < 8; i++) {
       airbag_13Hz_DW.pThresholds[i] = tmp[i];
     }
 
-    /* End of SystemInitialize for MATLAB Function: '<Root>/Æ·Î¶ÏµÊı1' */
+    /* End of SystemInitialize for MATLAB Function: '<Root>/Æ·Î¶Ïµï¿½ï¿½1' */
   }
 }
 

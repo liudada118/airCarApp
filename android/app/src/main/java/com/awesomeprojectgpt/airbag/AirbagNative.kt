@@ -74,5 +74,8 @@ object AirbagNative {
     const val IDX_IS_CHILD = 176        // isChild（儿童确认 0/1，先活体后儿童，重物恒 0）
     const val IDX_IS_ADULT = 177        // isAdult（成人确认 0/1，与 isChild 互斥）
     const val IDX_CHILD_THRESHOLD = 178 // childThreshold_out（儿童坐垫压力阈值回显，非法/未接线=1400）
-    const val OUT_LEN = 179
+    // 「无预压力热力图」用：没减 2 秒预压力基线的绝对值，点位排布与上面的热力图完全一致
+    const val IDX_RAW_CUSHION = 179     // rawCushionData[48] 在 [179..226]（列优先 6×8）
+    const val IDX_RAW_BACKREST = 227    // rawBackrestData[56] 在 [227..282]（列优先 7×8）
+    const val OUT_LEN = 283
 }

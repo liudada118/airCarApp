@@ -34,6 +34,8 @@
 //   [176] isChild（儿童确认 0/1，先活体后儿童，重物恒 0）
 //   [177] isAdult（成人确认 0/1，与 isChild 互斥；isLiving=1 时二者恰一为 1）
 //   [178] childThreshold_out（儿童坐垫压力阈值回显，非法/未接线回显 1400）
+//   [179..226] rawCushionData[48]（无预压力坐垫热力图：没减 2 秒基线的绝对值，点位同上）
+//   [227..282] rawBackrestData[56]（无预压力靠背热力图：没减 2 秒基线的绝对值，点位同上）
 #define OUT_FRAME_BASE      4
 #define OUT_CUSHION_BASE    59
 #define OUT_BACKREST_BASE   107
@@ -53,7 +55,14 @@
 #define OUT_IS_CHILD        176  // 儿童确认标志(1/0)：先活体后儿童，重物恒0
 #define OUT_IS_ADULT        177  // 成人确认标志(1/0)：与 isChild 互斥；isLiving=1 时二者恰一为1
 #define OUT_CHILD_THRESHOLD 178  // 儿童坐垫压力阈值回显(有效值回显下发，非法/未接线回显1400)
-#define OUT_LEN             179
+#define OUT_RAW_CUSHION     179  // 无预压力坐垫热力图 48 点(列优先 6×8，与 cushionData 同点位)
+#define OUT_RAW_BACKREST    227  // 无预压力靠背热力图 56 点(列优先 7×8，与 backrestData 同点位)
+#define OUT_LEN             283
+
+// airbag_13Hz.c 里手工加的两个全局：减预压力基线「之前」的原始矩阵快照。
+// 算法输出的 cushionData1/backrestData1 是「当前值 - 2秒基线」，调试面板要看绝对值。
+extern real32_T airbag_rawBackrest[56];
+extern real32_T airbag_rawCushion[48];
 
 // ===== 可运行时调节的算法阈值表 =====
 // 这些原本写死在 set_input_defaults() 里、改一次就得重编 .so 的标定输入，
@@ -213,6 +222,13 @@ Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeStep(JNIEnv *env, jobject t
     out[OUT_IS_CHILD]        = 0.0F;
     out[OUT_IS_ADULT]        = 0.0F;
     out[OUT_CHILD_THRESHOLD] = 0.0F;
+    // 无预压力热力图：直接透传原始矩阵快照（不减基线、不做 <5 归零等去噪）
+    for (int i = 0; i < 48; i++) {
+        out[OUT_RAW_CUSHION + i] = airbag_rawCushion[i];
+    }
+    for (int i = 0; i < 56; i++) {
+        out[OUT_RAW_BACKREST + i] = airbag_rawBackrest[i];
+    }
 
     jfloatArray result = (*env)->NewFloatArray(env, OUT_LEN);
     (*env)->SetFloatArrayRegion(env, result, 0, OUT_LEN, out);
