@@ -23,8 +23,23 @@ class AirbagModule(reactContext: ReactApplicationContext) :
 
     private fun ensureInit() {
         if (!initialized) {
+            AirbagNative.ensureLoaded(reactApplicationContext)
             AirbagNative.nativeInitialize()
             initialized = true
+        }
+    }
+
+    /** 返回当前加载的算法包来源（"override:<路径>" 或 "bundled"），用于确认热替换是否生效。 */
+    @ReactMethod
+    fun getAlgoInfo(promise: Promise) {
+        try {
+            ensureInit()
+            val result = Arguments.createMap()
+            result.putString("loadedFrom", AirbagNative.loadedFrom)
+            result.putBoolean("isOverride", AirbagNative.loadedFrom.startsWith("override:"))
+            promise.resolve(result)
+        } catch (e: Throwable) {
+            promise.reject("AIRBAG_NATIVE_ERR", e)
         }
     }
 

@@ -1,5 +1,9 @@
 package com.awesomeprojectgpt.airbag
 
+import android.content.Context
+import android.util.Log
+import java.io.File
+
 /**
  * airbag_13Hz 算法的 JNI 入口（对应 cpp/airbag_jni.c）。
  *
@@ -23,8 +27,68 @@ package com.awesomeprojectgpt.airbag
  * mode/part/dir = 本帧 frontCmd（自定义气囊/品味命令，一帧脉冲）；massageStop = 久坐按摩开关(0允许/1停)。
  */
 object AirbagNative {
-    init {
+    private const val TAG = "AirbagNative"
+
+    /** 算法团队 push 覆盖包的固定目录名（位于 App 外部私有目录下）。
+     *  实际路径：/sdcard/Android/data/com.awesomeprojectgpt/files/algo/libairbag.so
+     *  这个目录 adb push 不需要 root、也不需要存储权限（App 自己的私有目录）。 */
+    private const val OVERRIDE_DIR = "algo"
+    private const val SO_NAME = "libairbag.so"
+
+    @Volatile private var loaded = false
+    /** 记录本次到底加载了哪个 .so（"override:<路径>" 或 "bundled"），供状态面板显示。 */
+    @Volatile var loadedFrom: String = "(未加载)"
+        private set
+
+    /**
+     * 确保 libairbag.so 已加载。幂等：每个进程只真正加载一次。
+     * 加载优先级：
+     *   ① 覆盖包 getExternalFilesDir/algo/libairbag.so —— 存在就用它（算法团队热替换）
+     *   ② 打包内置 jniLibs/arm64-v8a/libairbag.so —— 兜底
+     * 任一步失败都自动回退到内置包，保证 App 一定能起来。
+     *
+     * 调用点：AirbagModule.ensureInit / SerialModule.ensureAirbag13Init，
+     * 必须在任何 nativeXxx() 之前调用一次。
+     */
+    @Synchronized
+    fun ensureLoaded(context: Context) {
+        if (loaded) return
+
+        val override = resolveOverrideSo(context)
+        if (override != null) {
+            try {
+                // dlopen 要求从可执行的位置加载；外部存储在部分设备是 noexec，
+                // 所以先复制到内部私有目录（filesDir）再 System.load。
+                val active = File(context.filesDir, "algo_active/$SO_NAME")
+                active.parentFile?.mkdirs()
+                override.copyTo(active, overwrite = true)
+                System.load(active.absolutePath)
+                loaded = true
+                loadedFrom = "override:${override.absolutePath}(${override.length()}B)"
+                Log.i(TAG, "已加载算法覆盖包 -> $loadedFrom")
+                return
+            } catch (e: Throwable) {
+                Log.e(TAG, "覆盖包加载失败，回退内置包: ${override.absolutePath}", e)
+            }
+        }
+
+        // 兜底：打包内置
         System.loadLibrary("airbag")
+        loaded = true
+        loadedFrom = "bundled"
+        Log.i(TAG, "已加载内置算法包 (jniLibs/libairbag.so)")
+    }
+
+    /** 找覆盖包文件，不存在/空文件返回 null。 */
+    private fun resolveOverrideSo(context: Context): File? {
+        return try {
+            val dir = context.getExternalFilesDir(OVERRIDE_DIR) ?: return null
+            val f = File(dir, SO_NAME)
+            if (f.isFile && f.length() > 0L) f else null
+        } catch (e: Throwable) {
+            Log.e(TAG, "查找覆盖包出错", e)
+            null
+        }
     }
 
     external fun nativeInitialize()

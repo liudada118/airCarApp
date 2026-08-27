@@ -936,6 +936,7 @@ class SerialModule(
     private fun ensureAirbag13Init() {
         synchronized(airbagInitLock) {
             if (!airbag13Inited) {
+                AirbagNative.ensureLoaded(reactContext)
                 AirbagNative.nativeInitialize()
                 applySavedThresholds()
                 airbag13Inited = true
