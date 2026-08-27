@@ -9,6 +9,9 @@
     "postinstall": "node scripts/patch-gradle-repos.js",
     "release": "cd android && gradlew.bat assembleRelease",
     "start": "react-native start",
+    "sync:design": "node scripts/sync-design-tokens.js",
+    "gen:theme": "node scripts/gen-theme.js",
+    "audit:hardcoded": "node scripts/audit-hardcoded.js",
     "test": "jest"
   },
   "dependencies": {

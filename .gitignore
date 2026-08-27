@@ -122,3 +122,9 @@ __pycache__/
 # 本地临时目录与机器专属脚本(不应提交)
 .tmp/
 /连接平板并运行.bat
+
+# MasterGo MCP 配置里带个人访问令牌
+/.mcp.json
+
+# 每次同步都会重生成，只是给人看的提示，进版本库全是噪音
+/design/token-map.pending.json

@@ -1,0 +1,23 @@
+{
+  "_readme": [
+    "MasterGo 样式名 → 代码里的 key。手写维护，不会被同步覆盖。",
+    "作用：设计师在 MasterGo 里改样式名时，代码这边不用跟着改。",
+    "没写映射的样式会自动推导 key（英文名走 camelCase，中文名原样保留），",
+    "推导结果会写到 token-map.pending.json，想换成更好的英文名就从那儿剪过来。",
+    "spacing / radii 的 key 是采样到的数值字符串，例如 \"12\": \"md\" 表示把画布上的 12px 提升成 Spacing.md。",
+    "注意：把某个值映射成 md/lg 这类既有 key，会直接覆盖 spacing.ts 里的手写值，全应用生效，谨慎操作。",
+    "usageColors：样式库为空时的出口——直接给画布上的色值起名，如 \"#2978CE\": \"primary\"。",
+    "  注意键是色值本身，设计师改色后映射会失配、需人工更新。样式库才是可自动同步的方案。"
+  ],
+  "colors": {},
+  "gradients": {
+    "1": "statusActive",
+    "3": "switchTrack",
+    "4": "btnPrimary"
+  },
+  "typography": {},
+  "shadows": {},
+  "radii": {},
+  "spacing": {},
+  "usageColors": {}
+}
