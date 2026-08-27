@@ -21,13 +21,14 @@ PKG="com.awesomeprojectgpt"
 DEST_DIR="/sdcard/Android/data/${PKG}/files/algo"
 DEST="${DEST_DIR}/libairbag.so"
 
-SO="${1:-}"
-if [[ -z "$SO" ]]; then
-  echo "❌ 用法: $0 <libairbag.so 的路径>"
-  exit 1
-fi
+# 不传参数时，默认用 build_so.sh 编出来的那个固定位置的 .so，
+# 所以正常情况下直接 `bash scripts/push-algo.sh` 就行，不用写路径。
+HERE="$(cd "$(dirname "$0")" && pwd)"
+DEFAULT_SO="$HERE/../android/app/src/main/jniLibs/arm64-v8a/libairbag.so"
+SO="${1:-$DEFAULT_SO}"
 if [[ ! -f "$SO" ]]; then
-  echo "❌ 找不到文件: $SO"
+  echo "❌ 找不到 .so 文件: $SO"
+  echo "   先跑编译：bash android/app/src/main/cpp/build_so.sh"
   exit 1
 fi
 
@@ -50,9 +51,12 @@ fi
 echo "📱 设备: $DEV"
 
 # --- ① 建目录 + push（改名成固定的 libairbag.so）---
+# 本地 .so 路径要转成 Windows 形式给 adb.exe（因为上面关了 MSYS 自动转换，
+# 否则 /c/... 这种路径 adb 认不出）；设备目标路径仍保持 /sdcard/... 不动。
+SO_PUSH="$(cygpath -w "$SO" 2>/dev/null || echo "$SO")"
 echo "📦 推送算法包 -> $DEST"
 "$ADB" -s "$DEV" shell mkdir -p "$DEST_DIR"
-"$ADB" -s "$DEV" push "$SO" "$DEST"
+"$ADB" -s "$DEV" push "$SO_PUSH" "$DEST"
 
 # --- ② 重启 App 让它重新加载 ---
 echo "🔄 重启 App..."

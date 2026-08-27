@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "postinstall": "node scripts/patch-gradle-repos.js",
     "release": "cd android && gradlew.bat assembleRelease",
+    "swap:algo": "bash scripts/swap-algo.sh",
     "push:algo": "bash scripts/push-algo.sh",
     "start": "react-native start",
     "sync:design": "node scripts/sync-design-tokens.js",
