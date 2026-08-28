@@ -645,6 +645,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
   const [showNonStdFrames, setShowNonStdFrames] = useState(false);
   const [showCommandModal, setShowCommandModal] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  // 手动演示:点「座椅状态」标题显隐这个下拉选择控件
+  const [demoOpen, setDemoOpen] = useState(false);
+  // 下拉列表是否展开
+  const [demoListOpen, setDemoListOpen] = useState(false);
+  // 当前状态(按钮上显示的文字，选过之后变成所选项)
+  const [demoLabel, setDemoLabel] = useState('当前状态');
   // 乘员识别:仅页面选中态(暂无功能，后续接数据)
   const [occupantType, setOccupantType] = useState<'person' | 'object' | null>(null);
   // 落座的是不是儿童/宠物：true 时「乘员入座」卡副标题变「有儿童或宠物入座」并弹安全保护弹窗
@@ -847,6 +853,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     voiceQueueRef.current.push(key);
     playNextVoiceRef.current();
   }, []);
+
+  // 手动演示：下发一帧 frontCmd 脉冲(mode,part,dir) + 播对应语音小球。
+  const runDemo = useCallback(
+    (mode: number, part: number, dir: number, voice: VoiceKey) => {
+      SerialModule?.pulseFrontCmd?.(mode, part, dir).catch(() => {});
+      triggerVoice(voice);
+    },
+    [triggerVoice],
+  );
 
   // 点中间彩球：立刻停掉当前这条语音并收起（卡死时的手动兜底）。
   // 只结束「自己这条」——finishCurrent 会接着放队列里的下一条，不影响后续播报。
@@ -1743,12 +1758,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
         {/* ─── 右侧面板 ─── */}
         <View style={styles.rightPanel} pointerEvents="box-none">
-          {/* 座椅状态(算法自动识别，不可点选) */}
+          {/* 座椅状态(算法自动识别，不可点选;标题点击=切换手动演示按钮显隐) */}
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
+            <TouchableOpacity
+              style={styles.sectionHeader}
+              onPress={() => setDemoOpen(o => !o)}
+              activeOpacity={0.7}>
               {/* <Image source={iconSitStatus} style={styles.sectionIcon} resizeMode="contain" /> */}
               <Text style={styles.sectionTitle}>座椅状态</Text>
-            </View>
+            </TouchableOpacity>
             <View style={styles.statusRow}>
               <StatusSquare active={seatStatus === 'seated'} icon={iconSeated} label="在座" />
               <StatusSquare active={seatStatus === 'away'} icon={iconAway} label="离座" />
@@ -1803,6 +1821,48 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
               </Text>
             ) : null} */}
           </View>
+
+          {/* 手动演示（点「座椅状态」标题显隐；单按钮下拉：选一项=播语音+传值，收起并显示当前状态） */}
+          {demoOpen && (() => {
+            const demoOptions: {label: string; run: () => void}[] = [
+              {label: '颠簸', run: () => runDemo(7, 0, 0, 'bump_relief')},
+              {label: '晕车', run: () => runDemo(8, 0, 0, 'motion_sickness')},
+              {label: '重心偏移', run: () => triggerVoice('spine_protect')},
+            ];
+            return (
+              <View style={styles.demoAnchor}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setDemoListOpen(o => !o)}>
+                  <LinearGradient
+                    colors={GRAD_BTN}
+                    start={{x: 0, y: 0}}
+                    end={{x: 1, y: 1}}
+                    style={styles.demoSelectBtn}>
+                    <Text style={styles.demoBtnText}>{demoLabel}</Text>
+                    <Text style={styles.demoCaret}>{demoListOpen ? '▲' : '▼'}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                {demoListOpen && (
+                  <View style={styles.demoList}>
+                    {demoOptions.map((opt, i) => (
+                      <TouchableOpacity
+                        key={opt.label}
+                        activeOpacity={0.7}
+                        style={[styles.demoOption, i > 0 && styles.demoOptionDivider]}
+                        onPress={() => {
+                          opt.run();
+                          setDemoLabel(opt.label);
+                          setDemoListOpen(false);
+                        }}>
+                        <Text style={styles.demoOptionText}>{opt.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            );
+          })()}
 
           {/* 悬浮按钮组 - 右上角（点击Logo切换显示） */}
           {showDebugPanel && (
@@ -3247,6 +3307,52 @@ const styles = StyleSheet.create({
   },
   floatingBtnGroup: {
     flexDirection: 'row',
+  },
+  // 手动演示：点「座椅状态」标题显隐；单按钮下拉选择(与按摩开关左对齐)
+  demoAnchor: {
+    marginTop: Spacing.sm,
+    alignItems: 'flex-start',   // 左对齐(和开始按摩/结束按摩同一左边)
+  },
+  demoSelectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: 120,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: 14,           // 和按摩开关(slideTrack)一致
+  },
+  demoBtnText: {
+    fontSize: FontSize.sm,
+    color: Colors.textWhite,
+    fontWeight: '600',
+  },
+  demoCaret: {
+    fontSize: FontSize.xs,
+    color: Colors.textWhite,
+    marginLeft: Spacing.sm,
+  },
+  demoList: {
+    marginTop: Spacing.xs,
+    minWidth: 120,
+    borderRadius: 14,
+    backgroundColor: Colors.cardBackgroundLight,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  demoOption: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  demoOptionDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  demoOptionText: {
+    fontSize: FontSize.sm,
+    color: Colors.textWhite,
+    fontWeight: '500',
   },
   matrixToggleBtn: {
     backgroundColor: 'rgba(0,0,0,0.55)',
