@@ -671,23 +671,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
 
   // ─── 新算法 airbag_13Hz 热力图（数据来自原生 onAirbag13Result 事件）───
   // 每帧存 ref（不触发重渲染），弹窗打开时限流刷新显示
-  // rawCushion/rawBackrest = 同样的点位，但没减「2 秒预压力基线」的绝对压力值，
-  // 给「无预压力热力图」面板用（永远显示当前状态的真实值）。
   const airbag13Ref = useRef<{
     cushion: number[];
     backrest: number[];
-    rawCushion: number[];
-    rawBackrest: number[];
     reasonCode: number;
     isFullSeat: number;
   } | null>(null);
   const [showAirbagHeatmap, setShowAirbagHeatmap] = useState(false);
-  const [showAirbagRawHeatmap, setShowAirbagRawHeatmap] = useState(false);
   const [airbag13View, setAirbag13View] = useState<{
     cushion: number[];
     backrest: number[];
-    rawCushion: number[];
-    rawBackrest: number[];
     reasonCode: number;
     isFullSeat: number;
   } | null>(null);
@@ -1318,8 +1311,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       (event: {
         cushion?: number[];
         backrest?: number[];
-        rawCushion?: number[];
-        rawBackrest?: number[];
         reasonCode?: number;
         isFullSeat?: number;
         isLivingRaw?: number;
@@ -1344,8 +1335,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         airbag13Ref.current = {
           cushion,
           backrest,
-          rawCushion: event.rawCushion ?? [],
-          rawBackrest: event.rawBackrest ?? [],
           reasonCode: event.reasonCode ?? 0,
           isFullSeat: event.isFullSeat ?? 0,
         };
@@ -1492,15 +1481,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     return () => clearInterval(timer);
   }, [showAirbagData]);
 
-  // 热力图 / 无预压力热力图弹窗打开时，每 200ms 从 ref 刷新一次显示
+  // 热力图弹窗打开时，每 200ms 从 ref 刷新一次显示
   //（避免 13Hz 直接 setState 卡顿）
   useEffect(() => {
-    if (!showAirbagHeatmap && !showAirbagRawHeatmap) return;
+    if (!showAirbagHeatmap) return;
     const timer = setInterval(() => {
       setAirbag13View(airbag13Ref.current);
     }, 200);
     return () => clearInterval(timer);
-  }, [showAirbagHeatmap, showAirbagRawHeatmap]);
+  }, [showAirbagHeatmap]);
 
   // 久坐按摩状态每 1s 刷新一次显示（时间是分钟级，无需高频）
   useEffect(() => {
@@ -1872,12 +1861,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 onPress={() => setShowAirbagHeatmap(true)}
                 activeOpacity={0.7}>
                 <Text style={styles.matrixToggleBtnText}>热力图</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.matrixToggleBtn, {marginLeft: 6}]}
-                onPress={() => setShowAirbagRawHeatmap(true)}
-                activeOpacity={0.7}>
-                <Text style={styles.matrixToggleBtnText}>无预压力热力图</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.matrixToggleBtn, {marginLeft: 6}]}
@@ -2619,45 +2602,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             </View>
             {airbag13View ? (
               <AirbagHeatmap cushion={airbag13View.cushion} backrest={airbag13View.backrest} />
-            ) : (
-              <View style={{padding: 40, alignItems: 'center'}}>
-                <Text style={{color: Colors.textGray}}>等待板子数据…（确认板子已插平板并连接串口）</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
-      )}
-
-      {/* 无预压力热力图弹窗：点位与上面的热力图完全一致，只是不减 2 秒预压力基线，
-          永远显示当前这一帧的绝对压力值（坐了多久都不会被"扣掉"）。 */}
-      {showAirbagRawHeatmap && (
-      <Modal
-        visible={showAirbagRawHeatmap}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowAirbagRawHeatmap(false)}>
-        <View style={styles.matrixModalOverlay}>
-          <View style={[styles.matrixModalContent, {maxWidth: 720}]}>
-            <View style={styles.matrixModalHeader}>
-              <Text style={styles.matrixModalTitle}>
-                无预压力热力图（原始绝对值，未减基线）
-                {airbag13View
-                  ? `　${airbag13View.isFullSeat >= 1 ? '全座' : '未全座'}　reason=${Math.round(airbag13View.reasonCode)}`
-                  : ''}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowAirbagRawHeatmap(false)}
-                activeOpacity={0.7}
-                style={styles.matrixModalClose}>
-                <Text style={styles.matrixModalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            {airbag13View ? (
-              <AirbagHeatmap
-                cushion={airbag13View.rawCushion}
-                backrest={airbag13View.rawBackrest}
-              />
             ) : (
               <View style={{padding: 40, alignItems: 'center'}}>
                 <Text style={{color: Colors.textGray}}>等待板子数据…（确认板子已插平板并连接串口）</Text>

@@ -7,9 +7,9 @@
  *
  * Code generated for Simulink model 'airbag_13Hz'.
  *
- * Model version                  : 1.241
+ * Model version                  : 1.243
  * Simulink Coder version         : 25.2 (R2025b) 28-Jul-2025
- * C/C++ source code generated on : Sat Aug  1 17:49:49 2026
+ * C/C++ source code generated on : Thu Aug 27 18:39:57 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: NXP->Cortex-M4
@@ -45,12 +45,6 @@ typedef struct {
   real_T livingQueueLen;               /* '<Root>/活体检测1' */
   real32_T UnitDelay3_DSTATE[4];       /* '<Root>/Unit Delay3' */
   real32_T UnitDelay2_DSTATE[15];      /* '<Root>/Unit Delay2' */
-  real32_T pBaseB[56];                 /* '<Root>/矩阵处理1' */
-  real32_T pBaseC[48];                 /* '<Root>/矩阵处理1' */
-  real32_T pPrevB[56];                 /* '<Root>/矩阵处理1' */
-  real32_T pPrevC[48];                 /* '<Root>/矩阵处理1' */
-  real32_T pStable;                    /* '<Root>/矩阵处理1' */
-  real32_T pDone;                      /* '<Root>/矩阵处理1' */
   real32_T prevCushion[48];            /* '<Root>/活体检测1' */
   real32_T prevBackrest[56];           /* '<Root>/活体检测1' */
   real32_T sadHistCushion[13];         /* '<Root>/活体检测1' */
@@ -59,12 +53,12 @@ typedef struct {
   real32_T noiseBaseline;              /* '<Root>/活体检测1' */
   real32_T noiseDev;                   /* '<Root>/活体检测1' */
   real32_T noiseWarmCount;             /* '<Root>/活体检测1' */
-  real32_T sessionFrames;              /* '<Root>/活体检测1' */
-  real32_T staticStreak;               /* '<Root>/活体检测1' */
   real32_T mode;                       /* '<Root>/气囊控制协议1' */
   real32_T elapsed_time;               /* '<Root>/气囊控制协议1' */
   real32_T pPrevReasonCode;            /* '<Root>/气囊控制协议1' */
   real32_T pPrevGears[24];             /* '<Root>/气囊控制协议1' */
+  real32_T pPrevHealthLeft;            /* '<Root>/气囊控制协议1' */
+  real32_T pPrevHealthRight;           /* '<Root>/气囊控制协议1' */
   real32_T pState;                     /* '<Root>/品味系数1' */
   real32_T pValid;                     /* '<Root>/品味系数1' */
   real32_T pSavedTimes[5];             /* '<Root>/品味系数1' */
@@ -110,6 +104,13 @@ typedef struct {
   real32_T pSickEventCount;            /* '<Root>/健康干预控制1' */
   real32_T pSickEventGap;              /* '<Root>/健康干预控制1' */
   real32_T pSickCountAge;              /* '<Root>/健康干预控制1' */
+  real32_T pDemoSpineTimer;            /* '<Root>/健康干预控制1' */
+  real32_T pDemoSpineSide;             /* '<Root>/健康干预控制1' */
+  real32_T pDemoBumpTimer;             /* '<Root>/健康干预控制1' */
+  real32_T pDemoSickTimer;             /* '<Root>/健康干预控制1' */
+  real32_T pPrevDemoCmd[3];            /* '<Root>/健康干预控制1' */
+  real32_T pPendingDemoMode;           /* '<Root>/健康干预控制1' */
+  real32_T pPendingDemoArg;            /* '<Root>/健康干预控制1' */
   int32_T pReplayIndex;                /* '<Root>/品味系数1' */
   int32_T pGapCycles;                  /* '<Root>/品味系数1' */
   int32_T pOffCounter;                 /* '<Root>/入座处理1' */
@@ -118,6 +119,7 @@ typedef struct {
   int32_T pBufLen;                     /* '<Root>/健康检测1' */
   int32_T pWriteIndex;                 /* '<Root>/健康检测1' */
   int32_T pFrameCount;                 /* '<Root>/健康检测1' */
+  int32_T pDemoHoldCycles;             /* '<Root>/健康干预控制1' */
   uint32_T sitFrameCount;              /* '<Root>/久坐按摩1' */
   uint32_T massageFrameCount;          /* '<Root>/久坐按摩1' */
   uint32_T hipCycleCount;              /* '<Root>/久坐按摩1' */
@@ -125,9 +127,8 @@ typedef struct {
   int8_T pState_i;                     /* '<Root>/入座处理1' */
   uint8_T phase;                       /* '<Root>/久坐按摩1' */
   boolean_T frameCount_not_empty;      /* '<Root>/活体检测1' */
-  boolean_T livingQueue[5];            /* '<Root>/活体检测1' */
+  boolean_T livingQueue[2];            /* '<Root>/活体检测1' */
   boolean_T latestRaw;                 /* '<Root>/活体检测1' */
-  boolean_T unlocked;                  /* '<Root>/活体检测1' */
   boolean_T sessionLivingLatched;      /* '<Root>/活体检测1' */
   boolean_T pState_not_empty;          /* '<Root>/入座处理1' */
   boolean_T phase_not_empty;           /* '<Root>/久坐按摩1' */

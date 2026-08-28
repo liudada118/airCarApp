@@ -1084,13 +1084,6 @@ class SerialModule(
         for (i in 0 until 56) backrest.pushDouble(out[AirbagNative.IDX_BACKREST_DATA + i].toDouble())
         map.putArray("cushion", cushion)
         map.putArray("backrest", backrest)
-        // 无预压力热力图：同样点位，但没减 2 秒预压力基线
-        val rawCushion = Arguments.createArray()
-        for (i in 0 until 48) rawCushion.pushDouble(out[AirbagNative.IDX_RAW_CUSHION + i].toDouble())
-        val rawBackrest = Arguments.createArray()
-        for (i in 0 until 56) rawBackrest.pushDouble(out[AirbagNative.IDX_RAW_BACKREST + i].toDouble())
-        map.putArray("rawCushion", rawCushion)
-        map.putArray("rawBackrest", rawBackrest)
         reactContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit("onAirbag13Result", map)
