@@ -63,43 +63,52 @@
 // 每一行：结构体字段 | 默认值 | 分组(中文,面板分节) | 标签(中文,面板显示名)
 // 只有「标定阈值」类输入进表；逐帧控制信号(frame_data1/frontCmd1/
 // longSitMassageStop1/manualMassageOn1) 和 resetFlag1 不进表，单独处理。
+// 表内顺序 = 配置面板显示顺序（面板按各项 group 首次出现的先后分节，组内保序）。
+// 两档划分依据「当前算法包实测：面板调完是否即时生效」：
+//   上半=生效（算法真读取该前端字段，改了座椅会变）；
+//   下半=不生效（纯回显到 _out 或算法完全不读），统一挪到表尾单独分组并加 [不生效] 前缀。
+// ⚠️ 这个划分跟着算法包走，算法团队换包若把某字段接进逻辑，需把它从「不生效」组挪回上面。
+// 备注：左右充/放气阈值、左充/放气比例本是「仅回显」，但本包 pValid 开关判据为 >1.5（恒不成立→
+//       恒用前端参数），故实测生效，归入上半；调这些请填 >0 的值（<=0/NaN 会被算法兜底成默认）。
 #define AIRBAG_PARAM_TABLE(X) \
+    /* ===== 生效：算法真读取，配置面板调完座椅会变 ===== */ \
     X(cushionThreshold1,        1700.0F, "在座判定",   "坐垫压力阈值") \
     X(backrestThreshold1,       1500.0F, "在座判定",   "靠背压力阈值") \
     X(backTotalThreshold1,      22.0F,   "在座判定",   "靠背总压阈值") \
     X(pointThreshold1,          20.0F,   "在座判定",   "单点有效压力阈值") \
-    X(detectorEnabled1,         1.0F,    "在座判定",   "检测器使能(0/1)") \
     X(inflation_time2,          10.0F,   "充放气时序", "充气时长1(s)") \
-    X(inflation_time3,          5.0F,    "充放气时序", "充气时长2(s)") \
-    X(holding_time1,            30.0F,   "充放气时序", "保持时长(s)") \
     X(deflation_time1,          10.0F,   "充放气时序", "放气时长(s)") \
     X(adoption_frequency1,      13.0F,   "充放气时序", "自适应频率") \
-    X(leftInflateThreshold1,    0.75F,   "充放气阈值", "左充气阈值") \
-    X(leftDeflateThreshold1,    0.9F,    "充放气阈值", "左放气阈值") \
-    X(rightInflateThreshold1,   0.75F,   "充放气阈值", "右充气阈值") \
-    X(rightDeflateThreshold1,   0.9F,    "充放气阈值", "右放气阈值") \
-    X(ratioInflateLeft1,        0.8F,    "充放气阈值", "左充气比例") \
-    X(ratioDeflateLeft1,        1.3F,    "充放气阈值", "左放气比例") \
-    X(ratioInflate1,            1.2F,    "充放气阈值", "充气比例") \
-    X(ratioDeflate1,            0.35F,   "充放气阈值", "放气比例") \
+    X(leftInflateThreshold1,    0.75F,   "充放气阈值", "左腿托 充气阈值(腿/臀压比)") \
+    X(leftDeflateThreshold1,    0.9F,    "充放气阈值", "左腿托 放气阈值(腿/臀压比)") \
+    X(rightInflateThreshold1,   0.75F,   "充放气阈值", "右腿托 充气阈值(腿/臀压比)") \
+    X(rightDeflateThreshold1,   0.9F,    "充放气阈值", "右腿托 放气阈值(腿/臀压比)") \
+    X(ratioInflateLeft1,        0.8F,    "充放气阈值", "靠背侧翼 充气比例(左/右背压比)") \
+    X(ratioDeflateLeft1,        1.3F,    "充放气阈值", "靠背侧翼 放气比例(左/右背压比)") \
     X(sadThresholdIn1,          0.3F,    "活体检测",   "判活分数阈值") \
     X(sadNormalizeScaleIn1,     3.0F,    "活体检测",   "判活归一化尺度") \
-    X(livingConfirmCountIn1,    2.0F,    "活体检测",   "确认活体次数(1~3)") \
-    X(spineBiasDeadband1,       0.5F,    "健康-脊椎",  "脊椎偏移死区") \
-    X(spineTimeThresholdSec1,   60.0F,   "健康-脊椎",  "脊椎持续阈值(s)") \
-    X(bumpMinVelocity1,         8.0F,    "健康-颠簸",  "颠簸最小速度") \
-    X(bumpMaxRms1,              0.5F,    "健康-颠簸",  "颠簸最大RMS") \
-    X(bumpMaxRangeMm1,          15.0F,   "健康-颠簸",  "颠簸最大幅度(mm)") \
-    X(bumpTimeThresholdSec1,    3.0F,    "健康-颠簸",  "颠簸持续阈值(s)") \
-    X(sickForwardMinMm1,        5.0F,    "健康-晕车",  "前移最小距离(mm)") \
-    X(sickBackDropRatio1,       0.3F,    "健康-晕车",  "靠背压降比例") \
-    X(sickPairWindowSec1,       0.8F,    "健康-晕车",  "配对时间窗(s)") \
-    X(cushionForwardSign1,      -1.0F,   "健康-晕车",  "坐垫前移方向符号") \
     X(welcomeSideWingTime1,     2.0F,    "入座欢迎",   "侧翼时长(s)") \
     X(welcomeLegTime1,          2.0F,    "入座欢迎",   "腿托时长(s)") \
     X(welcomeLumbarTime1,       3.0F,    "入座欢迎",   "腰托时长(s)") \
     X(welcomeHipTime1,          3.0F,    "入座欢迎",   "臀部时长(s)") \
-    X(sitThresholdmin1,         5.0F,    "久坐按摩",   "久坐触发(分钟)")
+    X(sitThresholdmin1,         5.0F,    "久坐按摩",   "久坐触发(分钟)") \
+    /* ===== 不生效【纯回显 或 算法不读，面板调了无作用】统一放最下面 ===== */ \
+    X(inflation_time3,          5.0F,    "⚠️不生效·算法未读", "[不生效] 充气时长2(s)") \
+    X(holding_time1,            30.0F,   "⚠️不生效·算法未读", "[不生效] 保持时长(s)") \
+    X(detectorEnabled1,         1.0F,    "⚠️不生效·算法未读", "[不生效] 检测器使能(0/1)") \
+    X(ratioInflate1,            1.2F,    "⚠️不生效·算法未读", "[不生效] 充气比例") \
+    X(ratioDeflate1,            0.35F,   "⚠️不生效·算法未读", "[不生效] 放气比例") \
+    X(livingConfirmCountIn1,    2.0F,    "⚠️不生效·算法未读", "[不生效] 确认活体次数(1~3)") \
+    X(spineBiasDeadband1,       0.5F,    "⚠️不生效·算法未读", "[不生效] 脊椎偏移死区") \
+    X(spineTimeThresholdSec1,   60.0F,   "⚠️不生效·算法未读", "[不生效] 脊椎持续阈值(s)") \
+    X(bumpMinVelocity1,         8.0F,    "⚠️不生效·算法未读", "[不生效] 颠簸最小速度") \
+    X(bumpMaxRms1,              0.5F,    "⚠️不生效·算法未读", "[不生效] 颠簸最大RMS") \
+    X(bumpMaxRangeMm1,          15.0F,   "⚠️不生效·算法未读", "[不生效] 颠簸最大幅度(mm)") \
+    X(bumpTimeThresholdSec1,    3.0F,    "⚠️不生效·算法未读", "[不生效] 颠簸持续阈值(s)") \
+    X(sickForwardMinMm1,        5.0F,    "⚠️不生效·算法未读", "[不生效] 前移最小距离(mm)") \
+    X(sickBackDropRatio1,       0.3F,    "⚠️不生效·算法未读", "[不生效] 靠背压降比例") \
+    X(sickPairWindowSec1,       0.8F,    "⚠️不生效·算法未读", "[不生效] 配对时间窗(s)") \
+    X(cushionForwardSign1,      -1.0F,   "⚠️不生效·算法未读", "[不生效] 坐垫前移方向符号")
 
 typedef struct {
     const char *name;    // 字段名（与 JS/Kotlin 一致的键）
