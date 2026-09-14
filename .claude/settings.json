@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"c:\\\\project\\\\airCarApp\\\\airCarApp\" && ls -la android/app/build/outputs/apk/release/app-release.apk && cp android/app/build/outputs/apk/release/app-release.apk \"/c/Users/98765/Desktop/SHROOM座椅.apk\" && ls -la \"/c/Users/98765/Desktop/SHROOM座椅.apk\" && echo \"已复制到桌面\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\98765\\Desktop"
+    ]
+  }
+}

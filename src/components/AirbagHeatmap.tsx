@@ -95,14 +95,23 @@ interface Props {
   cushion: number[];
   /** 靠背 56 点（列优先，恢复 7×8）。不足按 0 处理 */
   backrest: number[];
+  /** 只画坐垫（隐藏靠背）。用于「坐垫要减的预压力」预览 */
+  hideBackrest?: boolean;
+  /** 坐垫块标题，默认「坐垫」 */
+  cushionTitle?: string;
 }
 
-const AirbagHeatmap: React.FC<Props> = ({cushion, backrest}) => {
+const AirbagHeatmap: React.FC<Props> = ({
+  cushion,
+  backrest,
+  hideBackrest = false,
+  cushionTitle = '坐垫',
+}) => {
   return (
     <View style={styles.container}>
       <View style={styles.grids}>
-        <Grid data={backrest} rows={7} cols={8} title="靠背" />
-        <Grid data={cushion} rows={6} cols={8} title="坐垫" />
+        {!hideBackrest && <Grid data={backrest} rows={7} cols={8} title="靠背" />}
+        <Grid data={cushion} rows={6} cols={8} title={cushionTitle} />
       </View>
       <PressureLegend />
     </View>

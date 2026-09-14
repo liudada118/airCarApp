@@ -24,6 +24,8 @@ import CarAirRN from '../components/CarAirRN';
 import SeatMatrix46, {PressureLegend} from '../components/SeatMatrix46';
 import AirbagFullFrameModal from '../components/AirbagFullFrameModal';
 import AirbagHeatmap from '../components/AirbagHeatmap';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {cushionPreToGrid, CUSHION_QUAD_LABELS} from '../utils/cushionQuadrant';
 import {parseAirbagFullFrame, AirbagFullFrame} from '../utils/airbagFullFrame';
 import {
   playVoice,
@@ -35,6 +37,9 @@ import {
 } from '../utils/voicePlayer';
 
 // icon 图片资源
+// 坐垫「分四块手动预压力」持久化 key
+const CUSHION_PRE_KEY = 'airbag13_cushion_pre';
+const CUSHION_TOPGAIN_KEY = 'airbag13_cushion_topgain';
 const iconSitStatus = require('../assets/icons/icon-sitStatus.png');
 const iconAirStatus = require('../assets/icons/icon-airStatus.png');
 const iconSetting = require('../assets/icons/icon-setting.png');
@@ -413,9 +418,16 @@ function getBodyShapeColor(shape: BodyShape): string {
 }
 
 /**
- * C 算法(airbag_13Hz, 92帧链路) 的 reasonCode → 在座/离座。
- * 依据算法文档 5.3：
- *   1,2,3,5,7,8 → 在座；6 → 离座；0,4 → 保持上一个状态（返回 prev）。
+ * C 算法(airbag_13Hz, Zairbag_13Hz_Final 包) 的 reasonCode → 在座/离座。
+ * 本包 reasonCode 是「状态变化边沿码」，稳态不变时每帧回 0：
+ *   1 = 刚坐下(只坐垫)      → 在座
+ *   2 = 坐下(坐垫+靠背)     → 在座
+ *   3 = 只坐垫→加靠背        → 在座
+ *   5 = 靠背丢失13帧→退回只坐垫(人还在坐垫上) → 在座
+ *   4 = 离座(坐垫压力掉到阈值下)             → 离座
+ *   0 = 无变化(坐稳 或 一直空座) → 保持上一个状态(返回 prev)
+ * 注意：坐稳时 reasonCode 也是 0，所以 0 只能「保持上一状态」，不能判离座；
+ *      真正的离座只认 4（旧包用 6，本包已改为 4）。
  */
 function seatStatusFromReasonCode(
   reasonCode: number,
@@ -426,12 +438,11 @@ function seatStatusFromReasonCode(
     case 2:
     case 3:
     case 5:
-    case 7:
-    case 8:
       return 'seated';
-    case 6:
+    case 4:
+    case 6: // 6 为旧包离座码，一并兼容
       return 'away';
-    default: // 0、4 以及任何未知值：保持上一个状态
+    default: // 0 及任何未知值：保持上一个状态
       return prev;
   }
 }
@@ -690,6 +701,51 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
     reasonCode: number;
     isFullSeat: number;
   } | null>(null);
+  // 「清零预压力」按下那一刻记录的这一帧压力（被减掉的预压力），用于在热力图弹窗里
+  // 额外展示两个块（坐垫/靠背）。null = 未清零/已取消清零。
+  const [airbag13Baseline, setAirbag13Baseline] = useState<{
+    cushion: number[];
+    backrest: number[];
+  } | null>(null);
+  // 坐垫「分四块手动预压力」[左上,右上,左下,右下]：压力云图坐垫减去这四块各自设定的值
+  // （靠背仍减清零那一帧）。持久化到 AsyncStorage，重启后仍在。
+  const [cushionPre, setCushionPre] = useState<number[]>([0, 0, 0, 0]);
+  useEffect(() => {
+    AsyncStorage.getItem(CUSHION_PRE_KEY)
+      .then(json => {
+        if (!json) return;
+        const arr = JSON.parse(json);
+        if (Array.isArray(arr) && arr.length === 4) {
+          setCushionPre(arr.map((v: any) => Number(v) || 0));
+        }
+      })
+      .catch(() => {});
+  }, []);
+  const updateCushionPre = useCallback((quadIndex: number, value: number) => {
+    setCushionPre(prev => {
+      const next = prev.slice();
+      next[quadIndex] = Number.isFinite(value) ? value : 0;
+      AsyncStorage.setItem(CUSHION_PRE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+  // 坐垫「左上/右上」放大倍数:这两块减去的预压力 = 设定值 × 倍数(默认 1)。
+  // 让上半两块的压力云图变动更猛烈。持久化到 AsyncStorage。
+  const [cushionTopGain, setCushionTopGain] = useState<number>(1);
+  useEffect(() => {
+    AsyncStorage.getItem(CUSHION_TOPGAIN_KEY)
+      .then(json => {
+        if (!json) return;
+        const n = Number(JSON.parse(json));
+        if (Number.isFinite(n) && n > 0) setCushionTopGain(n);
+      })
+      .catch(() => {});
+  }, []);
+  const updateCushionTopGain = useCallback((value: number) => {
+    const n = Number.isFinite(value) && value > 0 ? value : 1;
+    setCushionTopGain(n);
+    AsyncStorage.setItem(CUSHION_TOPGAIN_KEY, JSON.stringify(n)).catch(() => {});
+  }, []);
   // 触发重渲染,把最新压力(104点)作为新引用喂给 3D 压力云图
   const [, setSeat3dTick] = useState(0);
   // 假压力调试:打开后喂一份"满压力"假数据(方便对齐 3D 点云位置),关掉回真数据
@@ -1332,6 +1388,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         detectionTriggered?: number;
         isLiving?: number;
         isStatic?: number;
+        isPending?: number;
         isChild?: number;
         isAdult?: number;
         childThreshold?: number;
@@ -1427,13 +1484,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
           onSeatStatusChange?.(nextSeat);
         }
 
-        // ── 乘员识别：直接用算法输出的两个字段 isLiving / isStatic ──
+        // ── 乘员识别：直接用算法输出的字段 isLiving / isStatic / isPending ──
         // 新 C 包已在算法内做完活体/静物判定，App 不再自己攒窗口：
+        //   isPending=1 → 待定/识别中，两张卡都置灰（优先级最高，压过下面两项）
         //   isLiving=1  → 「乘员入座」亮
         //   isStatic=1  → 「静物占位」亮
-        //   两者都为 0  → 识别中 / 离座，两张卡都不亮（无中间默认值）
-        const living = (event.isLiving ?? 0) >= 0.5;
-        const isStaticObj = (event.isStatic ?? 0) >= 0.5;
+        //   都为 0      → 离座，两张卡都不亮（无中间默认值）
+        const pending = (event.isPending ?? 0) >= 0.5;
+        const living = !pending && (event.isLiving ?? 0) >= 0.5;
+        const isStaticObj = !pending && (event.isStatic ?? 0) >= 0.5;
         const child = (event.isChild ?? 0) >= 0.5;
         const nextOccupant: 'person' | 'object' | null = living
           ? 'person'
@@ -1739,6 +1798,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 data={sensorData as unknown as never[]}
                 style={styles.carAir3D}
                 showDebugPanel={showDebugPanel}
+                cushionPre={cushionPre}
+                cushionTopGain={cushionTopGain}
+                onBaselineChange={(active: boolean) => {
+                  // 点「清零预压力」→ 把当前这一帧(坐垫48+靠背56)拍照存下来；取消清零→清空。
+                  if (active) {
+                    const cur = airbag13Ref.current;
+                    if (cur) {
+                      setAirbag13Baseline({
+                        cushion: (cur.cushion || []).slice(),
+                        backrest: (cur.backrest || []).slice(),
+                      });
+                    }
+                  } else {
+                    setAirbag13Baseline(null);
+                  }
+                }}
               />
             </LinearGradient>
           </View>
@@ -2645,7 +2720,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
         animationType="fade"
         onRequestClose={() => setShowAirbagHeatmap(false)}>
         <View style={styles.matrixModalOverlay}>
-          <View style={[styles.matrixModalContent, {maxWidth: 720}]}>
+          <View style={[styles.matrixModalContent, {maxWidth: 1040}]}>
             <View style={styles.matrixModalHeader}>
               <Text style={styles.matrixModalTitle}>
                 压力热力图（airbag_13Hz）
@@ -2660,13 +2735,92 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
                 <Text style={styles.matrixModalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
-            {airbag13View ? (
-              <AirbagHeatmap cushion={airbag13View.cushion} backrest={airbag13View.backrest} />
-            ) : (
-              <View style={{padding: 40, alignItems: 'center'}}>
-                <Text style={{color: Colors.textGray}}>等待板子数据…（确认板子已插平板并连接串口）</Text>
+            <View style={styles.heatmapModalBody}>
+              {/* ── 左侧：实时热力图 + 清零那一帧截图 ── */}
+              <View style={styles.heatmapLeft}>
+                {airbag13View ? (
+                  <ScrollView style={{maxHeight: 560}} showsVerticalScrollIndicator>
+                    {/* 现在的两个块：实时坐垫 + 靠背 */}
+                    <AirbagHeatmap cushion={airbag13View.cushion} backrest={airbag13View.backrest} />
+                    {/* 点了「清零预压力」后，记录清零那一刻的这一帧（靠背用它做减法） */}
+                    {airbag13Baseline && (
+                      <View style={styles.baselineBlock}>
+                        <Text style={styles.baselineTitle}>
+                          清零预压力记录的这一帧（靠背减此帧；坐垫改减右侧手动值）
+                        </Text>
+                        <AirbagHeatmap
+                          cushion={airbag13Baseline.cushion}
+                          backrest={airbag13Baseline.backrest}
+                        />
+                      </View>
+                    )}
+                  </ScrollView>
+                ) : (
+                  <View style={{padding: 40, alignItems: 'center'}}>
+                    <Text style={{color: Colors.textGray}}>等待板子数据…（确认板子已插平板并连接串口）</Text>
+                  </View>
+                )}
               </View>
-            )}
+
+              {/* ── 右侧：坐垫分四块手动预压力设置 + 预览 ── */}
+              <View style={styles.cushionPrePanel}>
+                <Text style={styles.cushionPreTitle}>坐垫预压力（手动·分四块）</Text>
+                <Text style={styles.cushionPreHint}>
+                  坐垫云图减去下面每块设定的值；靠背仍减「清零」那一帧。需先点「清零预压力」生效。
+                </Text>
+                {/* 2×2 输入，位置对应块的方位（上左/上右 · 下左/下右） */}
+                {[[0, 1], [2, 3]].map((pair, r) => (
+                  <View key={r} style={styles.quadInputRow}>
+                    {pair.map(qi => (
+                      <View key={qi} style={styles.quadInputCell}>
+                        <Text style={styles.quadInputLabel}>{CUSHION_QUAD_LABELS[qi]}</Text>
+                        <TextInput
+                          key={`${qi}:${cushionPre[qi]}`}
+                          style={styles.quadInput}
+                          defaultValue={String(cushionPre[qi])}
+                          keyboardType="numeric"
+                          returnKeyType="done"
+                          onEndEditing={e => {
+                            const t = e.nativeEvent.text.trim();
+                            const num = Number(t);
+                            if (t === '' || isNaN(num)) return;
+                            updateCushionPre(qi, Math.max(0, num));
+                          }}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                ))}
+                {/* 左上/右上放大倍数：这两块减去的预压力 = 设定值 × 倍数，让上半云图变动更猛烈 */}
+                <View style={styles.topGainRow}>
+                  <Text style={styles.topGainLabel}>左上/右上 放大倍数</Text>
+                  <TextInput
+                    key={`gain:${cushionTopGain}`}
+                    style={styles.quadInput}
+                    defaultValue={String(cushionTopGain)}
+                    keyboardType="numeric"
+                    returnKeyType="done"
+                    onEndEditing={e => {
+                      const t = e.nativeEvent.text.trim();
+                      const num = Number(t);
+                      if (t === '' || isNaN(num)) return;
+                      updateCushionTopGain(num);
+                    }}
+                  />
+                </View>
+                <Text style={styles.cushionPreHint}>
+                  放大「减完预压力后的变动」：显示=(实际−预压力)×倍数。例：实际60、预压力40→差20，倍数2→显示40。&gt;1 更猛烈，1=不放大
+                </Text>
+                {/* 预览：压力云图坐垫要减去的值（每格 = 所在块设定值） */}
+                <Text style={styles.cushionPrePreviewLabel}>压力云图坐垫要减去的值：</Text>
+                <AirbagHeatmap
+                  cushion={cushionPreToGrid(cushionPre)}
+                  backrest={[]}
+                  hideBackrest
+                  cushionTitle="坐垫要减的预压力"
+                />
+              </View>
+            </View>
           </View>
         </View>
       </Modal>
@@ -3425,6 +3579,98 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     minWidth: 340,
     maxWidth: '80%',
+  },
+  baselineBlock: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+  },
+  heatmapModalBody: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  heatmapLeft: {
+    flexShrink: 1,
+  },
+  cushionPrePanel: {
+    width: 300,
+    marginLeft: 16,
+    paddingLeft: 16,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+  },
+  cushionPreTitle: {
+    color: '#7cc4ff',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  cushionPreHint: {
+    color: '#90A4AE',
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  quadInputRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  topGainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  topGainLabel: {
+    color: '#E0E0E0',
+    fontSize: 12,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  quadInputCell: {
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  quadInputLabel: {
+    color: '#E0E0E0',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  quadInput: {
+    width: 96,
+    height: 34,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 6,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    textAlign: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  cushionPrePreviewLabel: {
+    color: '#ffb74d',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  baselineTitle: {
+    color: '#ffb74d',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 10,
+    textAlign: 'center',
   },
   matrixModalHeader: {
     flexDirection: 'row',

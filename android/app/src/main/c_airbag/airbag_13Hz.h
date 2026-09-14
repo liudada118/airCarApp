@@ -21,6 +21,7 @@ typedef struct {
   real_T sadCount;
   real_T frameCount;
   real_T livingQueueLen;
+  real_T staticQueueLen;
   real32_T UnitDelay3_DSTATE[4];
   real32_T UnitDelay2_DSTATE[15];
   real32_T prevCushion[48];
@@ -91,8 +92,6 @@ typedef struct {
   real32_T pPendingDemoArg;
   int32_T pReplayIndex;
   int32_T pGapCycles;
-  int32_T pOffCounter;
-  int32_T pResetCounter;
   int32_T pBackrestLostCounter;
   int32_T pBufLen;
   int32_T pWriteIndex;
@@ -108,6 +107,7 @@ typedef struct {
   boolean_T livingQueue[2];
   boolean_T latestRaw;
   boolean_T sessionLivingLatched;
+  boolean_T sessionStaticLatched;
   boolean_T pState_not_empty;
   boolean_T phase_not_empty;
   boolean_T livingLatched;
@@ -221,6 +221,11 @@ typedef struct {
   real32_T sickEventCount1;
   real32_T isLiving1;
   real32_T isStatic1;
+  real32_T lumbarRatio1;
+  real32_T wingRatio1;
+  real32_T leftLegRatio1;
+  real32_T rightLegRatio1;
+  real32_T isPending1;
 } ExtY_airbag_13Hz_T;
 
 struct tag_RTM_airbag_13Hz_T {

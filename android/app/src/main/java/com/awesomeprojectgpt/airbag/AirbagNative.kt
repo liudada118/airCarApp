@@ -138,5 +138,10 @@ object AirbagNative {
     const val IDX_IS_CHILD = 176        // isChild（儿童确认 0/1，先活体后儿童，重物恒 0）
     const val IDX_IS_ADULT = 177        // isAdult（成人确认 0/1，与 isChild 互斥）
     const val IDX_CHILD_THRESHOLD = 178 // childThreshold_out（儿童坐垫压力阈值回显，非法/未接线=1400）
-    const val OUT_LEN = 179
+    const val IDX_IS_PENDING = 179      // isPending（待定/识别中 0/1）；=1 时乘员入座与静物占位都置灰
+    const val IDX_LUMBAR_RATIO = 180    // 腰托实时压力比（靠背上/下平均压）
+    const val IDX_WING_RATIO = 181      // 侧翼实时压力比（靠背左/右压）
+    const val IDX_LEFT_LEG_RATIO = 182  // 左腿托实时压力比（左腿/左臀平均压）
+    const val IDX_RIGHT_LEG_RATIO = 183 // 右腿托实时压力比（右腿/右臀平均压）
+    const val OUT_LEN = 184
 }

@@ -18,6 +18,7 @@ import {GLView} from 'expo-gl';
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {addSide, lineInterpnew} from '../../util/util';
+import {cushionPreValue, cushionQuadOf} from '../utils/cushionQuadrant';
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 const SEPARATION = 100;
@@ -42,23 +43,38 @@ const COLOR_BRIGHTNESS = 1.35;
 // 默认 5 个颜色还原「红→橙→黄→蓝→蓝紫」的原彩虹表。
 const DEFAULT_RGB = [
   [220, 20, 20],   // 最高压
-  [255, 140, 0],
+  [245, 75, 5],
   [255, 255, 0],
   [0, 160, 255],
   [25, 25, 110],  // 最低压
 ];
 // 预设方案:每个是 5 个 RGB 锚点(高压→低压)。第5个(最低压)默认收在深蓝紫。
 const COLOR_PRESETS = {
-  彩虹: [[220, 20, 20], [255, 140, 0], [255, 255, 0], [0, 160, 255], [25, 25, 110]],
+  彩虹: [[220, 20, 20], [245, 75, 5], [255, 255, 0], [0, 160, 255], [25, 25, 110]],
   蓝红: [[255, 30, 30], [220, 20, 120], [150, 20, 180], [60, 40, 200], [25, 25, 110]],
   火焰: [[255, 240, 120], [255, 180, 0], [255, 90, 0], [200, 20, 0], [25, 25, 110]],
   蓝绿: [[0, 255, 120], [0, 230, 200], [0, 190, 255], [40, 90, 230], [25, 25, 110]],
 };
-const CLOUD_PALETTE_STOPS = 25;
+const CLOUD_PALETTE_STOPS = 128;
 
-// 5 个 RGB 锚点 → 25 级调色板(在锚点之间线性插值)。
+// 渐变过渡:把锚点之间的线性比例 fr(0~1) 重新映射,控制「过渡带」宽窄。
+//   gradientOn=false → 硬色带:每段只显示锚点原色(fr<0.5取前色,否则后色),就是「5 个颜色」。
+//   gradientOn=true  → 中间一段做过渡,strength(0~100)=过渡带占整段的宽度:
+//                      100 = 整段都在过渡(完全线性平滑,和以前一样);
+//                      越小 → 两端锚点原色占得越多,只在正中间窄窄一条过渡(红↔橘中间才有红橘)。
+function remapFrac(fr, gradientOn, strength) {
+  if (!gradientOn) return fr < 0.5 ? 0 : 1;
+  const w = Math.max(0.02, Math.min(1, (Number(strength) || 0) / 100));
+  if (w >= 0.999) return fr;
+  const lo = (1 - w) / 2; // 过渡带前后各留 (1-w)/2 的纯色
+  if (fr <= lo) return 0;
+  if (fr >= 1 - lo) return 1;
+  return (fr - lo) / w;
+}
+
+// 5 个 RGB 锚点 → 多级调色板(在锚点之间按 remapFrac 过渡)。
 // 返回数组 index 0 = 高压端(rgb[0]), index n-1 = 低压端(rgb[4])。
-function buildPalette(rgb) {
+function buildPalette(rgb, gradientOn = true, strength = 100) {
   const anchors = (Array.isArray(rgb) && rgb.length >= 2) ? rgb : DEFAULT_RGB;
   const seg = anchors.length - 1;
   const n = CLOUD_PALETTE_STOPS;
@@ -67,7 +83,7 @@ function buildPalette(rgb) {
     const fp = (i / (n - 1)) * seg;
     const a = Math.floor(fp);
     const b = Math.min(a + 1, seg);
-    const fr = fp - a;
+    const fr = remapFrac(fp - a, gradientOn, strength);
     const c0 = anchors[a];
     const c1 = anchors[b];
     out[i] = [
@@ -79,14 +95,16 @@ function buildPalette(rgb) {
   return out;
 }
 
-// 调色板缓存:颜色不变时复用,避免每帧重建。
+// 调色板缓存:颜色/渐变参数不变时复用,避免每帧重建。
 const rgbKey = (rgb) => (Array.isArray(rgb) ? rgb : DEFAULT_RGB).map(c => c.join('-')).join(',');
-let _paletteCache = buildPalette(DEFAULT_RGB);
-let _paletteKey = rgbKey(DEFAULT_RGB);
-function getPalette(rgb) {
-  const key = rgbKey(rgb);
+const paletteKey = (rgb, gradientOn, strength) =>
+  rgbKey(rgb) + '|' + (gradientOn ? 1 : 0) + '|' + Math.round(Number(strength) || 0);
+let _paletteCache = buildPalette(DEFAULT_RGB, true, 100);
+let _paletteKey = paletteKey(DEFAULT_RGB, true, 100);
+function getPalette(rgb, gradientOn = true, strength = 100) {
+  const key = paletteKey(rgb, gradientOn, strength);
   if (key !== _paletteKey) {
-    _paletteCache = buildPalette(rgb);
+    _paletteCache = buildPalette(rgb, gradientOn, strength);
     _paletteKey = key;
   }
   return _paletteCache;
@@ -112,17 +130,65 @@ function cloudColor(palette, max, x) {
   ];
 }
 const MODEL_ASSET = require('../assets/3D/111.glb');
-const DEFAULT_SETTINGS = {
-  gauss: 3.0,        // 用户实机调定
-  color: 425,        // 色阶映射范围(用户实机调定)
-  height: 0.6,
-  coherent: 2.0,     // 第二层平滑(插值后):越小越跟手(9→2 加快响应)
-  rawSmooth: 1.5,    // 第一层平滑(插值前):越小越跟手(3→1.5 加快响应)
-  deadZone: 9,       // 死区阈值,用户实机调定
-  zeroFrameThreshold: 10, // 全 0 帧检测：帧总和低于此值视为气囊动作干扰帧，直接跳过
-  colorRGB: DEFAULT_RGB.map(c => [...c]), // 云图 5 段颜色 RGB(高压→低压)
-  colorPreset: '彩虹',                     // 当前配色预设名(改单圈颜色后置为「自定义」)
+// 分区(坐垫/靠背)各自可调的参数:颜色/显示 + 平滑/滤波 + 渐变过渡。
+const DEFAULT_ZONE = {
+  gauss: 2.5,        // 高斯(用户备份还原值)
+  color: 425,        // 色阶映射范围(用户备份还原值)
+  height: 1.0,       // 高度(用户备份还原值)
+  coherent: 1.0,     // 第二层平滑(插值后):越小越跟手
+  rawSmooth: 1.0,    // 第一层平滑(插值前):越小越跟手
+  deadZone: 20,      // 死区阈值(用户备份还原值)
+  gradientOn: true,  // 渐变过渡开关:关=5 个硬色带
+  gradient: 15,      // 渐变过渡强弱 0~100:100=完全平滑,越小色带越硬(用户备份还原值)
 };
+// 分区字段名(坐垫/靠背各存一份;其余为全局共享)。
+const ZONE_SETTING_KEYS = Object.keys(DEFAULT_ZONE);
+// 配置「还原版本号」:升到新值时,旧设备上一次会被强制还原成下面这套默认值,
+// 之后用户的改动照常持久化。改默认值想让老设备生效就把这个数字 +1。
+const SETTINGS_RESTORE_VERSION = 2;
+// 顶部「坐垫/靠背」切换用的标签(键与 allConfig 一致)。
+const PANEL_ZONE_LABELS = {cushion: '坐垫', backrest: '靠背'};
+const DEFAULT_SETTINGS = {
+  // ── 版本 ──
+  _v: SETTINGS_RESTORE_VERSION,
+  // ── 全局共享 ──
+  zeroFrameThreshold: 10, // 全 0 帧检测:帧总和低于此值视为气囊动作干扰帧,直接跳过
+  colorRGB: DEFAULT_RGB.map(c => [...c]), // 云图 5 段颜色 RGB(高压→低压),坐垫靠背共用
+  colorPreset: '彩虹',                     // 当前配色预设名(改单圈颜色后置为「自定义」)
+  // ── 分区各一份 ──
+  cushion: {...DEFAULT_ZONE},
+  backrest: {...DEFAULT_ZONE},
+};
+
+// 迁移:把持久化读回的设置(可能是旧「扁平」格式)归一成新结构。
+// 旧格式里的 color/gauss/... 会被复制到坐垫和靠背两份里(你原来调的值不丢)。
+function normalizeSettings(saved) {
+  const s = saved || {};
+  // 一次性还原:设备上存的版本号低于当前 → 用户要求还原成备份默认值(只做一次)。
+  // 还原后回写新版本号,之后用户的改动照常持久化,不会被再次覆盖。
+  if ((s._v || 0) < SETTINGS_RESTORE_VERSION) {
+    return {
+      _v: SETTINGS_RESTORE_VERSION,
+      zeroFrameThreshold: DEFAULT_SETTINGS.zeroFrameThreshold,
+      colorRGB: DEFAULT_SETTINGS.colorRGB.map(c => [...c]),
+      colorPreset: DEFAULT_SETTINGS.colorPreset,
+      cushion: {...DEFAULT_ZONE},
+      backrest: {...DEFAULT_ZONE},
+    };
+  }
+  const out = {
+    _v: SETTINGS_RESTORE_VERSION,
+    zeroFrameThreshold: s.zeroFrameThreshold != null ? s.zeroFrameThreshold : DEFAULT_SETTINGS.zeroFrameThreshold,
+    colorRGB: Array.isArray(s.colorRGB) ? s.colorRGB.map(c => [...c]) : DEFAULT_SETTINGS.colorRGB.map(c => [...c]),
+    colorPreset: s.colorPreset || DEFAULT_SETTINGS.colorPreset,
+  };
+  // 旧扁平格式里的分区字段(若存在):作为坐垫/靠背的共同起点
+  const flat = {};
+  ZONE_SETTING_KEYS.forEach(k => { if (s[k] != null) flat[k] = s[k]; });
+  out.cushion = {...DEFAULT_ZONE, ...flat, ...(s.cushion || {})};
+  out.backrest = {...DEFAULT_ZONE, ...flat, ...(s.backrest || {})};
+  return out;
+}
 // 数据更新频率：15Hz（匹配串口数据源）
 const SEAT_UPDATE_INTERVAL = 1000 / 15;
 const MODEL_TARGET_SIZE = 220;
@@ -136,13 +202,28 @@ const IDLE_RENDER_FRAMES = 3;
 // 注意：新网格(坐垫6×8/靠背7×8)长宽比与旧版(10×6)不同，这些贴合值是起点，
 // 需在 3D 视图右侧调节面板里拖滑块微调，然后「打印参数」把结果填回这里。
 const DEFAULT_POINT_FIT_LAYOUT = {
-  // 用户实机调定并固化(坐垫/靠背贴合座椅)
-  center: {position: [13, -65, -29], rotation: [3.28, 0, 0], sx: 5.7, sy: 4.6, sz: 3},
-  centersit: {position: [15, 2, 24], rotation: [2.07, 0, 0], sx: 4.9, sy: 0.7, sz: 6.2},
+  // 用户实机调定并固化(坐垫/靠背贴合座椅)——还原为用户备份截图值
+  center: {position: [13, -65, -29], rotation: [3.28, 0, 0], sx: 4.7, sy: 2.5, sz: 3.9},
+  centersit: {position: [15, 8, 32], rotation: [2.01, 0, 0], sx: 4.5, sy: 0.7, sz: 6.2},
   leftsit: {position: [-28, -9, -30], rotation: [1.35, 0, -0.50], sx: 3.3, sy: 3.3, sz: 3.3},
   rightsit: {position: [64, -7, -10], rotation: [1.35, 0, 0.50], sx: 3.3, sy: 3.3, sz: 3.3},
 };
 const DEFAULT_POINT_SIZE = 8.5;  // 默认点大小
+
+// layout 状态({px,py,pz,rx,ry,rz,sx,sy,sz})→ applyPointFitToModel 用的 {position,rotation,sx,sy,sz}
+function layoutStateToFitMap(layout) {
+  const map = {};
+  Object.keys(layout || {}).forEach(name => {
+    const l = layout[name];
+    if (!l) return;
+    map[name] = {
+      position: [l.px, l.py, l.pz],
+      rotation: [l.rx, l.ry, l.rz],
+      sx: l.sx, sy: l.sy, sz: l.sz,
+    };
+  });
+  return map;
+}
 
 const DEFAULT_POINT_MAP_ROTATE = {x: 0, y: 0, z: 0};
 const POINT_MAP_SCALE_DEFAULT = 1.8;
@@ -243,7 +324,7 @@ function buildGaussKernel(r) {
   return {kernel, rs, size};
 }
 
-const GAUSS_KERNEL = buildGaussKernel(DEFAULT_SETTINGS.gauss);
+const GAUSS_KERNEL = buildGaussKernel(DEFAULT_ZONE.gauss);
 
 function gaussBlurFast(scl, w, h, resultBuf, gaussKernel) {
   const {kernel, rs} = gaussKernel || GAUSS_KERNEL;
@@ -604,8 +685,9 @@ function sitRenew(config, name, ndata1, smoothBig, particles, workBuf, flipRow =
   const colors = colorAttr.array;
   const scales = scalesAttr?.array instanceof Float32Array ? scalesAttr.array : null;
 
-  const {color, height, coherent} = dynSettings || DEFAULT_SETTINGS;
-  const palette = getPalette((dynSettings || DEFAULT_SETTINGS).colorRGB);
+  const _ds = dynSettings || DEFAULT_SETTINGS;
+  const {color, height, coherent} = _ds;
+  const palette = getPalette(_ds.colorRGB, _ds.gradientOn, _ds.gradient);
 
   const bigArr = lineInterpnew(ndata1, sitnum2, sitnum1, sitInterp1, sitInterp);
   const bigArrs = addSide(
@@ -805,9 +887,21 @@ const stepStyles = StyleSheet.create({
 
 // ─── 主组件 ──────────────────────────────────────────────────────────────────
 
-function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
+function CarAirRNInner({data = [], style, showDebugPanel = true, onBaselineChange, cushionPre, cushionTopGain}, ref) {
   const stateRef = useRef({});
   const dataRef = useRef(data);
+  // 把「清零预压力」开关状态回调给父组件(HomeScreen)，让它把这一帧记录下来。
+  // 用 ref 存回调，避免 useImperativeHandle 的空依赖捕获到旧引用。
+  const onBaselineChangeRef = useRef(onBaselineChange);
+  onBaselineChangeRef.current = onBaselineChange;
+  // 坐垫「分四块手动预压力」[左上,右上,左下,右下]，由父组件(热力图弹窗)设置。
+  // 靠背仍减去清零那一帧；坐垫改减这四块各自设定的值。
+  const cushionPreRef = useRef(cushionPre);
+  cushionPreRef.current = cushionPre;
+  // 坐垫「左上/右上」两块的放大倍数:减去的预压力 = 该块设定值 × 倍数(默认 1=不放大)。
+  // 过量减去静息基线→压低低压区,只留强压,让这两块的压力云图变动更猛烈。
+  const cushionTopGainRef = useRef(cushionTopGain);
+  cushionTopGainRef.current = cushionTopGain;
   const frameRef = useRef(null);
   const mountedRef = useRef(true);
   const [loading, setLoading] = useState(true);
@@ -825,36 +919,45 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       if (json) {
         try {
           const saved = JSON.parse(json);
-          const merged = {...DEFAULT_SETTINGS, ...saved};
+          const merged = normalizeSettings(saved); // 迁移旧扁平格式→坐垫/靠背各一份
           setPointSettings(merged);
           pointSettingsRef.current = merged;
-          // 同步高斯核
-          if (saved.gauss != null && stateRef.current) {
-            stateRef.current._gaussKernel = buildGaussKernel(merged.gauss);
+          // 坐垫/靠背各建一个高斯核
+          if (stateRef.current) {
+            stateRef.current._gaussKernel = {
+              cushion: buildGaussKernel(merged.cushion.gauss),
+              backrest: buildGaussKernel(merged.backrest.gauss),
+            };
+            stateRef.current.dirty = true;
           }
-          if (stateRef.current) stateRef.current.dirty = true;
         } catch (_) {}
       }
       settingsLoadedRef.current = true;
     }).catch(() => { settingsLoadedRef.current = true; });
   }, []);
 
-  const updatePointSetting = useCallback((key, value) => {
+  // 改某个分区(zoneKey='cushion'|'backrest')的某个参数。坐垫/靠背互不影响。
+  const updateZoneSetting = useCallback((zoneKey, key, value) => {
     setPointSettings(prev => {
-      const next = {...prev, [key]: value};
+      const zonePrev = prev[zoneKey] || DEFAULT_ZONE;
+      const nextZone = {...zonePrev, [key]: value};
+      const next = {...prev, [zoneKey]: nextZone};
       pointSettingsRef.current = next;
-      // 对于平滑参数变更，重置平滑缓冲区
+      const fs = stateRef.current;
+      // 平滑参数变更:重置平滑缓冲区(全局一份 buf,重置无妨)
       if (key === 'rawSmooth' || key === 'coherent') {
-        const fs = stateRef.current;
         fs.rawSmoothInited = false;
-        fs.dirty = true;
       }
       if (key === 'gauss') {
-        // 重建高斯核
-        stateRef.current._gaussKernel = buildGaussKernel(value);
-        stateRef.current.dirty = true;
+        // 只重建该分区的高斯核
+        fs._gaussKernel = fs._gaussKernel || {};
+        fs._gaussKernel[zoneKey] = buildGaussKernel(value);
       }
-      stateRef.current.dirty = true;
+      if (key === 'gradient' || key === 'gradientOn') {
+        // 纯配色调整:强制下一帧重新着色立即生效
+        fs.lastDataHash = -1;
+      }
+      fs.dirty = true;
       // 持久化到 SharedPreferences
       NativeModules.SerialModule?.savePointSettings?.(JSON.stringify(next)).catch(() => {});
       return next;
@@ -910,6 +1013,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
         fs.rawSmoothInited = false;
         fs.dirty = true;
         setBaselineActive(true);
+        onBaselineChangeRef.current?.(true);
       }
     },
     /** 取消清零，恢复原始数据 */
@@ -919,6 +1023,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       fs.rawSmoothInited = false;
       fs.dirty = true;
       setBaselineActive(false);
+      onBaselineChangeRef.current?.(false);
     },
     /** 是否已清零 */
     isBaselineActive() {
@@ -1010,6 +1115,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     return init;
   });
   const [activeZone, setActiveZone] = useState('center');
+  // 顶部「颜色/显示 · 平滑/滤波 · 渐变过渡」当前编辑的分区(坐垫/靠背)
+  const [panelZone, setPanelZone] = useState('cushion');
   const [pointSize, setPointSize] = useState(DEFAULT_POINT_SIZE);
 
   // 整体视角参数
@@ -1033,6 +1140,98 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     modelRz: 0,     // 模型 Z 旋转
     modelScale: 1,  // 模型缩放倍率（相对于自动计算的基准缩放）
   });
+
+  // 布局/视角/点大小的最新值 ref(供异步的「模型加载完成」回调 & 保存函数读取)
+  const layoutRef = useRef(layout);
+  const viewParamsRef = useRef(viewParams);
+  const pointSizeRef = useRef(pointSize);
+  const viewLoadedRef = useRef(false); // 视角持久化是否已加载完(避免早期渲染回调用默认值覆盖存档)
+  useEffect(() => { layoutRef.current = layout; }, [layout]);
+  useEffect(() => { viewParamsRef.current = viewParams; }, [viewParams]);
+  useEffect(() => { pointSizeRef.current = pointSize; }, [pointSize]);
+
+  // 把「布局+视角+点大小」打包持久化到 SharedPreferences(view 键)。防抖到帧末。
+  const saveViewTimerRef = useRef(null);
+  const saveViewSettings = useCallback(() => {
+    if (saveViewTimerRef.current) clearTimeout(saveViewTimerRef.current);
+    saveViewTimerRef.current = setTimeout(() => {
+      const payload = {
+        layout: layoutRef.current,
+        viewParams: viewParamsRef.current,
+        pointSize: pointSizeRef.current,
+      };
+      NativeModules.SerialModule?.saveViewSettings?.(JSON.stringify(payload)).catch(() => {});
+    }, 300);
+  }, []);
+
+  // 把持久化的视角参数应用到已存在的 3D 场景(rootGroup/model/pointGroup)。
+  const applyViewParamsToScene = useCallback((vp) => {
+    const s = stateRef.current;
+    if (!s || !vp) return;
+    if (s.camera && s.controls) {
+      if (Number.isFinite(vp.camDist)) { s.camera.position.z = vp.camDist; s.controls.distance = vp.camDist; }
+    }
+    if (s.rootGroup && s.controls) {
+      if (Number.isFinite(vp.rootRx)) { s.rootGroup.rotation.x = vp.rootRx; s.controls.rotationX = vp.rootRx; }
+      if (Number.isFinite(vp.rootRy)) { s.rootGroup.rotation.y = vp.rootRy; s.controls.rotationY = vp.rootRy; }
+      if (Number.isFinite(vp.rootPx)) s.rootGroup.position.x = vp.rootPx;
+      if (Number.isFinite(vp.rootPy)) s.rootGroup.position.y = vp.rootPy;
+      if (Number.isFinite(vp.rootPz)) s.rootGroup.position.z = vp.rootPz;
+    }
+    if (s.pointGroup) {
+      if (Number.isFinite(vp.grpRx)) s.pointGroup.rotation.x = vp.grpRx;
+      if (Number.isFinite(vp.grpRy)) s.pointGroup.rotation.y = vp.grpRy;
+      if (Number.isFinite(vp.grpRz)) s.pointGroup.rotation.z = vp.grpRz;
+    }
+    const model = s.model;
+    if (model) {
+      const bp = model._basePosition;
+      if (bp) {
+        if (Number.isFinite(vp.modelPx)) model.position.x = bp.x + vp.modelPx;
+        if (Number.isFinite(vp.modelPy)) model.position.y = bp.y + vp.modelPy;
+        if (Number.isFinite(vp.modelPz)) model.position.z = bp.z + vp.modelPz;
+      }
+      model.rotation.set(vp.modelRx ?? 0, vp.modelRy ?? 1.57, vp.modelRz ?? 0);
+      if (model._baseScale != null && Number.isFinite(vp.modelScale)) {
+        model.scale.setScalar(model._baseScale * vp.modelScale);
+      }
+    }
+    s.dirty = true;
+  }, []);
+
+  // 启动时加载持久化的视角/布局/点大小
+  useEffect(() => {
+    NativeModules.SerialModule?.loadViewSettings?.().then(json => {
+      if (json) {
+        try {
+          const saved = JSON.parse(json);
+          if (saved.layout) {
+            setLayout(prev => ({...prev, ...saved.layout}));
+            layoutRef.current = {...layoutRef.current, ...saved.layout};
+          }
+          if (saved.viewParams) {
+            setViewParams(prev => ({...prev, ...saved.viewParams}));
+            viewParamsRef.current = {...viewParamsRef.current, ...saved.viewParams};
+          }
+          if (Number.isFinite(saved.pointSize)) {
+            setPointSize(saved.pointSize);
+            pointSizeRef.current = saved.pointSize;
+          }
+          // 场景若已就绪则立即套用一遍(模型/网格已在则生效,未就绪由加载回调兜底)
+          const s = stateRef.current;
+          if (s?.pointMeshes && saved.layout) {
+            applyPointFitToModel(s.model, s.pointMeshes, layoutStateToFitMap({...layoutRef.current}));
+          }
+          if (saved.viewParams) applyViewParamsToScene(viewParamsRef.current);
+          if (Number.isFinite(saved.pointSize) && s?.pointMeshes) {
+            Object.values(s.pointMeshes).forEach(m => { if (m?.material) { m.material.size = saved.pointSize; m.material.needsUpdate = true; } });
+            if (s) s.dirty = true;
+          }
+        } catch (_) {}
+      }
+      viewLoadedRef.current = true;
+    }).catch(() => { viewLoadedRef.current = true; });
+  }, [applyViewParamsToScene]);
 
   // 将布局变化应用到 3D 场景
   const applyLayout = useCallback((newLayout) => {
@@ -1139,14 +1338,23 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     });
   }, []);
 
+  // updateViewParam 后持久化(用 effect 追新值,避免闭包旧值)
+  const updateViewParamPersist = useCallback((param, value) => {
+    updateViewParam(param, value);
+    viewParamsRef.current = {...viewParamsRef.current, [param]: value};
+    saveViewSettings();
+  }, [updateViewParam, saveViewSettings]);
+
   // 更新某个区域的某个参数
   const updateZoneParam = useCallback((zone, param, value) => {
     setLayout(prev => {
       const next = {...prev, [zone]: {...prev[zone], [param]: value}};
       applyLayout(next);
+      layoutRef.current = next;
+      saveViewSettings();
       return next;
     });
-  }, [applyLayout]);
+  }, [applyLayout, saveViewSettings]);
 
   // 重置当前区域
   const resetZone = useCallback(() => {
@@ -1166,9 +1374,11 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
     setLayout(prev => {
       const next = {...prev, [activeZone]: resetVal};
       applyLayout(next);
+      layoutRef.current = next;
+      saveViewSettings();
       return next;
     });
-  }, [activeZone, applyLayout]);
+  }, [activeZone, applyLayout, saveViewSettings]);
 
   // 重置全部
   const resetAll = useCallback(() => {
@@ -1206,13 +1416,21 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       }
       stateRef.current.dirty = true;
     }
-    setViewParams(prev => ({
-      ...prev,
-      modelPx: 0, modelPy: 0, modelPz: 0,
-      modelRx: 0, modelRy: 1.57, modelRz: 0,
-      modelScale: 1,
-    }));
-  }, [applyLayout, applyPointSize]);
+    setViewParams(prev => {
+      const nextVp = {
+        ...prev,
+        modelPx: 0, modelPy: 0, modelPz: 0,
+        modelRx: 0, modelRy: 1.57, modelRz: 0,
+        modelScale: 1,
+      };
+      viewParamsRef.current = nextVp;
+      return nextVp;
+    });
+    // 重置后把布局/视角/点大小一并持久化
+    layoutRef.current = init;
+    pointSizeRef.current = DEFAULT_POINT_SIZE;
+    saveViewSettings();
+  }, [applyLayout, applyPointSize, saveViewSettings]);
 
   // 打印当前参数到控制台
   const logParams = useCallback(() => {
@@ -1451,7 +1669,15 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           model.position.z = model._basePosition.z + 0;
           model.rotation.set(0, 1.57, 0);
         }
-        applyPointFitToModel(model, pointMeshes, DEFAULT_POINT_FIT_LAYOUT);
+        // 布局:有持久化(用户存过)就用存的,否则用代码默认
+        const fitMap = layoutStateToFitMap(layoutRef.current);
+        applyPointFitToModel(model, pointMeshes, Object.keys(fitMap).length ? fitMap : DEFAULT_POINT_FIT_LAYOUT);
+        // 点大小
+        if (Number.isFinite(pointSizeRef.current)) {
+          Object.values(pointMeshes).forEach(m => { if (m?.material) { m.material.size = pointSizeRef.current; m.material.needsUpdate = true; } });
+        }
+        // 视角(相机/rootGroup/pointGroup/model)——用最新(可能持久化)的值覆盖硬编码初值
+        applyViewParamsToScene(viewParamsRef.current);
         stateRef.current.dirty = true;
         setLoading(false);
         if (!model) {
@@ -1488,7 +1714,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
       lastSeatUpdate: 0,
       lastDataHash: 0,
       baseline: null, // 清零基线：144 元素数组，null 表示未清零
-      _gaussKernel: GAUSS_KERNEL, // 动态高斯核
+      _gaussKernel: {cushion: GAUSS_KERNEL, backrest: GAUSS_KERNEL}, // 坐垫/靠背各一个动态高斯核
     };
 
     const animate = () => {
@@ -1539,10 +1765,25 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
 
           const seatData = normalizeSeatData(currentData);
 
-          // 清零：减去基线预压力
+          // 清零：减去预压力。
+          //   靠背(bi>=CUSHION_LEN)：仍减去「清零」那一帧记录的基线值（逻辑不变）。
+          //   坐垫(bi<CUSHION_LEN) ：不再减那一帧，改减「分四块手动设定」的预压力值。
           if (frameState.baseline) {
+            const cp = cushionPreRef.current;
+            const topGain = Number(cushionTopGainRef.current) || 1;
             for (let bi = 0; bi < SENSOR_TOTAL; bi++) {
-              seatData[bi] = Math.max(0, seatData[bi] - frameState.baseline[bi]);
+              let v;
+              if (bi < CUSHION_LEN) {
+                const base = cp ? cushionPreValue(bi, cp) : 0;
+                const q = cushionQuadOf(bi); // 0左上 1右上 2左下 3右下
+                const diff = seatData[bi] - base; // 减完预压力后的变动
+                // 左上/右上:把「减完预压力后的变动」再放大 topGain 倍
+                // 例:实际60 预压力40 → diff=20,倍数2 → 40。压力变一点云图就很明显。
+                v = q === 0 || q === 1 ? diff * topGain : diff;
+              } else {
+                v = seatData[bi] - frameState.baseline[bi];
+              }
+              seatData[bi] = Math.max(0, v);
             }
           }
 
@@ -1577,9 +1818,10 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           }
 
 
-          // 第一层平滑：原始 144 字节数据帧间混合（在插值放大之前）
+          // 第一层平滑：原始数据帧间混合（在插值放大之前）。坐垫/靠背各用自己的帧平滑。
           const rawBuf = frameState.rawSmoothBuf;
-          const rawAlpha = _dynSettings.rawSmooth || 1;
+          const alphaCushion = (_dynSettings.cushion?.rawSmooth) || 1;
+          const alphaBackrest = (_dynSettings.backrest?.rawSmooth) || 1;
           if (!frameState.rawSmoothInited) {
             // 第一帧直接拷贝
             for (let ri = 0; ri < SENSOR_TOTAL; ri++) {
@@ -1588,7 +1830,8 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             frameState.rawSmoothInited = true;
           } else {
             for (let ri = 0; ri < SENSOR_TOTAL; ri++) {
-              rawBuf[ri] = rawBuf[ri] + (seatData[ri] - rawBuf[ri]) / rawAlpha;
+              const a = ri < CUSHION_LEN ? alphaCushion : alphaBackrest;
+              rawBuf[ri] = rawBuf[ri] + (seatData[ri] - rawBuf[ri]) / a;
             }
           }
           // 用平滑后的数据进行分割和插值
@@ -1603,7 +1846,10 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             const smooth = frameState.smoothBig?.[name];
             if (!mesh || !smooth) return;
             const workBuf = frameState.workBuffers?.[name];
-            const dynS = {..._dynSettings, _gaussKernel: frameState._gaussKernel};
+            // 该分区(坐垫/靠背)自己的设置 + 共享配色 + 该分区高斯核
+            const zoneCfg = _dynSettings[key] || DEFAULT_ZONE;
+            const kern = (frameState._gaussKernel && frameState._gaussKernel[key]) || GAUSS_KERNEL;
+            const dynS = {...zoneCfg, colorRGB: _dynSettings.colorRGB, _gaussKernel: kern};
             sitRenew(config.dataConfig, name, split[name], smooth, mesh, workBuf, config.flipRow, config.flipHeight, dynS);
           });
           frameState.dirty = true;
@@ -1694,6 +1940,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
                   fs.rawSmoothInited = false;
                   fs.dirty = true;
                   setBaselineActive(false);
+                  onBaselineChangeRef.current?.(false);
                 } else {
                   const fs = stateRef.current;
                   const currentData = dataRef.current;
@@ -1703,6 +1950,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
                     fs.rawSmoothInited = false;
                     fs.dirty = true;
                     setBaselineActive(true);
+                    onBaselineChangeRef.current?.(true);
                   }
                 }
               }}>
@@ -1712,63 +1960,105 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             </TouchableOpacity>
           </View>
 
-          {/* 点图参数调节 */}
-          <Text style={styles.sectionLabel}>颜色 / 显示</Text>
+          {/* ─── 顶部:坐垫/靠背分区切换(下面「颜色/显示·平滑/滤波·渐变过渡」按此分区分别控制) ─── */}
+          <View style={styles.zoneTabs}>
+            {['cushion', 'backrest'].map(zk => (
+              <TouchableOpacity
+                key={zk}
+                style={[styles.zoneTab, panelZone === zk && styles.zoneTabActive]}
+                onPress={() => setPanelZone(zk)}>
+                <Text style={[styles.zoneTabText, panelZone === zk && styles.zoneTabTextActive]}>
+                  {PANEL_ZONE_LABELS[zk]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* 点图参数调节(仅作用于当前分区 panelZone) */}
+          <Text style={styles.sectionLabel}>颜色 / 显示（{PANEL_ZONE_LABELS[panelZone]}）</Text>
           <StepControl
             label="色阶"
-            value={pointSettings.color}
+            value={pointSettings[panelZone].color}
             min={50}
             max={2000}
             step={25}
             decimals={0}
-            onValueChange={v => updatePointSetting('color', v)}
+            onValueChange={v => updateZoneSetting(panelZone, 'color', v)}
           />
           <StepControl
             label="高度"
-            value={pointSettings.height}
-            min={0.1}
+            value={pointSettings[panelZone].height}
+            min={-5}
             max={5}
             step={0.1}
             decimals={1}
-            onValueChange={v => updatePointSetting('height', v)}
+            onValueChange={v => updateZoneSetting(panelZone, 'height', v)}
           />
           <StepControl
             label="高斯"
-            value={pointSettings.gauss}
+            value={pointSettings[panelZone].gauss}
             min={0}
             max={5}
             step={0.1}
             decimals={1}
-            onValueChange={v => updatePointSetting('gauss', v)}
+            onValueChange={v => updateZoneSetting(panelZone, 'gauss', v)}
           />
 
-          <Text style={styles.sectionLabel}>平滑 / 滤波</Text>
+          <Text style={styles.sectionLabel}>平滑 / 滤波（{PANEL_ZONE_LABELS[panelZone]}）</Text>
           <StepControl
             label="帧平滑"
-            value={pointSettings.rawSmooth}
+            value={pointSettings[panelZone].rawSmooth}
             min={1}
             max={10}
             step={0.1}
             decimals={1}
-            onValueChange={v => updatePointSetting('rawSmooth', v)}
+            onValueChange={v => updateZoneSetting(panelZone, 'rawSmooth', v)}
           />
           <StepControl
             label="插值平滑"
-            value={pointSettings.coherent}
+            value={pointSettings[panelZone].coherent}
             min={1}
             max={10}
             step={0.1}
             decimals={1}
-            onValueChange={v => updatePointSetting('coherent', v)}
+            onValueChange={v => updateZoneSetting(panelZone, 'coherent', v)}
           />
           <StepControl
             label="死区"
-            value={pointSettings.deadZone}
+            value={pointSettings[panelZone].deadZone}
             min={0}
             max={50}
             step={1}
             decimals={0}
-            onValueChange={v => updatePointSetting('deadZone', v)}
+            onValueChange={v => updateZoneSetting(panelZone, 'deadZone', v)}
+          />
+
+          {/* ─── 渐变过渡:开关 + 强弱(按当前分区;写在云图配色上面) ─── */}
+          <Text style={styles.sectionLabel}>渐变过渡（{PANEL_ZONE_LABELS[panelZone]}）</Text>
+          <View style={styles.presetRow}>
+            <TouchableOpacity
+              style={[styles.presetBtn, pointSettings[panelZone].gradientOn && styles.presetBtnActive]}
+              onPress={() => updateZoneSetting(panelZone, 'gradientOn', true)}>
+              <Text style={[styles.presetBtnText, pointSettings[panelZone].gradientOn && styles.presetBtnTextActive]}>
+                开(渐变)
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.presetBtn, !pointSettings[panelZone].gradientOn && styles.presetBtnActive]}
+              onPress={() => updateZoneSetting(panelZone, 'gradientOn', false)}>
+              <Text style={[styles.presetBtnText, !pointSettings[panelZone].gradientOn && styles.presetBtnTextActive]}>
+                关(硬色带)
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <StepControl
+            label="渐变强弱"
+            value={pointSettings[panelZone].gradient}
+            min={0}
+            max={100}
+            step={5}
+            decimals={0}
+            onValueChange={v => updateZoneSetting(panelZone, 'gradient', v)}
           />
 
           {/* ─── 云图配色:预设 + 逐圈 RGB ─── */}
@@ -1788,7 +2078,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
           </View>
           {/* 调色板预览条(高压左 → 低压右) */}
           <View style={styles.gradientPreview}>
-            {getPalette(pointSettings.colorRGB).map((c, i) => (
+            {getPalette(pointSettings.colorRGB, pointSettings[panelZone].gradientOn, pointSettings[panelZone].gradient).map((c, i) => (
               <View
                 key={i}
                 style={{flex: 1, backgroundColor: `rgb(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])})`}}
@@ -1935,7 +2225,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={10}
             step={0.5}
             decimals={1}
-            onValueChange={v => { setPointSize(v); applyPointSize(v); }}
+            onValueChange={v => { setPointSize(v); applyPointSize(v); pointSizeRef.current = v; saveViewSettings(); }}
           />
 
           <View style={styles.btnRow}>
@@ -1953,7 +2243,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={1000}
             step={1}
             decimals={0}
-            onValueChange={v => updateViewParam('modelPx', v)}
+            onValueChange={v => updateViewParamPersist('modelPx', v)}
           />
           <StepControl
             label="Y 位移"
@@ -1962,7 +2252,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={1000}
             step={1}
             decimals={0}
-            onValueChange={v => updateViewParam('modelPy', v)}
+            onValueChange={v => updateViewParamPersist('modelPy', v)}
           />
           <StepControl
             label="Z 位移"
@@ -1971,7 +2261,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={1000}
             step={1}
             decimals={0}
-            onValueChange={v => updateViewParam('modelPz', v)}
+            onValueChange={v => updateViewParamPersist('modelPz', v)}
           />
 
           <Text style={styles.sectionLabel}>座椅旋转</Text>
@@ -1982,7 +2272,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={6.28}
             step={0.01}
             decimals={2}
-            onValueChange={v => updateViewParam('modelRx', v)}
+            onValueChange={v => updateViewParamPersist('modelRx', v)}
           />
           <StepControl
             label="Y 旋转"
@@ -1991,7 +2281,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={6.28}
             step={0.01}
             decimals={2}
-            onValueChange={v => updateViewParam('modelRy', v)}
+            onValueChange={v => updateViewParamPersist('modelRy', v)}
           />
           <StepControl
             label="Z 旋转"
@@ -2000,7 +2290,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={6.28}
             step={0.01}
             decimals={2}
-            onValueChange={v => updateViewParam('modelRz', v)}
+            onValueChange={v => updateViewParamPersist('modelRz', v)}
           />
 
           <Text style={styles.sectionLabel}>座椅缩放</Text>
@@ -2011,7 +2301,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={5}
             step={0.05}
             decimals={2}
-            onValueChange={v => updateViewParam('modelScale', v)}
+            onValueChange={v => updateViewParamPersist('modelScale', v)}
           />
 
           {/* ─── 整体调节（rootGroup，同时影响点图和座椅模型） ─── */}
@@ -2023,7 +2313,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={1000}
             step={1}
             decimals={0}
-            onValueChange={v => updateViewParam('rootPx', v)}
+            onValueChange={v => updateViewParamPersist('rootPx', v)}
           />
           <StepControl
             label="Y 位移"
@@ -2032,7 +2322,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={1000}
             step={1}
             decimals={0}
-            onValueChange={v => updateViewParam('rootPy', v)}
+            onValueChange={v => updateViewParamPersist('rootPy', v)}
           />
           <StepControl
             label="Z 位移"
@@ -2041,7 +2331,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={1000}
             step={1}
             decimals={0}
-            onValueChange={v => updateViewParam('rootPz', v)}
+            onValueChange={v => updateViewParamPersist('rootPz', v)}
           />
 
           <Text style={styles.sectionLabel}>整体旋转</Text>
@@ -2052,7 +2342,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={6.28}
             step={0.01}
             decimals={2}
-            onValueChange={v => updateViewParam('rootRx', v)}
+            onValueChange={v => updateViewParamPersist('rootRx', v)}
           />
           <StepControl
             label="Y 旋转"
@@ -2061,7 +2351,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={6.28}
             step={0.01}
             decimals={2}
-            onValueChange={v => updateViewParam('rootRy', v)}
+            onValueChange={v => updateViewParamPersist('rootRy', v)}
           />
 
           <Text style={styles.sectionLabel}>相机距离</Text>
@@ -2072,7 +2362,7 @@ function CarAirRNInner({data = [], style, showDebugPanel = true}, ref) {
             max={1500}
             step={5}
             decimals={0}
-            onValueChange={v => updateViewParam('camDist', v)}
+            onValueChange={v => updateViewParamPersist('camDist', v)}
           />
 
           {/* 操作按钮 */}

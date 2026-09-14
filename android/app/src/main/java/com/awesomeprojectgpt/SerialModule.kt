@@ -763,6 +763,27 @@ class SerialModule(
         }
     }
 
+    // ─── 3D 视角/布局/点大小持久化（与 point_settings 同一文件，不同键） ───
+    @ReactMethod
+    fun saveViewSettings(jsonStr: String, promise: Promise) {
+        try {
+            prefs.edit().putString("view", jsonStr).apply()
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("SAVE_ERROR", e.message ?: "save view failed")
+        }
+    }
+
+    @ReactMethod
+    fun loadViewSettings(promise: Promise) {
+        try {
+            val json = prefs.getString("view", null)
+            promise.resolve(json)
+        } catch (e: Exception) {
+            promise.reject("LOAD_ERROR", e.message ?: "load view failed")
+        }
+    }
+
     @ReactMethod
     fun resetPendingOpen() {
         pendingOpen?.promise?.reject("OPEN_CANCELED", "open canceled by reset")
@@ -1069,6 +1090,11 @@ class SerialModule(
         map.putDouble("isChild", out[AirbagNative.IDX_IS_CHILD].toDouble())
         map.putDouble("isAdult", out[AirbagNative.IDX_IS_ADULT].toDouble())
         map.putDouble("childThreshold", out[AirbagNative.IDX_CHILD_THRESHOLD].toDouble())
+        map.putDouble("isPending", out[AirbagNative.IDX_IS_PENDING].toDouble())
+        map.putDouble("lumbarRatio", out[AirbagNative.IDX_LUMBAR_RATIO].toDouble())
+        map.putDouble("wingRatio", out[AirbagNative.IDX_WING_RATIO].toDouble())
+        map.putDouble("leftLegRatio", out[AirbagNative.IDX_LEFT_LEG_RATIO].toDouble())
+        map.putDouble("rightLegRatio", out[AirbagNative.IDX_RIGHT_LEG_RATIO].toDouble())
         map.putDouble("longSitMinutes", out[AirbagNative.IDX_LONGSIT_MIN].toDouble())
         map.putDouble("longSitCycleRemain", out[AirbagNative.IDX_LONGSIT_REMAIN].toDouble())
         map.putDouble("longSitPrompt", out[AirbagNative.IDX_LONGSIT_PROMPT].toDouble())

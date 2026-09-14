@@ -34,6 +34,11 @@
 //   [176] isChild（儿童确认 0/1，先活体后儿童，重物恒 0）
 //   [177] isAdult（成人确认 0/1，与 isChild 互斥；isLiving=1 时二者恰一为 1）
 //   [178] childThreshold_out（儿童坐垫压力阈值回显，非法/未接线回显 1400）
+//   [179] isPending（活体检测待定/识别中 0/1，=1 时乘员入座与静物占位都置灰）
+//   [180] lumbarRatio（腰托实时压力比：靠背上部/下部平均压）
+//   [181] wingRatio（侧翼实时压力比：靠背左/右压）
+//   [182] leftLegRatio（左腿托实时压力比：左腿/左臀平均压）
+//   [183] rightLegRatio（右腿托实时压力比：右腿/右臀平均压）
 #define OUT_FRAME_BASE      4
 #define OUT_CUSHION_BASE    59
 #define OUT_BACKREST_BASE   107
@@ -53,7 +58,12 @@
 #define OUT_IS_CHILD        176  // 儿童确认标志(1/0)：先活体后儿童，重物恒0
 #define OUT_IS_ADULT        177  // 成人确认标志(1/0)：与 isChild 互斥；isLiving=1 时二者恰一为1
 #define OUT_CHILD_THRESHOLD 178  // 儿童坐垫压力阈值回显(有效值回显下发，非法/未接线回显1400)
-#define OUT_LEN             179
+#define OUT_IS_PENDING      179  // 活体检测待定/识别中(0/1)：=1 时乘员入座与静物占位都置灰
+#define OUT_LUMBAR_RATIO    180  // 腰托实时压力比(靠背上/下平均压)
+#define OUT_WING_RATIO      181  // 侧翼实时压力比(靠背左/右压)
+#define OUT_LEFT_LEG_RATIO  182  // 左腿托实时压力比(左腿/左臀平均压)
+#define OUT_RIGHT_LEG_RATIO 183  // 右腿托实时压力比(右腿/右臀平均压)
+#define OUT_LEN             184
 
 // ===== 可运行时调节的算法阈值表 =====
 // 这些原本写死在 set_input_defaults() 里、改一次就得重编 .so 的标定输入，
@@ -68,8 +78,11 @@
 //   上半=生效（算法真读取该前端字段，改了座椅会变）；
 //   下半=不生效（纯回显到 _out 或算法完全不读），统一挪到表尾单独分组并加 [不生效] 前缀。
 // ⚠️ 这个划分跟着算法包走，算法团队换包若把某字段接进逻辑，需把它从「不生效」组挪回上面。
-// 备注：左右充/放气阈值、左充/放气比例本是「仅回显」，但本包 pValid 开关判据为 >1.5（恒不成立→
-//       恒用前端参数），故实测生效，归入上半；调这些请填 >0 的值（<=0/NaN 会被算法兜底成默认）。
+// 备注：本包(Zairbag_13Hz_Final)8 个自适应阈值(腰托 ratioInflate/Deflate、侧翼 ratioInflateLeft/
+//       DeflateLeft、左/右腿托 left/rightInflate/DeflateThreshold)全部生效——pValid 开关判据为 >1.5
+//       (恒不成立→恒用前端参数)，均归入上半；调这些请填 >0 的值(<=0/NaN 会被算法兜底成默认)。
+//       算法另有 5 个只读输出:isPending1(待定置灰)、lumbarRatio1/wingRatio1/leftLegRatio1/
+//       rightLegRatio1(4 个实时压力比),经 JNI 透传给前端做状态显示与调参参考,不进本阈值表。
 #define AIRBAG_PARAM_TABLE(X) \
     /* ===== 生效：算法真读取，配置面板调完座椅会变 ===== */ \
     X(cushionThreshold1,        1700.0F, "在座判定",   "坐垫压力阈值") \
@@ -79,12 +92,14 @@
     X(inflation_time2,          10.0F,   "充放气时序", "充气时长1(s)") \
     X(deflation_time1,          10.0F,   "充放气时序", "放气时长(s)") \
     X(adoption_frequency1,      13.0F,   "充放气时序", "自适应频率") \
-    X(leftInflateThreshold1,    0.75F,   "充放气阈值", "左腿托 充气阈值(腿/臀压比)") \
-    X(leftDeflateThreshold1,    0.9F,    "充放气阈值", "左腿托 放气阈值(腿/臀压比)") \
-    X(rightInflateThreshold1,   0.75F,   "充放气阈值", "右腿托 充气阈值(腿/臀压比)") \
-    X(rightDeflateThreshold1,   0.9F,    "充放气阈值", "右腿托 放气阈值(腿/臀压比)") \
-    X(ratioInflateLeft1,        0.8F,    "充放气阈值", "靠背侧翼 充气比例(左/右背压比)") \
-    X(ratioDeflateLeft1,        1.3F,    "充放气阈值", "靠背侧翼 放气比例(左/右背压比)") \
+    X(ratioInflate1,            1.15F,   "充放气阈值", "腰托 充气阈值(上/下背压比,比>阈值充)") \
+    X(ratioDeflate1,            0.8F,    "充放气阈值", "腰托 放气阈值(上/下背压比,比<阈值放)") \
+    X(ratioInflateLeft1,        0.8F,    "充放气阈值", "侧翼 低比阈值(左/右背压比,比<阈值→左放右充)") \
+    X(ratioDeflateLeft1,        1.3F,    "充放气阈值", "侧翼 高比阈值(左/右背压比,比>阈值→左充右放)") \
+    X(leftInflateThreshold1,    0.75F,   "充放气阈值", "左腿托 充气阈值(腿/臀压比,比<阈值充)") \
+    X(leftDeflateThreshold1,    0.9F,    "充放气阈值", "左腿托 放气阈值(腿/臀压比,比>阈值放)") \
+    X(rightInflateThreshold1,   0.75F,   "充放气阈值", "右腿托 充气阈值(腿/臀压比,比<阈值充)") \
+    X(rightDeflateThreshold1,   0.9F,    "充放气阈值", "右腿托 放气阈值(腿/臀压比,比>阈值放)") \
     X(sadThresholdIn1,          0.3F,    "活体检测",   "判活分数阈值") \
     X(sadNormalizeScaleIn1,     3.0F,    "活体检测",   "判活归一化尺度") \
     X(welcomeSideWingTime1,     2.0F,    "入座欢迎",   "侧翼时长(s)") \
@@ -96,8 +111,6 @@
     X(inflation_time3,          5.0F,    "⚠️不生效·算法未读", "[不生效] 充气时长2(s)") \
     X(holding_time1,            30.0F,   "⚠️不生效·算法未读", "[不生效] 保持时长(s)") \
     X(detectorEnabled1,         1.0F,    "⚠️不生效·算法未读", "[不生效] 检测器使能(0/1)") \
-    X(ratioInflate1,            1.2F,    "⚠️不生效·算法未读", "[不生效] 充气比例") \
-    X(ratioDeflate1,            0.35F,   "⚠️不生效·算法未读", "[不生效] 放气比例") \
     X(livingConfirmCountIn1,    2.0F,    "⚠️不生效·算法未读", "[不生效] 确认活体次数(1~3)") \
     X(spineBiasDeadband1,       0.5F,    "⚠️不生效·算法未读", "[不生效] 脊椎偏移死区") \
     X(spineTimeThresholdSec1,   60.0F,   "⚠️不生效·算法未读", "[不生效] 脊椎持续阈值(s)") \
@@ -222,6 +235,12 @@ Java_com_awesomeprojectgpt_airbag_AirbagNative_nativeStep(JNIEnv *env, jobject t
     out[OUT_IS_CHILD]        = 0.0F;
     out[OUT_IS_ADULT]        = 0.0F;
     out[OUT_CHILD_THRESHOLD] = 0.0F;
+    // 新包新增输出：待定置灰标志 + 4 个实时压力比(调参参考)
+    out[OUT_IS_PENDING]      = airbag_13Hz_Y.isPending1;
+    out[OUT_LUMBAR_RATIO]    = airbag_13Hz_Y.lumbarRatio1;
+    out[OUT_WING_RATIO]      = airbag_13Hz_Y.wingRatio1;
+    out[OUT_LEFT_LEG_RATIO]  = airbag_13Hz_Y.leftLegRatio1;
+    out[OUT_RIGHT_LEG_RATIO] = airbag_13Hz_Y.rightLegRatio1;
 
     jfloatArray result = (*env)->NewFloatArray(env, OUT_LEN);
     (*env)->SetFloatArrayRegion(env, result, 0, OUT_LEN, out);
