@@ -1105,6 +1105,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
       .catch(() => {});
   }, [loadThresholds]);
 
+  // 914 固定值：2026-09-14 换包(Zairbag_13Hz_Final)后这版算法阈值的快照。
+  // 与"重置默认"的区别：重置默认跟随 C 代码表(以后换包会变)；914 是钉死的历史基线，
+  // 以后即便再换包改了默认，按此键也能一键回到这组已知好的值。
+  const applyPreset914 = useCallback(() => {
+    const PRESET_914: Record<string, number> = {
+      cushionThreshold1: 3200, backrestThreshold1: 2500, backTotalThreshold1: 22, pointThreshold1: 20,
+      inflation_time2: 10, deflation_time1: 10, adoption_frequency1: 13,
+      ratioInflate1: 0.8, ratioDeflate1: 0.65, ratioInflateLeft1: 0.7, ratioDeflateLeft1: 1.3,
+      leftInflateThreshold1: 0.65, leftDeflateThreshold1: 0.76, rightInflateThreshold1: 0.65, rightDeflateThreshold1: 0.76,
+      sadThresholdIn1: 0.2, sadNormalizeScaleIn1: 3.0,
+      welcomeSideWingTime1: 2.0, welcomeLegTime1: 2.0, welcomeLumbarTime1: 3.0, welcomeHipTime1: 3.0,
+      sitThresholdmin1: 5.0,
+      inflation_time3: 5.0, holding_time1: 30.0, detectorEnabled1: 1.0, livingConfirmCountIn1: 2.0,
+      spineBiasDeadband1: 0.5, spineTimeThresholdSec1: 60.0,
+      bumpMinVelocity1: 8.0, bumpMaxRms1: 0.5, bumpMaxRangeMm1: 15.0, bumpTimeThresholdSec1: 3.0,
+      sickForwardMinMm1: 5.0, sickBackDropRatio1: 0.3, sickPairWindowSec1: 0.8, cushionForwardSign1: -1.0,
+    };
+    Promise.all(
+      Object.entries(PRESET_914).map(([name, value]) =>
+        NativeModules.SerialModule?.setAirbagThreshold?.(name, value)?.catch(() => {}),
+      ),
+    ).then(() => loadThresholds());
+  }, [loadThresholds]);
+
   const openConfigModal = useCallback(() => {
     setShowConfig(true);
     loadConfig();
@@ -2077,6 +2101,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({onNavigateToCustomize, adaptiveE
             <View style={styles.matrixModalHeader}>
               <Text style={styles.matrixModalTitle}>算法配置</Text>
               <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert('914固定值', '把所有算法阈值恢复为 914 固定基线值？', [
+                      {text: '取消', style: 'cancel'},
+                      {text: '确认', onPress: () => applyPreset914()},
+                    ]);
+                  }}
+                  activeOpacity={0.7}
+                  style={{marginRight: 12, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: '#8a5a12', borderRadius: 4}}>
+                  <Text style={{color: '#fff', fontSize: 12}}>914固定值</Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
                     Alert.alert('确认重置', '是否恢复所有阈值/配置为默认值？', [

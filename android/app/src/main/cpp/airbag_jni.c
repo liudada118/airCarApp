@@ -85,22 +85,22 @@
 //       rightLegRatio1(4 个实时压力比),经 JNI 透传给前端做状态显示与调参参考,不进本阈值表。
 #define AIRBAG_PARAM_TABLE(X) \
     /* ===== 生效：算法真读取，配置面板调完座椅会变 ===== */ \
-    X(cushionThreshold1,        1700.0F, "在座判定",   "坐垫压力阈值") \
-    X(backrestThreshold1,       1500.0F, "在座判定",   "靠背压力阈值") \
+    X(cushionThreshold1,        3200.0F, "在座判定",   "坐垫压力阈值") \
+    X(backrestThreshold1,       2500.0F, "在座判定",   "靠背压力阈值") \
     X(backTotalThreshold1,      22.0F,   "在座判定",   "靠背总压阈值") \
     X(pointThreshold1,          20.0F,   "在座判定",   "单点有效压力阈值") \
     X(inflation_time2,          10.0F,   "充放气时序", "充气时长1(s)") \
     X(deflation_time1,          10.0F,   "充放气时序", "放气时长(s)") \
     X(adoption_frequency1,      13.0F,   "充放气时序", "自适应频率") \
-    X(ratioInflate1,            1.15F,   "充放气阈值", "腰托 充气阈值(上/下背压比,比>阈值充)") \
-    X(ratioDeflate1,            0.8F,    "充放气阈值", "腰托 放气阈值(上/下背压比,比<阈值放)") \
-    X(ratioInflateLeft1,        0.8F,    "充放气阈值", "侧翼 低比阈值(左/右背压比,比<阈值→左放右充)") \
+    X(ratioInflate1,            0.8F,    "充放气阈值", "腰托 充气阈值(上/下背压比,比>阈值充)") \
+    X(ratioDeflate1,            0.65F,   "充放气阈值", "腰托 放气阈值(上/下背压比,比<阈值放)") \
+    X(ratioInflateLeft1,        0.7F,    "充放气阈值", "侧翼 低比阈值(左/右背压比,比<阈值→左放右充)") \
     X(ratioDeflateLeft1,        1.3F,    "充放气阈值", "侧翼 高比阈值(左/右背压比,比>阈值→左充右放)") \
-    X(leftInflateThreshold1,    0.75F,   "充放气阈值", "左腿托 充气阈值(腿/臀压比,比<阈值充)") \
-    X(leftDeflateThreshold1,    0.9F,    "充放气阈值", "左腿托 放气阈值(腿/臀压比,比>阈值放)") \
-    X(rightInflateThreshold1,   0.75F,   "充放气阈值", "右腿托 充气阈值(腿/臀压比,比<阈值充)") \
-    X(rightDeflateThreshold1,   0.9F,    "充放气阈值", "右腿托 放气阈值(腿/臀压比,比>阈值放)") \
-    X(sadThresholdIn1,          0.3F,    "活体检测",   "判活分数阈值") \
+    X(leftInflateThreshold1,    0.65F,   "充放气阈值", "左腿托 充气阈值(腿/臀压比,比<阈值充)") \
+    X(leftDeflateThreshold1,    0.76F,   "充放气阈值", "左腿托 放气阈值(腿/臀压比,比>阈值放)") \
+    X(rightInflateThreshold1,   0.65F,   "充放气阈值", "右腿托 充气阈值(腿/臀压比,比<阈值充)") \
+    X(rightDeflateThreshold1,   0.76F,   "充放气阈值", "右腿托 放气阈值(腿/臀压比,比>阈值放)") \
+    X(sadThresholdIn1,          0.2F,    "活体检测",   "判活分数阈值") \
     X(sadNormalizeScaleIn1,     3.0F,    "活体检测",   "判活归一化尺度") \
     X(welcomeSideWingTime1,     2.0F,    "入座欢迎",   "侧翼时长(s)") \
     X(welcomeLegTime1,          2.0F,    "入座欢迎",   "腿托时长(s)") \

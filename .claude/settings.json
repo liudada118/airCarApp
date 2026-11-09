@@ -1,7 +1,23 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cd \"c:\\\\project\\\\airCarApp\\\\airCarApp\" && ls -la android/app/build/outputs/apk/release/app-release.apk && cp android/app/build/outputs/apk/release/app-release.apk \"/c/Users/98765/Desktop/SHROOM座椅.apk\" && ls -la \"/c/Users/98765/Desktop/SHROOM座椅.apk\" && echo \"已复制到桌面\")"
+      "Bash(cd \"c:\\\\project\\\\airCarApp\\\\airCarApp\" && ls -la android/app/build/outputs/apk/release/app-release.apk && cp android/app/build/outputs/apk/release/app-release.apk \"/c/Users/98765/Desktop/SHROOM座椅.apk\" && ls -la \"/c/Users/98765/Desktop/SHROOM座椅.apk\" && echo \"已复制到桌面\")",
+      "Bash(node -e \"require\\('@babel/core'\\).transformFileSync\\('src/components/CarAirRN.js',{presets:['module:metro-react-native-babel-preset']}\\); console.log\\('PARSE OK'\\)\")",
+      "Bash(node -e \"require\\('@babel/core'\\).transformFileSync\\('src/components/CarAirRN.js',{configFile:require\\('path'\\).resolve\\('babel.config.js'\\)}\\); console.log\\('PARSE OK \\(babel.config.js\\)'\\)\")",
+      "Bash(bash build_so.sh)",
+      "Bash(ping -n 2 10.100.13.40)",
+      "Bash(adb -s d8304102 shell \"rm -f /sdcard/Android/data/com.awesomeprojectgpt/files/algo/libairbag.so\")",
+      "Bash(adb -s d8304102 shell \"am force-stop com.awesomeprojectgpt\")",
+      "Bash(adb -s d8304102 shell \"monkey -p com.awesomeprojectgpt -c android.intent.category.LAUNCHER 1\")",
+      "Bash(cmd //c \"cd /d c:\\\\project\\\\airCarApp\\\\airCarApp\\\\android && gradlew.bat assembleRelease\")",
+      "Bash(adb -s 8691f20d shell rm -f /sdcard/Android/data/com.awesomeprojectgpt/files/algo/libairbag.so)",
+      "Bash(grep -oE 'ExtU_Zairbag[A-Za-z0-9_]*T|ExtY_Zairbag[A-Za-z0-9_]*T|DW_Zairbag[A-Za-z0-9_]*T|RT_MODEL_Zairbag[A-Za-z0-9_]*T|tag_RTM_Zairbag[A-Za-z0-9_]*T|Zairbag_13Hz_Final_V1_0_11_\\(initialize|step|terminate\\)|Zairbag_13Hz_Final_V1_0_11_[UYD]W?\\\\b' __TRACKED_VAR__/Zairbag_13Hz_Final_V1_0_11.c __TRACKED_VAR__/Zairbag_13Hz_Final_V1_0_11.h)",
+      "Bash(exit 1)",
+      "Read(//c/project/airCarApp/jniLibs/arm64-v8a/**)",
+      "Bash(unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL)",
+      "Bash(./gradlew clean *)",
+      "Bash(MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' adb devices)",
+      "Bash(cp \"c:\\\\project\\\\airCarApp\\\\airCarApp/android/app/build/outputs/apk/release/app-release.apk\" ~/Desktop/\"SHROOM座椅.apk\" && ls -la ~/Desktop/\"SHROOM座椅.apk\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\98765\\Desktop"
