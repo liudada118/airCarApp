@@ -22,6 +22,7 @@ typedef struct {
   real_T frameCount;
   real_T livingQueueLen;
   real_T staticQueueLen;
+  real32_T backRelActiveDelay_DSTATE;
   real32_T UnitDelay3_DSTATE[4];
   real32_T UnitDelay2_DSTATE[15];
   real32_T prevCushion[48];
@@ -162,6 +163,7 @@ typedef struct {
   real32_T bumpTimeThresholdSec1;
   real32_T spineTimeThresholdSec1;
   real32_T pointThreshold1;
+  real32_T backRelDeflateTime1;
 } ExtU_airbag_13Hz_T;
 
 typedef struct {
@@ -230,6 +232,7 @@ typedef struct {
   real32_T leftLegRatio1;
   real32_T rightLegRatio1;
   real32_T isPending1;
+  real32_T backRelDeflateTime_out1;
 } ExtY_airbag_13Hz_T;
 
 struct tag_RTM_airbag_13Hz_T {

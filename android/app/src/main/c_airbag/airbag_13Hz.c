@@ -1051,6 +1051,21 @@ void airbag_13Hz_step(void)
     airbag_13Hz_DW.hipInflating = false;
     airbag_13Hz_DW.prevOccupied = true;
     airbag_13Hz_DW.prevManualCmd = manualNow;
+  } else if (airbag_13Hz_DW.backRelActiveDelay_DSTATE >= 0.5F) {
+    if (airbag_13Hz_DW.phase == 1) {
+      for (i = 0; i < 14; i++) {
+        rtb_massageGears[i] = 4;
+      }
+    }
+
+    airbag_13Hz_DW.phase = 0U;
+    airbag_13Hz_DW.sitFrameCount = 0U;
+    airbag_13Hz_DW.massageFrameCount = 0U;
+    airbag_13Hz_DW.hipCycleCount = 0U;
+    airbag_13Hz_DW.hipInflateCount = 0U;
+    airbag_13Hz_DW.hipInflating = false;
+    airbag_13Hz_DW.prevOccupied = true;
+    airbag_13Hz_DW.prevManualCmd = manualNow;
   } else if ((!airbag_13Hz_DW.livingLatched) &&
              (airbag_13Hz_DW.phase != 1) &&
              (airbag_13Hz_DW.phase != 2)) {
@@ -2240,6 +2255,15 @@ void airbag_13Hz_step(void)
 
   requestIdle = (airbag_13Hz_Y.backrestSum1 >=
                  baseInflationSeconds);
+  airbag_13Hz_Y.backRelDeflateTime_out1 =
+    airbag_13Hz_U.backRelDeflateTime1;
+  if (rtIsInfF(airbag_13Hz_U.backRelDeflateTime1) || rtIsNaNF
+      (airbag_13Hz_U.backRelDeflateTime1)) {
+    airbag_13Hz_Y.backRelDeflateTime_out1 = 10.0F;
+  } else if (airbag_13Hz_U.backRelDeflateTime1 <= 0.0F) {
+    airbag_13Hz_Y.backRelDeflateTime_out1 = 10.0F;
+  }
+
   if (healthLeftNow || (airbag_13Hz_DW.mode == 4.0F)) {
     airbag_13Hz_DW.pBackRelState = 0;
     airbag_13Hz_DW.pBackRelLostCount = 0;
@@ -2552,6 +2576,7 @@ void airbag_13Hz_step(void)
       airbag_13Hz_Y.frame1[(rtb_hipInflateRequest << 1) + 2];
   }
 
+  airbag_13Hz_DW.backRelActiveDelay_DSTATE = 0.0F;
   switch (airbag_13Hz_DW.pBackRelState) {
    case 2:
     for (rtb_hipInflateRequest = 0; rtb_hipInflateRequest < 6;
@@ -2562,10 +2587,12 @@ void airbag_13Hz_step(void)
 
     airbag_13Hz_DW.pBackRelState = 3;
     airbag_13Hz_DW.pBackRelTimer = 0.0F;
+    airbag_13Hz_DW.backRelActiveDelay_DSTATE = 1.0F;
     break;
 
    case 3:
-    if (requestIdle || (airbag_13Hz_DW.pBackRelTimer >= 5.0F *
+    if (requestIdle || (airbag_13Hz_DW.pBackRelTimer >=
+                        airbag_13Hz_Y.backRelDeflateTime_out1 *
                         alpha)) {
       for (rtb_hipInflateRequest = 0; rtb_hipInflateRequest < 6;
            rtb_hipInflateRequest++) {
@@ -2575,6 +2602,7 @@ void airbag_13Hz_step(void)
 
       airbag_13Hz_DW.pBackRelState = 0;
       airbag_13Hz_DW.pBackRelTimer = 0.0F;
+      airbag_13Hz_DW.backRelActiveDelay_DSTATE = 1.0F;
     } else {
       for (rtb_hipInflateRequest = 0; rtb_hipInflateRequest < 6;
            rtb_hipInflateRequest++) {
@@ -2583,6 +2611,7 @@ void airbag_13Hz_step(void)
       }
 
       airbag_13Hz_DW.pBackRelTimer++;
+      airbag_13Hz_DW.backRelActiveDelay_DSTATE = 1.0F;
     }
     break;
   }
