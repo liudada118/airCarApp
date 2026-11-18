@@ -38,6 +38,7 @@ typedef struct {
   real32_T pPrevGears[24];
   real32_T pPrevHealthLeft;
   real32_T pPrevHealthRight;
+  real32_T pBackRelTimer;
   real32_T pPrevBackrestGears[6];
   real32_T pState;
   real32_T pValid;
@@ -91,6 +92,7 @@ typedef struct {
   real32_T pPrevDemoCmd[3];
   real32_T pPendingDemoMode;
   real32_T pPendingDemoArg;
+  int32_T pBackRelLostCount;
   int32_T pReplayIndex;
   int32_T pGapCycles;
   int32_T pBackrestLostCounter;
@@ -102,7 +104,7 @@ typedef struct {
   uint32_T massageFrameCount;
   uint32_T hipCycleCount;
   uint32_T hipInflateCount;
-  int8_T pBackrestReleaseState;
+  int8_T pBackRelState;
   int8_T pState_i;
   uint8_T phase;
   boolean_T frameCount_not_empty;
